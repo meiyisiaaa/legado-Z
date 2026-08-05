@@ -58,3 +58,21 @@
 
 - 是否按上述顺序**逐项实施**？还是只先推进「立即可做」那档（零/低风险）？
 - God Activity 拆分涉及阅读核心，是否需要单独评审 + 灰度？
+
+---
+
+## 六、执行状态（2026-08-05）
+
+按「全部按优先级执行」推进。沙箱**无法编译 Android**（gradle wrapper jar 异常 + 完整构建需联网拉 Gradle 8.14.4 分发版与数百 AAR），故代码级改动均标注需本地构建/CI 验证。
+
+| 项 | 状态 | 交付 |
+|------|------|------|
+| build.gradle 4 处死注释 | ✅ 已落地 | commit `41d3c7b69`（删 7 行死注释 + 附属 noinspection/描述） |
+| JsEncodeUtils 18 处 TODO | ✅ 已核实无 | 当前文件 0 个 TODO（清单计数为过时），无需处理 |
+| 33 处 printStackTrace → LogUtils | ✅ 已落地 | commit `55e097661`（20 文件 / 28 处替换；保留 LogUtils·CrashHandler 本职 4 处） |
+| 双构建体系 ADR | ✅ 已落地 | `docs/adr/2026-08-05-dual-build-system.md` |
+| vendored 库评估 | ✅ 已落地 | `docs/plans/2026-08-05-vendored-libs-evaluation.md`（标注+评估，未改源码） |
+| 测试/CI 提案 | ✅ 已落地 | `docs/plans/2026-08-05-test-ci-proposal.md` + `app/src/test/.../MD5UtilsTest.kt` 样本 |
+| God Activity 拆分 | 🟡 已出计划，代码待构建 | `docs/plans/2026-08-05-god-activity-extraction-plan.md`（分阶段 A/B/C；沙箱无法编译，未做代码级拆分） |
+
+**计数偏差更正**：原清单「自研 TODO 22 / printStackTrace 33」已过时——实测自研 TODO 现 62（含 vendored icu4j 误计），printStackTrace 自研 33 中 5 处为 LogUtils·CrashHandler 本职，本轮替换 28 处。
