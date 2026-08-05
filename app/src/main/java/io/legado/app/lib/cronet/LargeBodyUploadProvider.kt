@@ -10,6 +10,8 @@ import org.chromium.net.UploadDataSink
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
+import io.legado.app.utils.LogUtils
+private const val TAG = "LargeBodyUploadProvider"
 
 /**
  * 用于上传大型文件
@@ -54,7 +56,7 @@ class LargeBodyUploadProvider(
                 body.writeTo(writeSink)
                 writeSink.flush()
             } catch (e: IOException) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             }
 
         }

@@ -30,6 +30,8 @@ import master.flame.danmaku.danmaku.parser.BaseDanmakuParser
 import master.flame.danmaku.ui.widget.DanmakuView
 import java.io.File
 import java.io.FileInputStream
+import io.legado.app.utils.LogUtils
+private const val TAG = "VideoPlayer"
 
 class VideoPlayer: StandardGSYVideoPlayer {
     constructor(context: Context?, fullFlag: Boolean?) : super(context, fullFlag) //必须的,全屏时依靠这个构建知道获取全屏布局
@@ -365,7 +367,7 @@ class VideoPlayer: StandardGSYVideoPlayer {
                 }
             }
         } catch (e: IllegalDataException) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
         val parser: BaseDanmakuParser = BiliDanmukuParser()
         val dataSource = loader.dataSource

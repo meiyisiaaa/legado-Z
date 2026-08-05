@@ -20,6 +20,8 @@ import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.helpers.XMLReaderFactory
 import java.io.IOException
 import java.util.Locale
+import io.legado.app.utils.LogUtils
+private const val TAG = "BiliDanmukuParser"
 
 class BiliDanmukuParser : BaseDanmakuParser() {
     companion object {
@@ -41,9 +43,9 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                 xmlReader.parse(InputSource(source.data()))
                 return contentHandler.result
             } catch (e: SAXException) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             } catch (e: IOException) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             }
         }
 
@@ -147,7 +149,7 @@ class BiliDanmukuParser : BaseDanmakuParser() {
                             textArr[i] = jsonArray.getString(i)
                         }
                     } catch (e: JSONException) {
-                        e.printStackTrace()
+                        LogUtils.e(TAG, e.stackTraceToString())
                     }
 
                     if (textArr == null || textArr.size < 5 || TextUtils.isEmpty(textArr[4])) {

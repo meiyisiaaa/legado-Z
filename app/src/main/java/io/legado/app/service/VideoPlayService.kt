@@ -58,6 +58,8 @@ import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import splitties.systemservices.notificationManager
 import kotlin.math.abs
+import io.legado.app.utils.LogUtils
+private const val TAG = "VideoPlayService"
 
 /**
  * 视频悬浮窗服务
@@ -105,7 +107,7 @@ class VideoPlayService : BaseService() {
         try {
             windowManager.updateViewLayout(floatingView, params)
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 
@@ -592,7 +594,7 @@ class VideoPlayService : BaseService() {
             application.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks)
             playerView.release()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 

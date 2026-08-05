@@ -13,6 +13,8 @@ import io.legado.app.lib.mobi.utils.readString
 import io.legado.app.lib.mobi.utils.readUInt32
 import java.nio.ByteBuffer
 import java.util.Locale
+import io.legado.app.utils.LogUtils
+private const val TAG = "KF8Book"
 
 /**
  * Kindle Format 8 Book
@@ -252,7 +254,7 @@ class KF8Book(
                 fdstTableEnds!![i] = fdstBuffer.readUInt32()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 

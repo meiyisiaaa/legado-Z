@@ -43,6 +43,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import splitties.init.appCtx
+import io.legado.app.utils.LogUtils
+private const val TAG = "CoverImageView"
 
 /**
  * 封面
@@ -148,7 +150,7 @@ class CoverImageView @JvmOverloads constructor(
                 invalidate()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             }
         }
     }

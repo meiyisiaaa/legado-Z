@@ -37,6 +37,8 @@ import io.legado.app.utils.setNavigationBarColorAuto
 import io.legado.app.utils.setStatusBarColorAuto
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.windowSize
+import io.legado.app.utils.LogUtils
+private const val TAG = "BaseActivity"
 
 abstract class BaseActivity<VB : ViewBinding>(
     val fullScreen: Boolean = true,
@@ -203,7 +205,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         return try {
             super.dispatchTouchEvent(ev)
         } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             false
         }
     }

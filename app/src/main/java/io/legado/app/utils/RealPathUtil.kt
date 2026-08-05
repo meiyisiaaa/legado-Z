@@ -15,6 +15,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import io.legado.app.utils.LogUtils
+private const val TAG = "RealPathUtil"
 
 @Suppress("unused")
 object RealPathUtil {
@@ -143,7 +145,7 @@ object RealPathUtil {
                     File(filePath).absolutePath
                 }
             } catch (e: IOException) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             }
         } finally {
             cursor?.close()

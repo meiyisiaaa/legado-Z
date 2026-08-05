@@ -168,7 +168,7 @@ class App : Application() {
                 .getMethod("insertProvider", Context::class.java)
                 .invoke(null, gms)
         } catch (e: java.lang.Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 

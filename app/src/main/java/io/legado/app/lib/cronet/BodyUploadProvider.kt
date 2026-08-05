@@ -7,6 +7,8 @@ import org.chromium.net.UploadDataProvider
 import org.chromium.net.UploadDataSink
 import java.io.IOException
 import java.nio.ByteBuffer
+import io.legado.app.utils.LogUtils
+private const val TAG = "BodyUploadProvider"
 
 @Keep
 class BodyUploadProvider(private val body: RequestBody) : UploadDataProvider(), AutoCloseable {
@@ -27,7 +29,7 @@ class BodyUploadProvider(private val body: RequestBody) : UploadDataProvider(), 
             body.writeTo(buffer)
             buffer.flush()
         } catch (e: IOException) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 

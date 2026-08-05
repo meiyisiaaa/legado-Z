@@ -22,6 +22,8 @@ import splitties.init.appCtx
 import java.util.Stack
 import kotlin.math.max
 import kotlin.random.Random
+import io.legado.app.utils.LogUtils
+private const val TAG = "WebViewPool"
 
 object WebViewPool {
     const val BLANK_HTML = "about:blank"
@@ -177,7 +179,7 @@ object WebViewPool {
                         try {
                             pooled.realWebView.destroy()
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            LogUtils.e(TAG, e.stackTraceToString())
                         }
                     }
                     if (idlePool.isEmpty()) {
