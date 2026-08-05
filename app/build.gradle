@@ -170,9 +170,6 @@ dependencies {
     //kotlin
     //noinspection GradleDependency,DifferentStdlibGradleVersion
     implementation(libs.kotlin.stdlib)
-    //Kotlin反射
-    //noinspection GradleDependency,DifferentStdlibGradleVersion
-    //implementation(libs.kotlin.reflect)
 
 
     //协程
@@ -209,12 +206,8 @@ dependencies {
     implementation(libs.media.media)
     // For media playback using ExoPlayer
     implementation(libs.media3.exoplayer)
-    //implementation(libs.media3.exoplayer.hls)
-    //implementation(libs.media3.ui)
     // For loading data using the OkHttp network stack
     implementation(libs.media3.datasource.okhttp)
-    // For exposing and controlling media sessions
-    //implementation "androidx.media3:media3-session:$media3_version"
 
     //videoPlayer
     implementation(libs.gsyVideoPlayer.java)
