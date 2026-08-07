@@ -169,9 +169,11 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     private val tocActivity =
         registerForActivityResult(TocActivityResult()) {
-            it?.let {
-                viewModel.openChapter(it[0] as Int, it[1] as Int)
-            }
+            openTocResult(it)
+        }
+    private val readingNotesActivity =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            openTocResult(TocActivityResult.parseTocResult(it.resultCode, it.data))
         }
     private val sourceEditActivity =
         registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
@@ -530,6 +532,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_ai_qa -> {
                 binding.readMenu.runMenuOut()
                 showAiChat(AiChatBottomSheet.MODE_QA)
+            }
+            R.id.menu_reading_notes -> {
+                binding.readMenu.runMenuOut()
+                openReadingNotes()
             }
             R.id.menu_add_bookmark -> addBookmark()
             R.id.menu_simulated_reading -> showSimulatedReading()
@@ -1232,6 +1238,20 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun openChapterList() {
         ReadBook.book?.let {
             tocActivity.launch(it.bookUrl)
+        }
+    }
+
+    private fun openReadingNotes() {
+        ReadBook.book?.let {
+            readingNotesActivity.launch(
+                TocActivityResult.createIntent(this, TocActivityResult.Args(it.bookUrl, initialTab = 1))
+            )
+        }
+    }
+
+    private fun openTocResult(result: Array<Any>?) {
+        result?.let {
+            viewModel.openChapter(it[0] as Int, it[1] as Int)
         }
     }
 

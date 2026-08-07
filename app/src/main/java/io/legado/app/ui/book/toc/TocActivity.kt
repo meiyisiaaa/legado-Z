@@ -59,6 +59,9 @@ class TocActivity : VMBaseActivity<ActivityChapterListBinding, TocViewModel>(),
         binding.viewPager.adapter = TabFragmentPageAdapter()
         tabLayout.setupWithViewPager(binding.viewPager)
         tabLayout.tabGravity = TabLayout.GRAVITY_CENTER
+        binding.viewPager.currentItem = intent
+            .getIntExtra(TocActivityResult.EXTRA_INITIAL_TAB, 0)
+            .coerceIn(0, 1)
         viewModel.bookData.observe(this) {
             menu?.setGroupVisible(R.id.menu_group_text, it.isLocalTxt)
         }
