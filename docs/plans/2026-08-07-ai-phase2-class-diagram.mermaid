@@ -1,0 +1,339 @@
+%% 阅读Sigma（legado-Z）AI Phase2 — 类图
+%% 来源：docs/plans/2026-08-07-ai-phase2-arch.md §4
+%% 图例：<<v1 reuse>> 原样复用 | <<v1 extended>> 在 v1 类上扩展 | <<new ...>> Phase2 新增
+classDiagram
+    direction LR
+
+    %% ==================== v1 复用（不改） ====================
+    class AiChatOptions {
+        <<v1 reuse>>
+        +String endpoint
+        +String apiKey
+        +String model
+        +Float temperature
+        +Int maxTokens
+        +Int timeoutSec
+    }
+    class AiChatClient {
+        <<v1 interface>>
+        +chat(AiChatOptions, List~ChatMessage~) ChatResponse
+        +ping(AiChatOptions) Boolean
+    }
+    class OpenAiClient {
+        <<v1 reuse>>
+        -OkHttpClient okHttpClient
+    }
+    class ChatMessage {
+        <<v1 reuse>>
+        +String role
+        +String content
+        +system(String)$ ChatMessage
+        +user(String)$ ChatMessage
+        +assistant(String)$ ChatMessage
+    }
+    class AiError {
+        <<v1 sealed>>
+        +String detail
+        +wrap(Throwable)$ AiError
+    }
+    class SourceGenEngine {
+        <<v1 reuse>>
+        +generate(AiChatOptions, GenerateInput) AiSourceOutcome
+    }
+    class AiSourceOutcome {
+        <<v1 reuse>>
+        +String json
+        +ValidationResult validation
+        +List~RulePreviewItem~ previews
+    }
+
+    %% ==================== 扩展的 v1 类 ====================
+    class AiConfig {
+        <<v1 extended>>
+        +snapshot() AiChatOptions
+        +save(...)
+        +isConfigured() Boolean
+        +retrievalTopK Int
+        +retrievalMaxChars Int
+        +explainMaxChars Int
+        +readerAssistantEnabled Boolean
+    }
+    class PromptBuilder {
+        <<v1 extended>>
+        +buildGenerate(GenerateInput) List~ChatMessage~
+        +buildDebug(DebugInput) List~ChatMessage~
+        +buildRepair(...) List~ChatMessage~
+        +buildQa(QaPromptInput) List~ChatMessage~
+        +buildExplain(ExplainPromptInput) List~ChatMessage~
+    }
+    class ReaderPromptTemplates {
+        <<new object>>
+        +SYSTEM_QA String$
+        +SYSTEM_EXPLAIN String$
+        +LABEL_FRAGMENTS String$
+        +LABEL_HISTORY String$
+        +LABEL_QUESTION String$
+        +LABEL_SELECTION String$
+        +NO_EVIDENCE_HINT String$
+    }
+    class IntentPromptTemplates {
+        <<new object>>
+        +SEARCH String$
+        +TOC String$
+        +CONTENT String$
+        +DETAIL String$
+        +all() List~IntentSnippet~$
+    }
+
+    %% ==================== 检索内核（新增，纯 Kotlin） ====================
+    class ChapterTextProvider {
+        <<new interface>>
+        +chapterCount() Int
+        +currentIndex() Int
+        +titleAt(Int) String
+        +isCached(Int) Boolean
+        +textAt(Int) String?
+    }
+    class ChapterRef {
+        <<new>>
+        +Int index
+        +String title
+    }
+    class TextFragment {
+        <<new>>
+        +Int chapterIndex
+        +String chapterTitle
+        +Int charStart
+        +String text
+    }
+    class ScoredFragment {
+        <<new>>
+        +TextFragment fragment
+        +Double score
+    }
+    class RetrievalRequest {
+        <<new>>
+        +String query
+        +Int topK
+        +Int maxCharsPerFragment
+        +Int maxTotalChars
+        +Int windowRadius
+        +Long timeBudgetMs
+    }
+    class RetrievalStats {
+        <<new>>
+        +Int scannedChapters
+        +Int cachedChapters
+        +Int totalChapters
+        +Long elapsedMs
+        +Boolean budgetExceeded
+        +Boolean usedFallback
+    }
+    class RetrievalResult {
+        <<new>>
+        +List~ScoredFragment~ fragments
+        +RetrievalStats stats
+        +Boolean isEmpty
+        +Int totalChars
+    }
+    class Tokenizer {
+        <<new object>>
+        +tokenize(String) List~String~
+        +normalize(String) String
+    }
+    class FragmentSplitter {
+        <<new object>>
+        +split(Int, String, String, Int, Int) List~TextFragment~
+    }
+    class BookRetriever {
+        <<new class>>
+        -ChapterTextProvider provider
+        +retrieve(RetrievalRequest) RetrievalResult
+        -scoreFragment(List~String~, TextFragment, Int) Double
+        -selectTopK(List~ScoredFragment~, RetrievalRequest) List~ScoredFragment~
+    }
+
+    %% ==================== 阅读器引擎（新增，纯 Kotlin） ====================
+    class ChatTurn {
+        <<new>>
+        +String question
+        +String answer
+    }
+    class QaInput {
+        <<new>>
+        +String bookName
+        +String question
+        +List~ChatTurn~ history
+        +RetrievalRequest retrieval
+    }
+    class QaOutcome {
+        <<new>>
+        +String answerMarkdown
+        +List~ScoredFragment~ citations
+        +RetrievalStats stats
+        +Int promptChars
+    }
+    class ExplainInput {
+        <<new>>
+        +String bookName
+        +String chapterTitle
+        +String selection
+        +Int maxChars
+    }
+    class ExplainOutcome {
+        <<new>>
+        +String answerMarkdown
+        +Boolean truncated
+        +Int sentChars
+    }
+    class QaPromptInput {
+        <<new>>
+        +String bookName
+        +String question
+        +List~ChatTurn~ history
+        +List~ScoredFragment~ fragments
+    }
+    class ExplainPromptInput {
+        <<new>>
+        +String bookName
+        +String chapterTitle
+        +String selection
+    }
+    class ReaderQaEngine {
+        <<new class>>
+        -AiChatClient client
+        -BookRetriever retriever
+        +ask(AiChatOptions, QaInput) QaOutcome
+    }
+    class ExplainEngine {
+        <<new class>>
+        -AiChatClient client
+        +explain(AiChatOptions, ExplainInput) ExplainOutcome
+    }
+
+    %% ==================== 批量编排（新增，纯 Kotlin） ====================
+    class BatchItemState {
+        <<enumeration>>
+        PENDING
+        RUNNING
+        SUCCESS
+        FAILED
+        CANCELLED
+    }
+    class BatchItem {
+        <<new>>
+        +Int index
+        +String url
+        +BatchItemState state
+        +AiSourceOutcome? outcome
+        +String? errorMessage
+    }
+    class BatchProgress {
+        <<new>>
+        +List~BatchItem~ items
+        +Int finished
+        +Int total
+        +Boolean running
+        +successCount() Int
+        +failedCount() Int
+    }
+    class BatchSourceGenerator {
+        <<new class>>
+        -SourceGenEngine engine
+        +run(AiChatOptions, List~String~, String?, (BatchProgress)-~Unit) BatchProgress
+    }
+
+    %% ==================== Android 外壳 ====================
+    class CachedBookTextProvider {
+        <<new android>>
+        -Book book
+        -List~ChapterRef~ refs
+        +chapterCount() Int
+        +textAt(Int) String?
+        +loadWindow(Int, Int)
+    }
+    class AiChatBottomSheet {
+        <<new android>>
+        +MODE_QA Int$
+        +MODE_EXPLAIN Int$
+        +newInstance(Int, String?)$ AiChatBottomSheet
+    }
+    class AiChatViewModel {
+        <<new android>>
+        +LiveData~List~ChatTurn~~ turns
+        +LiveData~RetrievalStats~ stats
+        +ask(String)
+        +explain(String)
+        +cancel()
+    }
+    class AiChatAdapter {
+        <<new android>>
+    }
+    class BatchTaskAdapter {
+        <<new android>>
+    }
+    class AiSourceAssistantViewModel {
+        <<v1 extended>>
+        +LiveData~BatchProgress~ batchProgress
+        +startBatch(List~String~, String?)
+        +cancelBatch()
+        +applyIntent(String)
+    }
+    class AiSourceAssistantDialog {
+        <<v1 extended>>
+    }
+    class ReadBookActivity {
+        <<extended>>
+        +onMenuItemSelected(Int) Boolean
+    }
+
+    %% ==================== 关系 ====================
+    OpenAiClient ..|> AiChatClient
+    AiConfig ..> AiChatOptions : produces
+    PromptBuilder ..> ReaderPromptTemplates : uses
+    PromptBuilder ..> ChatMessage : builds
+    PromptBuilder ..> QaPromptInput : input
+    PromptBuilder ..> ExplainPromptInput : input
+
+    BookRetriever o-- ChapterTextProvider : depends on abstraction
+    BookRetriever ..> Tokenizer : uses
+    BookRetriever ..> FragmentSplitter : uses
+    BookRetriever ..> RetrievalRequest : input
+    BookRetriever ..> RetrievalResult : output
+    RetrievalResult *-- ScoredFragment
+    RetrievalResult *-- RetrievalStats
+    ScoredFragment *-- TextFragment
+
+    ReaderQaEngine o-- AiChatClient
+    ReaderQaEngine o-- BookRetriever
+    ReaderQaEngine ..> PromptBuilder : uses
+    ReaderQaEngine ..> QaInput : input
+    ReaderQaEngine ..> QaOutcome : output
+    ReaderQaEngine ..> AiError : throws
+
+    ExplainEngine o-- AiChatClient
+    ExplainEngine ..> PromptBuilder : uses
+    ExplainEngine ..> ExplainInput : input
+    ExplainEngine ..> ExplainOutcome : output
+
+    BatchSourceGenerator o-- SourceGenEngine
+    BatchSourceGenerator ..> BatchProgress : emits
+    BatchProgress *-- BatchItem
+    BatchItem --> BatchItemState
+    BatchItem ..> AiSourceOutcome
+
+    CachedBookTextProvider ..|> ChapterTextProvider
+    CachedBookTextProvider *-- ChapterRef
+
+    AiChatViewModel o-- ReaderQaEngine
+    AiChatViewModel o-- ExplainEngine
+    AiChatViewModel ..> CachedBookTextProvider : creates
+    AiChatViewModel ..> AiConfig : snapshot()
+    AiChatBottomSheet o-- AiChatViewModel
+    AiChatBottomSheet o-- AiChatAdapter
+    ReadBookActivity ..> AiChatBottomSheet : shows
+
+    AiSourceAssistantViewModel o-- BatchSourceGenerator
+    AiSourceAssistantViewModel ..> IntentPromptTemplates : uses
+    AiSourceAssistantDialog o-- AiSourceAssistantViewModel
+    AiSourceAssistantDialog o-- BatchTaskAdapter

@@ -1,0 +1,135 @@
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant BSA as BookSourceActivity<br/>(现有)
+    participant DLG as AiSourceHelperDialog
+    participant VM as AiSourceHelperViewModel
+    participant CFG as AiConfig
+    participant GEN as SourceGenEngine
+    participant DBG as SourceDebugEngine
+    participant FET as OkHttpPageFetcher
+    participant EXT as HtmlSnippetExtractor
+    participant PB as PromptBuilder
+    participant CLI as OpenAiClient
+    participant LLM as 用户自有 LLM 端点
+    participant JX as AiJsonExtractor
+    participant VAL as BookSourceValidator
+    participant PRV as SourceRulePreview
+    participant IMP as ImportBookSourceDialog<br/>(现有)
+    participant DB as appDb.bookSourceDao<br/>(现有)
+
+    %% ---------- 入口与配置 ----------
+    U->>BSA: 点击菜单「AI 书源助手」(Q7)
+    BSA->>DLG: showDialogFragment(AiSourceHelperDialog())
+    DLG->>VM: 初始化
+    VM->>CFG: isConfigured()
+    CFG-->>VM: false
+    VM-->>DLG: errorLive = AiError.NotConfigured
+    DLG->>U: 提示未配置 + 打开 AiConfigDialog
+    U->>CFG: 填写 endpoint/apiKey/model/temp/maxTokens → save()
+    Note over CFG: AiConfigValidator.validate()<br/>normalizeEndpoint()<br/>仅写入 SharedPreferences，不上报 (P0-1/US3)
+
+    alt 生成模式 (P0-2 / US1)
+        U->>DLG: 输入 URL 或粘贴 HTML + 自然语言意图 → 点「生成书源」
+        DLG->>VM: generate(GenerateInput)
+        VM->>CFG: snapshot()
+        CFG-->>VM: AiChatOptions
+        VM->>VM: execute{} 持有 Coroutine (P1-3 可取消)
+        VM->>GEN: generate(options, input)
+
+        alt 输入为 URL
+            GEN->>FET: fetch(url)
+            Note over FET: okHttpClient.newBuilder()<br/>.cookieJar(NO_COOKIES) (Q5 隐私)
+            FET-->>GEN: 整页 HTML
+        else 输入为 HTML
+            Note over GEN: 直接使用用户粘贴内容
+        end
+
+        GEN->>EXT: extract(html, intent, maxChars=12000)
+        Note over EXT: Jsoup 剥 script/style/注释<br/>意图关键词定位容器<br/>截断后二次 parse 保证闭合 (Q2/P1-1)
+        EXT-->>GEN: HTML 片段
+        GEN->>PB: buildGenerate(input, snippet)
+        PB-->>GEN: List~ChatMessage~ (system + user)
+        Note over GEN: TokenEstimator 估算并回传 UI 预告
+        GEN->>CLI: chat(options, messages)
+        CLI->>LLM: POST {endpoint}/chat/completions<br/>stream=false (Q1)
+        LLM-->>CLI: 200 + choices[0].message.content
+        CLI-->>GEN: ChatResponse
+        GEN->>JX: extract(rawReply)
+        JX-->>GEN: sourceJson 或 null
+        GEN->>VAL: validate(JsonObject)
+        VAL-->>GEN: ValidationResult (ERROR/WARNING 分级, Q6)
+        GEN->>PRV: build(JsonObject)
+        PRV-->>GEN: RulePreview
+        GEN-->>VM: AiSourceOutcome
+        VM-->>DLG: outcomeLive.postValue(outcome)
+        DLG->>U: 规则预览分组展示 + 问题清单 (P1-2)
+
+    else 调试模式 (P0-3 / US2)
+        U->>DLG: 粘贴现有书源 JSON + 样例 HTML/症状 → 点「诊断」
+        Note over DLG,DBG: Q5：不主动抓取测试 URL<br/>SourceDebugEngine 构造上无 PageFetcher
+        DLG->>VM: diagnose(DebugInput)
+        VM->>CFG: snapshot()
+        CFG-->>VM: AiChatOptions
+        VM->>DBG: diagnose(options, input)
+        DBG->>VAL: validateRaw(sourceJson) 预检
+        VAL-->>DBG: ValidationResult
+        alt 输入源 JSON 非法
+            DBG-->>VM: throw AiError.JsonMalformed
+        else 合法
+            DBG->>EXT: extract(sampleHtml, symptom, maxChars)
+            EXT-->>DBG: HTML 片段
+            DBG->>PB: buildDebug(input, snippet)
+            PB-->>DBG: List~ChatMessage~
+            DBG->>CLI: chat(options, messages)
+            CLI->>LLM: POST /chat/completions
+            LLM-->>CLI: 诊断建议 + 修正后 JSON
+            CLI-->>DBG: ChatResponse
+            DBG->>JX: splitAdviceAndJson(rawReply)
+            JX-->>DBG: (advice, sourceJson)
+            DBG->>VAL: validate(JsonObject)
+            VAL-->>DBG: ValidationResult
+            DBG->>PRV: build(JsonObject)
+            PRV-->>DBG: RulePreview
+            DBG-->>VM: AiSourceOutcome(advice + json)
+            VM-->>DLG: outcomeLive
+            DLG->>U: 「诊断建议」与「修正 JSON」分区展示
+        end
+    end
+
+    %% ---------- 错误与兜底 (P0-5 / Q4) ----------
+    opt LLM 调用异常
+        LLM--xCLI: 401 / 429 / 5xx / 超时 / 断网
+        CLI-->>VM: throw AiError.{Unauthorized|RateLimited|ServerError|Timeout|NetworkFailure}
+        VM-->>DLG: errorLive
+        DLG->>U: 明确中文文案 (R.string.ai_err_*)，输入原样保留，显示「重试」
+        Note over DLG: 绝不抛异常堆栈，绝不清空输入，绝不打印 apiKey
+    end
+
+    opt LLM 输出无法解析 (Q4 兜底)
+        JX-->>GEN: null
+        GEN-->>VM: throw AiError.JsonNotFound(rawReply)
+        VM-->>DLG: errorLive + 原始回复
+        U->>DLG: 点「编辑 JSON」
+        DLG->>DLG: showDialogFragment(CodeDialog(raw, disableEdit=false)) (复用现有)
+        U->>DLG: onCodeSave(editedJson)
+        DLG->>VM: revalidate(editedJson)
+        VM->>VAL: validate() 本地重校验（零 token）
+        VAL-->>VM: ValidationResult
+        VM-->>DLG: outcomeLive
+    end
+
+    opt 用户取消 (P1-3)
+        U->>DLG: 点「取消」
+        DLG->>VM: cancel()
+        VM->>VM: coroutine.cancel() → OkHttp Call 随之取消
+        VM-->>DLG: loadingLive=false，UI 回到可操作态
+    end
+
+    %% ---------- 一键导入 (P0-4) ----------
+    U->>DLG: 点「一键导入」（canImport==true 才可点）
+    DLG->>IMP: showDialogFragment(ImportBookSourceDialog(sourceJson))
+    Note over IMP: 100% 复用既有导入链路：<br/>新增/更新/已有识别、分组、<br/>保留名称/分组/启用状态
+    IMP->>DB: importSelect() → insert/update
+    DB-->>IMP: 完成
+    IMP-->>U: 导入成功反馈

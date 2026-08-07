@@ -1,0 +1,187 @@
+%% 阅读Sigma（legado-Z）AI Phase2 — 时序图（3 个场景）
+%% 来源：docs/plans/2026-08-07-ai-phase2-arch.md §5
+%% 注意：单个 .mermaid 文件通常只渲染第一个图，下方两个图请在 arch.md 中查看，
+%%       或按 "=== 场景 N ===" 分隔手动拆分渲染。
+
+%% =========================================================
+%% === 场景 1：阅读器检索问答（A 块，PH2-P0-1 ~ PH2-P0-4）===
+%% =========================================================
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant RA as ReadBookActivity
+    participant BS as AiChatBottomSheet
+    participant VM as AiChatViewModel
+    participant CFG as AiConfig
+    participant P as CachedBookTextProvider
+    participant DB as BookChapterDao / BookHelp
+    participant R as BookRetriever
+    participant PB as PromptBuilder
+    participant C as OpenAiClient
+    participant LLM as LLM 服务
+
+    U->>RA: 点击 menu_ai_qa
+    RA->>CFG: isConfigured() / readerAssistantEnabled
+    alt 未配置 或 总开关关闭
+        RA-->>U: toast 引导去 AI 设置
+    else 可用
+        RA->>BS: show(MODE_QA)
+        BS->>VM: init(ReadBook.book, durChapterIndex)
+        VM->>P: create(book, currentIndex)
+        P->>DB: getChapterCount(bookUrl)
+        P-->>VM: chapterCount = M
+        VM->>P: 统计 isCached → N
+        VM-->>BS: 显示「已缓存 N/M 章」
+        U->>BS: 输入问题并发送
+        BS->>VM: ask(question)
+        VM->>CFG: snapshot() → AiChatOptions
+        VM->>R: retrieve(RetrievalRequest(query, topK=5, 400, 3000, radius=200, budget=2000ms))
+        loop 由近及远交替扫描，直到 topK 稳定 / 预算耗尽
+            R->>P: isCached(i) / textAt(i)
+            P->>DB: BookHelp.getContent(book, chapter)  (IO 线程, 同步文件读)
+            DB-->>P: 章节正文 或 null
+            P-->>R: text?
+            R->>R: FragmentSplitter.split + Tokenizer + 打分
+        end
+        alt 零缓存（N == 0）
+            R->>P: fallback → ReadBook.curTextChapter 文本
+            Note over R,P: Q6 兜底：仅用当前章节
+        end
+        R-->>VM: RetrievalResult(fragments, stats)
+        alt fragments 为空 / 全 0 分
+            VM-->>BS: 「未在本地缓存中找到相关内容」<br/>不发起网络请求
+        else 有命中
+            VM->>VM: 取最近 2 轮 history (Q8)
+            VM->>PB: buildQa(QaPromptInput(bookName, question, history, fragments))
+            Note over PB: 只含片段与问题，<br/>无 apiKey、无整本书
+            PB-->>VM: List<ChatMessage>
+            VM-->>BS: 显示「本次发送约 X 字」
+            VM->>C: chat(options, messages)
+            C->>LLM: POST /chat/completions (stream=false)
+            LLM-->>C: ChatResponse
+            C-->>VM: firstContent()
+            VM-->>BS: QaOutcome(answerMarkdown, citations, stats)
+            BS->>BS: TextView.setMarkdown(markwon, ...)
+            BS-->>U: 渲染答案 + 引用片段折叠区
+        end
+    end
+
+    opt 用户取消 / 弹层关闭
+        U->>BS: 取消
+        BS->>VM: cancel()
+        VM->>VM: job.cancel() → CancellationException 逐层外抛，不转 AiError
+    end
+
+%% =========================================================
+%% === 场景 2：划词赏析（B 块，PH2-P0-5 ~ PH2-P0-6）      ===
+%% =========================================================
+%% sequenceDiagram
+%%     autonumber
+%%     actor U as 用户
+%%     participant TM as TextActionMenu
+%%     participant RA as ReadBookActivity
+%%     participant BS as AiChatBottomSheet
+%%     participant VM as AiChatViewModel
+%%     participant CFG as AiConfig
+%%     participant E as ExplainEngine
+%%     participant PB as PromptBuilder
+%%     participant C as OpenAiClient
+%%     participant LLM as LLM 服务
+%%
+%%     U->>TM: 长按选中文本
+%%     TM-->>U: 弹出操作菜单（menu_dict / menu_ai_explain 平级）
+%%     U->>TM: 点击「AI 赏析」
+%%     TM->>RA: onMenuItemSelected(R.id.menu_ai_explain)
+%%     RA->>RA: selectedText = readView.getSelectText()
+%%     RA->>CFG: isConfigured() / readerAssistantEnabled
+%%     alt 选中为空
+%%         RA-->>U: toast 「请先选择文本」
+%%     else 可用
+%%         RA->>BS: show(MODE_EXPLAIN, selectedText)
+%%         RA->>TM: onMenuActionFinally()  (关闭菜单并清除选区)
+%%         BS->>VM: explain(selectedText)
+%%         VM->>CFG: snapshot() + explainMaxChars (默认 1000)
+%%         VM->>E: explain(options, ExplainInput(bookName, chapterTitle, selection, maxChars))
+%%         alt selection.length > maxChars
+%%             E->>E: 截断至 maxChars，标记 truncated = true (Q9)
+%%         end
+%%         E->>PB: buildExplain(ExplainPromptInput)
+%%         Note over PB: SYSTEM_EXPLAIN 要求输出四段：<br/>释义 / 典故 / 手法 / 语境<br/>仅发送选中文本
+%%         PB-->>E: List<ChatMessage>
+%%         E->>C: chat(options, messages)
+%%         C->>LLM: POST /chat/completions
+%%         LLM-->>C: ChatResponse
+%%         C-->>E: firstContent()
+%%         E-->>VM: ExplainOutcome(answerMarkdown, truncated, sentChars)
+%%         VM-->>BS: 渲染
+%%         BS->>BS: setMarkdown(markwon, ...)
+%%         alt truncated
+%%             BS-->>U: 顶部提示「已截断至 1000 字」
+%%         end
+%%         BS-->>U: 显示赏析结果（可复制 / 重新生成）
+%%     end
+
+%% =========================================================
+%% === 场景 3：书源助手批量生成（C 块，PH2-P1-3 ~ P1-5）  ===
+%% =========================================================
+%% sequenceDiagram
+%%     autonumber
+%%     actor U as 用户
+%%     participant D as AiSourceAssistantDialog
+%%     participant VM as AiSourceAssistantViewModel
+%%     participant IT as IntentPromptTemplates
+%%     participant B as BatchSourceGenerator
+%%     participant GE as SourceGenEngine
+%%     participant F as OkHttpPageFetcher
+%%     participant C as OpenAiClient
+%%     participant IMP as ImportBookSourceDialog
+%%
+%%     U->>D: 点击意图 Chip（搜索/目录/正文/详情）
+%%     D->>VM: applyIntent(key)
+%%     VM->>IT: SEARCH / TOC / CONTENT / DETAIL 常量
+%%     IT-->>VM: prompt 片段
+%%     VM-->>D: 追加到「补充要求」输入框（可再编辑）
+%%
+%%     U->>D: 粘贴多行 URL，点击「批量生成」
+%%     D->>VM: startBatch(urls, extraRequirement)
+%%     VM->>VM: execute { ... }  (BaseViewModel)
+%%     VM->>B: run(options, urls, extra, onProgress)
+%%     B->>B: 初始化 items 全部 PENDING，emit 首帧
+%%
+%%     loop 严格串行 concurrency = 1 (Q4)
+%%         B->>B: ensureActive()
+%%         B->>B: item[i].state = RUNNING → onProgress(snapshot)
+%%         B->>GE: generate(options, GenerateInput(url, extra))
+%%         GE->>F: fetch(url)
+%%         F-->>GE: html
+%%         GE->>GE: HtmlChunker.chunk(html, aiHtmlMaxChars)
+%%         GE->>C: chat(...)
+%%         C-->>GE: ChatResponse
+%%         GE->>GE: SourceJsonExtractor + BookSourceValidator + RulePreviewBuilder
+%%         alt 成功
+%%             GE-->>B: AiSourceOutcome
+%%             B->>B: item[i] = SUCCESS(outcome) → onProgress(snapshot)
+%%             B-->>VM: 该条可立即导入
+%%             VM-->>D: batchProgress LiveData 更新
+%%             D-->>U: 列表第 i 项出现「导入」按钮
+%%         else 失败（非 Cancellation）
+%%             GE-->>B: throw
+%%             B->>B: AiError.wrap(e) → item[i] = FAILED(msg) → onProgress
+%%             Note over B: 失败隔离：继续下一条，绝不中断整批
+%%         end
+%%     end
+%%
+%%     B-->>VM: 最终 BatchProgress(running = false)
+%%     VM-->>D: 汇总「成功 x / 失败 y / 共 n」
+%%
+%%     opt 用户中途取消
+%%         U->>D: 点击「取消批量」
+%%         D->>VM: cancelBatch()
+%%         VM->>B: job.cancel()
+%%         B->>B: 剩余 PENDING/RUNNING 标记为 CANCELLED 后外抛
+%%         B-->>VM: 状态机收敛，无「永久 RUNNING」残留
+%%     end
+%%
+%%     U->>D: 对某条成功项点「导入」
+%%     D->>IMP: ImportBookSourceDialog(item.outcome.json)
+%%     IMP-->>U: 走既有一键导入流程
