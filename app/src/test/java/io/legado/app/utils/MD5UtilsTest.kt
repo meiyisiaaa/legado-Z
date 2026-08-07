@@ -20,7 +20,7 @@ class MD5UtilsTest {
     }
 
     @Test
-    fun `md5Encode16 是完整 MD5 的 8..24 子串`() {
+    fun `md5Encode16 是完整 MD5 的中间子串`() {
         val full = MD5Utils.md5Encode("abc")
         assertEquals(full.substring(8, 24), MD5Utils.md5Encode16("abc"))
     }

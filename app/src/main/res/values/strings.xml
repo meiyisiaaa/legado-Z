@@ -1343,4 +1343,186 @@
     <string name="click_image_way">点击图片方式</string>
     <string name="auto_update_summary">每天自动检查软件是否更新</string>
     <string name="shibboleth">口令</string>
+
+    <!-- ==================== AI 书源助手 ==================== -->
+    <!-- 标题 / 入口 -->
+    <string name="ai_source_assistant">AI 书源助手</string>
+    <string name="ai_source_assistant_summary">用大模型生成或诊断书源规则</string>
+    <string name="ai_settings">AI 配置</string>
+    <string name="ai_tab_generate">生成</string>
+    <string name="ai_tab_debug">诊断</string>
+
+    <!-- 生成 / 诊断 输入 -->
+    <string name="ai_hint_intent">用一句话描述你想要的书源，例如：帮我做这个站的搜索和目录规则</string>
+    <string name="ai_hint_page_url">页面地址（可选，留空则只用下方 HTML）</string>
+    <string name="ai_hint_html">粘贴网页 HTML 片段（推荐，不耗流量也更快）</string>
+    <string name="ai_hint_source_json">粘贴现有书源 JSON</string>
+    <string name="ai_hint_symptom">描述故障症状，例如：搜索有结果但目录为空</string>
+    <string name="ai_hint_sample_html">粘贴出问题页面的样例 HTML 片段</string>
+
+    <!-- 配置项 -->
+    <string name="ai_hint_endpoint">接口地址，例如 https://api.openai.com/v1</string>
+    <string name="ai_hint_api_key">API Key</string>
+    <string name="ai_hint_model">模型名，例如 gpt-4o-mini</string>
+    <string name="ai_hint_temperature">温度（0 ~ 2）</string>
+    <string name="ai_hint_max_tokens">最大输出 token</string>
+    <string name="ai_hint_timeout_sec">超时秒数</string>
+    <string name="ai_hint_html_max_chars">HTML 片段字符上限</string>
+    <string name="ai_auto_repair">自动修复</string>
+    <string name="ai_auto_repair_summary">JSON 解析或校验失败时自动重试一次修复，会额外消耗一次请求</string>
+    <string name="ai_advanced">高级参数</string>
+    <string name="ai_privacy_tip">API Key 仅保存在本机私有存储，不会随备份导出；HTML 片段仅在你点击生成时上传给你配置的接口。</string>
+
+    <!-- 动作 -->
+    <string name="ai_action_generate">生成书源</string>
+    <string name="ai_action_diagnose">诊断书源</string>
+    <string name="ai_action_import">一键导入</string>
+    <string name="ai_action_retry">重试</string>
+    <string name="ai_action_edit_json">编辑 JSON</string>
+    <string name="ai_action_copy_json">复制 JSON</string>
+    <string name="ai_action_test_connection">测试连接</string>
+
+    <!-- 结果区 -->
+    <string name="ai_result_advice">诊断建议</string>
+    <string name="ai_result_issues">校验问题</string>
+    <string name="ai_result_raw_reply">原始回复</string>
+    <string name="ai_token_estimate">预计消耗 token</string>
+    <string name="ai_usage">本次用量</string>
+    <string name="ai_disclaimer">AI 生成的规则仅供参考，导入前请自行核对。</string>
+    <string name="ai_empty_result">暂无结果</string>
+
+    <!-- 提示 -->
+    <string name="ai_settings_saved">AI 配置已保存</string>
+    <string name="ai_ping_ok">连接正常</string>
+    <string name="ai_not_configured_tip">请先完成 AI 配置</string>
+    <string name="ai_input_required">请至少填写意图或 HTML 片段</string>
+    <string name="ai_debug_input_required">请填写现有书源 JSON</string>
+    <string name="ai_no_json_to_import">没有可导入的书源 JSON</string>
+    <string name="ai_revalidated">已重新校验</string>
+    <string name="ai_generating">正在请求模型…</string>
+
+    <!-- 预览分组 -->
+    <string name="ai_preview_group_base">基础信息</string>
+    <string name="ai_preview_group_search">搜索规则</string>
+    <string name="ai_preview_group_explore">发现规则</string>
+    <string name="ai_preview_group_book_info">详情规则</string>
+    <string name="ai_preview_group_toc">目录规则</string>
+    <string name="ai_preview_group_content">正文规则</string>
+
+    <!-- 错误 -->
+    <string name="ai_err_not_configured">尚未配置 AI 接口</string>
+    <string name="ai_err_invalid_config">AI 配置不合法</string>
+    <string name="ai_err_network">网络连接失败</string>
+    <string name="ai_err_timeout">请求超时</string>
+    <string name="ai_err_unauthorized">API Key 无效或无权限</string>
+    <string name="ai_err_rate_limited">请求过于频繁或余额不足</string>
+    <string name="ai_err_server">服务端返回错误</string>
+    <string name="ai_err_empty_response">模型没有返回内容</string>
+    <string name="ai_err_json_not_found">回复中找不到书源 JSON</string>
+    <string name="ai_err_json_malformed">书源 JSON 格式非法</string>
+    <string name="ai_err_schema_invalid">书源 JSON 不符合规范</string>
+    <string name="ai_err_fetch_failed">网页抓取失败</string>
+    <string name="ai_err_stream_unsupported">当前版本不支持流式输出</string>
+    <string name="ai_err_unknown">未知错误</string>
+
+    <!-- 配置校验问题 -->
+    <string name="ai_issue_endpoint_empty">接口地址不能为空</string>
+    <string name="ai_issue_endpoint_scheme">接口地址必须以 http:// 或 https:// 开头</string>
+    <string name="ai_issue_api_key_empty">API Key 不能为空</string>
+    <string name="ai_issue_api_key_storage">API Key 安全存储失败，请重试</string>
+    <string name="ai_issue_model_empty">模型名不能为空</string>
+    <string name="ai_issue_temperature_range">温度需在 0 ~ 2 之间</string>
+    <string name="ai_issue_max_tokens_range">最大输出 token 超出允许范围</string>
+    <string name="ai_issue_timeout_range">超时秒数超出允许范围</string>
+    <string name="ai_issue_html_max_chars_range">HTML 片段字符上限超出允许范围</string>
+
+    <!-- 书源校验问题 -->
+    <string name="ai_issue_json_malformed">JSON 语法非法</string>
+    <string name="ai_issue_json_not_object">JSON 顶层必须是一个对象</string>
+    <string name="ai_issue_source_url_missing">缺少 bookSourceUrl</string>
+    <string name="ai_issue_source_url_invalid">bookSourceUrl 必须是 http/https 绝对地址</string>
+    <string name="ai_issue_source_name_missing">缺少 bookSourceName</string>
+    <string name="ai_issue_source_type_invalid">bookSourceType 取值非法，应为 0 ~ 4</string>
+    <string name="ai_issue_search_url_missing">有搜索规则却缺少 searchUrl</string>
+    <string name="ai_issue_core_rules_missing">缺少搜索/目录/正文三大核心规则</string>
+    <string name="ai_issue_unknown_field">未知顶层字段，导入时会被丢弃</string>
+    <string name="ai_issue_unknown_rule_field">未知规则字段，导入时会被丢弃</string>
+    <string name="ai_issue_rule_not_object">规则字段必须是一个对象</string>
+    <string name="ai_issue_critical_rule_missing">缺少关键规则字段</string>
+    <string name="ai_issue_rule_value_not_primitive">规则值必须是字符串或布尔值</string>
+
+    <!-- ==================== AI Phase 2：读者助手 ==================== -->
+
+    <!-- 配置项 -->
+    <string name="ai_reader_section">AI 读者助手</string>
+    <string name="ai_reader_assistant_enabled">在阅读界面显示 AI 入口</string>
+    <string name="ai_hint_retrieval_top_k">召回片段条数（1 ~ 10）</string>
+    <string name="ai_hint_retrieval_max_chars">单条片段字符上限（100 ~ 1000）</string>
+    <string name="ai_hint_explain_max_chars">赏析选中文本字符上限（200 ~ 2000）</string>
+
+    <!-- 入口菜单 -->
+    <string name="menu_ai_qa">AI 问书</string>
+    <string name="menu_ai_explain">AI 赏析</string>
+
+    <!-- 问答面板 -->
+    <string name="ai_qa_title">AI 问书</string>
+    <string name="ai_qa_hint">就本书内容提问，例如：主角第一次见到师父是在哪一章？</string>
+    <string name="ai_qa_send">发送</string>
+    <string name="ai_qa_stop">停止</string>
+    <string name="ai_qa_clear">清空对话</string>
+    <string name="ai_qa_retrieving">正在本地检索…</string>
+    <string name="ai_qa_thinking">模型思考中…</string>
+    <string name="ai_qa_scope_window">检索范围：附近章节</string>
+    <string name="ai_qa_scope_full">检索范围：全书</string>
+    <string name="ai_action_expand_full_book">扩大到全书重试</string>
+    <string name="ai_qa_no_hit_window">附近章节里没有找到相关内容，未发送任何请求。可尝试扩大到全书。</string>
+    <string name="ai_qa_citations">参考出处</string>
+    <string name="ai_qa_stats">扫描 %1$d/%2$d 章（已缓存 %3$d），耗时 %4$d ms</string>
+    <string name="ai_qa_budget_exceeded">检索已达时间上限提前返回，结果可能不完整</string>
+    <string name="ai_qa_history_dropped">已省略较早的 %1$d 轮对话以控制成本</string>
+    <string name="ai_qa_prompt_chars">本轮提示词约 %1$d 字</string>
+    <string name="ai_qa_copy_answer">复制回答</string>
+    <string name="ai_qa_cleared">对话已清空</string>
+
+    <!-- 赏析面板 -->
+    <string name="ai_explain_title">AI 赏析</string>
+    <string name="ai_explain_truncated">选中文本过长，已截断至 %1$d 字后发送</string>
+
+    <!-- 读者侧提示 -->
+    <string name="ai_reader_disabled">阅读界面 AI 入口已关闭，可在「AI 配置」中开启</string>
+    <string name="ai_book_not_ready">当前书籍尚未就绪，请稍后再试</string>
+    <string name="ai_no_cached_chapter">本地没有已缓存的章节，请先阅读或缓存后再试</string>
+    <string name="ai_disclaimer_reader">AI 回答基于本地已缓存的章节片段生成，可能存在错误或遗漏，请以原文为准。</string>
+
+    <!-- ==================== AI Phase 2：书源助手增强 ==================== -->
+
+    <!-- 意图模板 -->
+    <string name="ai_intent_section">快捷意图</string>
+    <string name="ai_intent_search">搜索规则</string>
+    <string name="ai_intent_toc">目录规则</string>
+    <string name="ai_intent_content">正文规则</string>
+    <string name="ai_intent_detail">详情规则</string>
+
+    <!-- 批量生成 -->
+    <string name="ai_tab_batch">批量</string>
+    <string name="ai_hint_batch_urls">每行一个页面地址，最多 %1$d 条</string>
+    <string name="ai_action_batch_run">批量生成</string>
+    <string name="ai_action_batch_cancel">取消批量</string>
+    <string name="ai_action_batch_import_all">导入全部成功项</string>
+    <string name="ai_batch_progress">%1$d/%2$d 已完成 · 成功 %3$d · 失败 %4$d</string>
+    <string name="ai_batch_state_pending">等待中</string>
+    <string name="ai_batch_state_running">生成中…</string>
+    <string name="ai_batch_state_success">成功</string>
+    <string name="ai_batch_state_failed">失败</string>
+    <string name="ai_batch_state_cancelled">已取消</string>
+    <string name="ai_batch_limit_exceeded">最多支持 %1$d 条，超出部分已忽略</string>
+    <string name="ai_batch_imported">已合并 %1$d 条书源，请在导入面板确认</string>
+    <string name="ai_batch_no_success">没有可导入的成功结果</string>
+    <string name="ai_batch_serial_tip">为避免触发限流，批量任务按顺序逐条请求，单条失败不影响其余条目。</string>
+
+    <!-- Phase 2 新增错误 -->
+    <string name="ai_err_retrieval_empty">本地检索没有命中相关内容，未发送任何请求</string>
+    <string name="ai_err_question_empty">请先输入问题</string>
+    <string name="ai_err_selection_empty">请先选中一段文本</string>
+    <string name="ai_err_batch_input_empty">请至少填写一个页面地址</string>
 </resources>

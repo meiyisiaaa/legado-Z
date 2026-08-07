@@ -209,4 +209,34 @@ object PreferKey {
     const val editAutoWrap = "editAutoWrap"
     const val editAutoComplete = "editAutoComplete"
     const val showBoardLine = "showBoardLine"
+
+    /* ---------------- AI 书源助手（io.legado.app.ai） ---------------- */
+    const val aiEndpoint = "aiEndpoint"
+
+    /**
+     * AI 服务的 apiKey。
+     * 加密后存放于 app 私有 SharedPreferences，密钥由 Android Keystore 管理；
+     * **必须**在备份/导出时排除，见 [io.legado.app.help.storage.BackupConfig.ignorePrefKeys]。
+     */
+    const val aiApiKey = "aiApiKey"
+    const val aiModel = "aiModel"
+    const val aiTemperature = "aiTemperature"
+    const val aiMaxTokens = "aiMaxTokens"
+    const val aiTimeoutSec = "aiTimeoutSec"
+    const val aiHtmlMaxChars = "aiHtmlMaxChars"
+    const val aiAutoRepair = "aiAutoRepair"
+
+    /* ------------- AI 读者助手（Phase 2，io.legado.app.ai.retrieval / engine） ------------- */
+
+    /** 单次问答召回的片段条数上限，取值域见 [io.legado.app.ai.AiReaderOptions] */
+    const val aiRetrievalTopK = "aiRetrievalTopK"
+
+    /** 单条召回片段送入 LLM 的字符上限 */
+    const val aiRetrievalMaxChars = "aiRetrievalMaxChars"
+
+    /** 「AI 赏析」允许送出的选中文本字符上限，超出则截断 */
+    const val aiExplainMaxChars = "aiExplainMaxChars"
+
+    /** 阅读器 AI 入口总开关，关闭后阅读界面不再展示问答/赏析菜单 */
+    const val aiReaderAssistantEnabled = "aiReaderAssistantEnabled"
 }

@@ -246,6 +246,11 @@
             android:title="@string/record_heap_dump_t"
             app:iconSpaceReserved="false" />
 
+        <io.legado.app.lib.prefs.Preference
+            android:key="aiSettings"
+            android:summary="@string/ai_source_assistant_summary"
+            android:title="@string/ai_settings" />
+
     </io.legado.app.lib.prefs.PreferenceCategory>
 
 

@@ -63,8 +63,11 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
             onInitializeMenu(otherMenu)
         }
         menuItems = myMenu.visibleItems + otherMenu.visibleItems
-        visibleMenuItems.addAll(menuItems.subList(0, 5))
-        moreMenuItems.addAll(menuItems.subList(5, menuItems.size))
+        // 常驻行只放前 VISIBLE_MENU_ITEM_COUNT 项，其余折进「更多」。
+        // coerceAtMost 兜底：当可见项不足阈值时（例如资源被裁剪）避免 subList 越界。
+        val visibleCount = VISIBLE_MENU_ITEM_COUNT.coerceAtMost(menuItems.size)
+        visibleMenuItems.addAll(menuItems.subList(0, visibleCount))
+        moreMenuItems.addAll(menuItems.subList(visibleCount, menuItems.size))
         binding.recyclerView.adapter = adapter
         binding.recyclerViewMore.adapter = adapter
         setOnDismissListener {
@@ -291,5 +294,20 @@ class TextActionMenu(private val context: Context, private val callBack: CallBac
         fun onMenuItemSelected(itemId: Int): Boolean
 
         fun onMenuActionFinally()
+    }
+
+    companion object {
+
+        /**
+         * 选区菜单常驻行显示的菜单项数量，超出部分折进「更多」。
+         *
+         * 取 6 而不是原来的 5：content_select_action.xml 里「AI 赏析」插在「字典」之后
+         * 排到第 6 位，阈值同步 +1 才能让它与字典平级直接可见。
+         * 这样做的好处是既有 8 项的相对顺序完全不动，也没有任何一项被挤进「更多」
+         * —— 若维持 5，就必须把「朗读」这个高频 TTS 入口降级折叠。
+         * 布局上安全：常驻行用的是 FlexboxLayoutManager(flexWrap=wrap)，放不下会自动换行；
+         * expandTextMenu 打开时本来就一次性铺满全部 10 项，已验证换行排布可行。
+         */
+        private const val VISIBLE_MENU_ITEM_COUNT = 6
     }
 }

@@ -34,6 +34,7 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
+import io.legado.app.ui.ai.AiSourceAssistantDialog
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.search.SearchScope
@@ -188,6 +189,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_add_book_source -> startActivity<BookSourceEditActivity>()
+            R.id.menu_ai_source_assistant -> showDialogFragment(AiSourceAssistantDialog())
             R.id.menu_import_qr -> qrResult.launch()
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_local -> importDoc.launch {

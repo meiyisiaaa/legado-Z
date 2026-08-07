@@ -150,6 +150,11 @@ android {
     lint {
         checkDependencies = true
     }
+    testOptions {
+        // 防御性配置：JVM 单测正常路径不应触碰 android.jar 桩方法
+        // （io.legado.app.ai 内核层已做到零 Android 依赖），此项仅兜底避免 "not mocked" 崩溃
+        unitTests.returnDefaultValues = true
+    }
     tasks.withType(JavaCompile).tap {
         configureEach {
             //options.compilerArgs << "-Xlint:unchecked"
@@ -166,6 +171,9 @@ dependencies {
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
     coreLibraryDesugaring(libs.desugar)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    // 仅 AiConfigTest 需要：AiConfig 触碰 appCtx/SharedPreferences，必须真实 Context
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.bundles.androidTest)
     //kotlin
     //noinspection GradleDependency,DifferentStdlibGradleVersion

@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.BuildConfig
 import io.legado.app.R
+import io.legado.app.ai.AiConfig
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.BookType
@@ -70,6 +71,7 @@ import io.legado.app.receiver.NetworkChangedListener
 import io.legado.app.receiver.TimeBatteryReceiver
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.ui.ai.AiChatBottomSheet
 import io.legado.app.ui.book.bookmark.BookmarkDialog
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.changesource.ChangeChapterSourceDialog
@@ -521,6 +523,14 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
 
             R.id.menu_download -> showDownloadDialog()
+            // 阅读菜单里的「AI 问书」：与选区菜单 menu_ai_qa 复用同一套唤起逻辑，
+            // 两处入口都走 showAiChat()，可用性判断只在 showAiChat() 里做一次。
+            // 先收起阅读菜单（同 menu_change_source 的处理）：问书面板是从底部升起的
+            // BottomSheet，会正好压住底部菜单栏，不收起来关掉面板后菜单还杵在那儿。
+            R.id.menu_ai_qa -> {
+                binding.readMenu.runMenuOut()
+                showAiChat(AiChatBottomSheet.MODE_QA)
+            }
             R.id.menu_add_bookmark -> addBookmark()
             R.id.menu_simulated_reading -> showSimulatedReading()
             R.id.menu_edit_content -> showDialogFragment(ContentEditDialog())
@@ -856,12 +866,15 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     override fun onMenuItemSelected(itemId: Int): Boolean {
         when (itemId) {
-            R.id.menu_aloud -> when (AppConfig.contentSelectSpeakMod) {
-                1 -> lifecycleScope.launch {
-                    binding.readView.aloudStartSelect()
-                }
+            R.id.menu_aloud -> {
+                when (AppConfig.contentSelectSpeakMod) {
+                    1 -> lifecycleScope.launch {
+                        binding.readView.aloudStartSelect()
+                    }
 
-                else -> speak(binding.readView.getSelectText())
+                    else -> speak(binding.readView.getSelectText())
+                }
+                return true
             }
 
             R.id.menu_bookmark -> binding.readView.curPage.let {
@@ -903,8 +916,36 @@ class ReadBookActivity : BaseReadBookActivity(),
                 showDialogFragment(DictDialog(selectedText))
                 return true
             }
+
+            R.id.menu_ai_qa -> {
+                showAiChat(AiChatBottomSheet.MODE_QA)
+                return true
+            }
+
+            R.id.menu_ai_explain -> {
+                // 必须在这里就把选中文本取走：紧随其后的 onMenuActionFinally() 会清掉选区
+                showAiChat(AiChatBottomSheet.MODE_EXPLAIN, selectedText)
+                return true
+            }
         }
         return false
+    }
+
+    /**
+     * 打开 AI 助手面板。
+     *
+     * 菜单项常驻（和词典一样不做动态增删），可用性在点击时判断：
+     * 总开关关了或三要素没配全，就只给一句提示，绝不打开一个必定失败的面板。
+     */
+    private fun showAiChat(mode: Int, selection: String = "") {
+        if (!AiConfig.isReaderAssistantAvailable()) {
+            toastOnUi(
+                if (AiConfig.isConfigured()) R.string.ai_reader_disabled
+                else R.string.ai_not_configured_tip
+            )
+            return
+        }
+        showDialogFragment(AiChatBottomSheet(mode, selection))
     }
 
     /**

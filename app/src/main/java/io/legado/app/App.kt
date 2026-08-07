@@ -63,6 +63,8 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 
+private const val TAG = "App"
+
 class App : Application() {
 
     private lateinit var oldConfig: Configuration

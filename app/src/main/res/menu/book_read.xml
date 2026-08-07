@@ -44,6 +44,17 @@
 
     </group>
 
+    <!--
+        AI 问书入口（落地架构 Q7）。这里放在溢出菜单首位，读者不用翻到底。
+        注意：选区菜单的 menu_ai_qa 走的是 TextActionMenu.CallBack.onMenuItemSelected(itemId)，
+        阅读菜单走的是 onCompatOptionsItemSelected(item)，是两条互不相干的分发链路，
+        共用 id 并不会让阅读菜单自动复用选区菜单的分支 —— 所以两处都各有一个分支。
+    -->
+    <item
+        android:id="@+id/menu_ai_qa"
+        android:title="@string/menu_ai_qa"
+        app:showAsAction="never" />
+
     <item
         android:id="@+id/menu_add_bookmark"
         android:title="@string/bookmark_add"
