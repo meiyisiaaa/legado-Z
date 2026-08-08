@@ -6,11 +6,8 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Looper
 import android.view.Gravity
-import android.view.InputDevice
-import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
-import android.view.MotionEvent
 import android.view.View
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -250,6 +247,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     override val imgBgPaddingStart: Int get() = binding.readView.curPage.imgBgPaddingStart
     private val nextPageDebounce by lazy { Debounce { keyPage(PageDirection.NEXT) } }
     private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
+    private val keyHandler by lazy { ReadBookKeyHandler(this, nextPageDebounce, prevPageDebounce) }
     private var bookChanged = false
     private var pageChanged = false
     private val handler by lazy { buildMainHandler() }
@@ -665,184 +663,50 @@ class ReadBookActivity : BaseReadBookActivity(),
     /**
      * 按键拦截,显示菜单
      */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val action = event.action
-        val isDown = action == 0
-
-        if (keyCode == KeyEvent.KEYCODE_MENU) {
-            if (isDown && !binding.readMenu.canShowMenu) {
-                binding.readMenu.runMenuIn()
-                return true
-            }
-            if (!isDown && !binding.readMenu.canShowMenu) {
-                binding.readMenu.canShowMenu = true
-                return true
-            }
-        }
-        return super.dispatchKeyEvent(event)
-    }
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        keyHandler.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
 
     /**
      * 鼠标滚轮事件
      */
-    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (0 != (event.source and InputDevice.SOURCE_CLASS_POINTER)) {
-            if (event.action == MotionEvent.ACTION_SCROLL) {
-                val axisValue = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
-                LogUtils.d("onGenericMotionEvent", "axisValue = $axisValue")
-                // 获得垂直坐标上的滚动方向
-                if (axisValue < 0.0f) { // 滚轮向下滚
-                    mouseWheelPage(PageDirection.NEXT, axisValue)
-                } else { // 滚轮向上滚
-                    mouseWheelPage(PageDirection.PREV, axisValue)
-                }
-                return true
-            }
-        }
-        return super.onGenericMotionEvent(event)
-    }
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean =
+        keyHandler.onGenericMotionEvent(event) || super.onGenericMotionEvent(event)
 
     /**
      * 按键事件
      */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (menuLayoutIsVisible) {
-            return super.onKeyDown(keyCode, event)
-        }
-        val longPress = event.repeatCount > 0
-        when {
-            isPrevKey(keyCode) -> {
-                handleKeyPage(PageDirection.PREV, longPress)
-                return true
-            }
-
-            isNextKey(keyCode) -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-        }
-        when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> if (volumeKeyPage(PageDirection.PREV, longPress)) {
-                return true
-            }
-
-            KeyEvent.KEYCODE_VOLUME_DOWN -> if (volumeKeyPage(PageDirection.NEXT, longPress)) {
-                return true
-            }
-
-            KeyEvent.KEYCODE_PAGE_UP -> {
-                handleKeyPage(PageDirection.PREV, longPress)
-                return true
-            }
-
-            KeyEvent.KEYCODE_PAGE_DOWN -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-
-            KeyEvent.KEYCODE_SPACE -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-        }
-
-        return super.onKeyDown(keyCode, event)
-    }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        if (menuLayoutIsVisible) super.onKeyDown(keyCode, event)
+        else keyHandler.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
 
     /**
      * 松开按键事件
      */
-    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                if (volumeKeyPage(PageDirection.NONE, false)) {
-                    return true
-                }
-            }
-
-        }
-        return super.onKeyUp(keyCode, event)
-    }
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        keyHandler.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event)
 
     /**
      * view触摸,文字选择
      */
-    @SuppressLint("ClickableViewAccessibility")
-    override fun onTouch(v: View, event: MotionEvent): Boolean = binding.run {
-        if (!binding.readView.isTextSelected) {
-            return false
-        }
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> textActionMenu.dismiss()
-            MotionEvent.ACTION_MOVE -> {
-                when (v.id) {
-                    R.id.cursor_left -> if (!readView.curPage.getReverseStartCursor()) {
-                        readView.curPage.selectStartMove(
-                            event.rawX + cursorLeft.width,
-                            event.rawY - cursorLeft.height
-                        )
-                    } else {
-                        readView.curPage.selectEndMove(
-                            event.rawX - cursorRight.width,
-                            event.rawY - cursorRight.height
-                        )
-                    }
-
-                    R.id.cursor_right -> if (readView.curPage.getReverseEndCursor()) {
-                        readView.curPage.selectStartMove(
-                            event.rawX + cursorLeft.width,
-                            event.rawY - cursorLeft.height
-                        )
-                    } else {
-                        readView.curPage.selectEndMove(
-                            event.rawX - cursorRight.width,
-                            event.rawY - cursorRight.height
-                        )
-                    }
-                }
-            }
-
-            MotionEvent.ACTION_UP -> {
-                readView.curPage.resetReverseCursor()
-                showTextActionMenu()
-            }
-        }
-        return true
-    }
+    override fun onTouch(v: View, event: MotionEvent): Boolean = keyHandler.onTouch(v, event)
 
     /**
      * 更新文字选择开始位置
      */
-    override fun upSelectedStart(x: Float, y: Float, top: Float) = binding.run {
-        cursorLeft.x = x - cursorLeft.width
-        cursorLeft.y = y
-        cursorLeft.visible(true)
-        textMenuPosition.x = x
-        textMenuPosition.y = top
-    }
+    override fun upSelectedStart(x: Float, y: Float, top: Float) = keyHandler.upSelectedStart(x, y, top)
 
     /**
      * 更新文字选择结束位置
      */
-    override fun upSelectedEnd(x: Float, y: Float) = binding.run {
-        cursorRight.x = x
-        cursorRight.y = y
-        cursorRight.visible(true)
-    }
+    override fun upSelectedEnd(x: Float, y: Float) = keyHandler.upSelectedEnd(x, y)
 
     /**
      * 取消文字选择
      */
-    override fun onCancelSelect() = binding.run {
-        cursorLeft.invisible()
-        cursorRight.invisible()
-        textActionMenu.dismiss()
-    }
+    override fun onCancelSelect() = keyHandler.onCancelSelect()
 
-    override fun onLongScreenshotTouchEvent(event: MotionEvent): Boolean {
-        return binding.readView.onTouchEvent(event)
-    }
+    override fun onLongScreenshotTouchEvent(event: MotionEvent): Boolean =
+        keyHandler.onLongScreenshotTouchEvent(event)
 
     /**
      * 显示文本操作菜单
@@ -960,81 +824,6 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onMenuActionFinally() = binding.run {
         textActionMenu.dismiss()
         readView.cancelSelect()
-    }
-
-    private fun speak(text: String) {
-        if (tts == null) {
-            tts = TTS()
-        }
-        tts?.speak(text)
-    }
-
-    /**
-     * 鼠标滚轮翻页
-     */
-    private fun mouseWheelPage(direction: PageDirection, distance: Float) {
-        if (menuLayoutIsVisible || !AppConfig.mouseWheelPage) {
-            return
-        }
-        if (binding.readView.isScroll) {
-            // 滚动视图时滚动,否则翻页
-            (binding.readView.pageDelegate as? ScrollPageDelegate)?.curPage?.scroll((distance * 50).toInt())
-        } else {
-            keyPageDebounce(direction, mouseWheel = true, longPress = false)
-        }
-    }
-
-    /**
-     * 音量键翻页
-     */
-    private fun volumeKeyPage(direction: PageDirection, longPress: Boolean): Boolean {
-        if (!AppConfig.volumeKeyPage) {
-            return false
-        }
-        if (!AppConfig.volumeKeyPageOnPlay && BaseReadAloudService.isPlay()) {
-            return false
-        }
-        handleKeyPage(direction, longPress)
-        return true
-    }
-
-    private fun handleKeyPage(direction: PageDirection, longPress: Boolean) {
-        if (AppConfig.keyPageOnLongPress || direction == PageDirection.NONE) {
-            keyPage(direction)
-        } else {
-            keyPageDebounce(direction, longPress = longPress)
-        }
-    }
-
-    private fun keyPageDebounce(
-        direction: PageDirection,
-        mouseWheel: Boolean = false,
-        longPress: Boolean
-    ) {
-        if (longPress) {
-            return
-        }
-        nextPageDebounce.apply {
-            wait = if (mouseWheel) 200L else 600L
-            leading = !mouseWheel
-            trailing = mouseWheel
-        }
-        prevPageDebounce.apply {
-            wait = if (mouseWheel) 200L else 600L
-            leading = !mouseWheel
-            trailing = mouseWheel
-        }
-        when (direction) {
-            PageDirection.NEXT -> nextPageDebounce.invoke()
-            PageDirection.PREV -> prevPageDebounce.invoke()
-            else -> {}
-        }
-    }
-
-    private fun keyPage(direction: PageDirection) {
-        binding.readView.cancelSelect()
-        binding.readView.pageDelegate?.isCancel = false
-        binding.readView.pageDelegate?.keyTurnPage(direction)
     }
 
     override fun upMenuView() {
