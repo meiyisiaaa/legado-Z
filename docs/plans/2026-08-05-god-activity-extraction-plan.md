@@ -32,9 +32,20 @@
 
 ## 4. 当前进度
 
-- 本轮**未做代码级拆分**（环境无法编译验证，盲改 1858 行核心风险过高）。
-- 已就绪：本执行计划 + 测试基建提案（`2026-08-05-test-ci-proposal.md`）中的单测路径。
-- 待本地构建可用后，按阶段 A→B→C 推进，每步带单测与回归说明。
+- 阶段 A（安全）：✅ 已完成
+  - `ReadBookKeyHandler.kt`（236 行）：封装所有键盘/手势处理
+  - ReadBookActivity 减少 195 行（1773→1578）
+  - commit: `803797bce`
+
+- 阶段 B（需评审）：✅ 已完成
+  - `ReadBookNavigationHandler.kt`（76 行）：封装搜索导航逻辑
+  - ReadBookActivity 减少 45 行（1578→1533）
+  - commit: `c9d5c9ea7`
+
+- 阶段 C（长期）：未开始
+  - 引入 MVI/状态机进一步解耦 ReadBookStateHolder 与 View
+
+- 待本地构建可用后，按 A→B→C 推进，每步带单测与回归说明。
 
 ## 5. 验收（合并门禁）
 
