@@ -201,7 +201,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 binding.searchMenu.updateSearchResultIndex(index)
                 binding.searchMenu.selectedSearchResult?.let { currentResult ->
                     ReadBook.saveCurrentBookProgress() //退出全文搜索恢复此时进度
-                    skipToSearch(currentResult)
+                    navigationHandler.navigateToSearch(currentResult, index)
                     showActionMenu()
                 }
             }
@@ -248,6 +248,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private val nextPageDebounce by lazy { Debounce { keyPage(PageDirection.NEXT) } }
     private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
     private val keyHandler by lazy { ReadBookKeyHandler(this, nextPageDebounce, prevPageDebounce) }
+    private val navigationHandler by lazy { ReadBookNavigationHandler(this) }
     private var bookChanged = false
     private var pageChanged = false
     private val handler by lazy { buildMainHandler() }
@@ -1048,17 +1049,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 打开搜索界面
      */
     override fun openSearchActivity(searchWord: String?) {
-        val book = ReadBook.book ?: return
-        searchContentActivity.launch {
-            putExtra("bookUrl", book.bookUrl)
-            putExtra("searchWord", searchWord ?: viewModel.searchContentQuery)
-            putExtra("searchResultIndex", viewModel.searchResultIndex)
-            viewModel.searchResultList?.first()?.let {
-                if (it.query == viewModel.searchContentQuery) {
-                    IntentData.put("searchResultList", viewModel.searchResultList)
-                }
-            }
-        }
+        navigationHandler.openSearchActivity(searchWord)
     }
 
     /**
@@ -1436,8 +1427,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     /* 全文搜索跳转 */
     override fun navigateToSearch(searchResult: SearchResult, index: Int) {
-        viewModel.searchResultIndex = index
-        skipToSearch(searchResult)
+        navigationHandler.navigateToSearch(searchResult, index)
     }
 
     override fun onMenuShow() {
@@ -1453,43 +1443,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         binding.readView.onLayoutPageCompleted(index, page)
     }
 
-    /* 全文搜索跳转 */
-    private fun skipToSearch(searchResult: SearchResult) {
-        if (searchResult.chapterIndex != ReadBook.durChapterIndex) {
-            viewModel.openChapter(searchResult.chapterIndex) {
-                jumpToPosition(searchResult)
-            }
-        } else {
-            jumpToPosition(searchResult)
-        }
-    }
-
-    private fun jumpToPosition(searchResult: SearchResult) {
-        val curTextChapter = ReadBook.curTextChapter ?: return
-        binding.searchMenu.updateSearchInfo()
-        val searchResultPositions =
-            viewModel.searchResultPositions(curTextChapter, searchResult)
-        val (pageIndex, lineIndex, charIndex, addLine, charIndex2) = searchResultPositions
-        ReadBook.skipToPage(pageIndex) {
-            isSelectingSearchResult = true
-            binding.readView.curPage.selectStartMoveIndex(0, lineIndex, charIndex)
-            when (addLine) {
-                0 -> binding.readView.curPage.selectEndMoveIndex(
-                    0,
-                    lineIndex,
-                    charIndex + searchResultPositions[5] - 1
-                )
-
-                1 -> binding.readView.curPage.selectEndMoveIndex(
-                    0, lineIndex + 1, charIndex2
-                )
-                //consider change page, jump to scroll position
-                -1 -> binding.readView.curPage.selectEndMoveIndex(1, 0, charIndex2)
-            }
-            binding.readView.isTextSelected = true
-            isSelectingSearchResult = false
-        }
-    }
 
     override fun addBookmark() {
         val book = ReadBook.book
