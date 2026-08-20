@@ -21,7 +21,7 @@
     "headerPaddingTop": 10,
     "letterSpacing": 0,
     "lineSpacingExtra": 10,
-    "name": "微信读书",
+    "name": "沉浸长读",
     "paddingBottom": 4,
     "paddingLeft": 22,
     "paddingRight": 22,
@@ -48,7 +48,7 @@
     "titleTopSpacing": 0
   },
   {
-    "name": "预设1",
+    "name": "纯白专注",
     "bgStr": "#FFFFFF",
     "bgStrNight": "#000000",
     "textColor": "#000000",
@@ -61,7 +61,7 @@
     "darkStatusIconNight": false
   },
   {
-    "name": "预设2",
+    "name": "纸感暖黄",
     "bgStr": "#DDC090",
     "bgStrNight": "#3C3F43",
     "textColor": "#3E3422",
@@ -74,7 +74,7 @@
     "darkStatusIconNight": false
   },
   {
-    "name": "预设3",
+    "name": "护眼青绿",
     "bgStr": "#C2D8AA",
     "bgStrNight": "#3C3F43",
     "textColor": "#596C44",
@@ -87,7 +87,7 @@
     "darkStatusIconNight": false
   },
   {
-    "name": "预设4",
+    "name": "柔紫夜读",
     "bgStr": "#DBB8E2",
     "bgStrNight": "#3C3F43",
     "textColor": "#68516C",
@@ -100,7 +100,7 @@
     "darkStatusIconNight": false
   },
   {
-    "name": "预设5",
+    "name": "雾蓝静读",
     "bgStr": "#ABCEE0",
     "bgStrNight": "#3C3F43",
     "textColor": "#3D4C54",

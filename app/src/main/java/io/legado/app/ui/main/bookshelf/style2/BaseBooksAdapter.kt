@@ -49,7 +49,9 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
                             oldItem.author == newItem.author &&
                             oldItem.durChapterTitle == newItem.durChapterTitle &&
                             oldItem.latestChapterTitle == newItem.latestChapterTitle &&
+                            oldItem.latestChapterTime == newItem.latestChapterTime &&
                             oldItem.lastCheckCount == newItem.lastCheckCount &&
+                            oldItem.type == newItem.type &&
                             oldItem.getDisplayCover() == newItem.getDisplayCover() &&
                             oldItem.getUnreadChapterNum() == newItem.getUnreadChapterNum()
                 }
@@ -81,12 +83,18 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
                     if (oldItem.latestChapterTitle != newItem.latestChapterTitle) {
                         bundle.putString("last", newItem.latestChapterTitle)
                     }
+                    if (oldItem.latestChapterTime != newItem.latestChapterTime
+                        || oldItem.type != newItem.type
+                    ) {
+                        bundle.putBoolean("lastUpdateTime", true)
+                    }
                     if (oldItem.getDisplayCover() != newItem.getDisplayCover()) {
                         bundle.putString("cover", newItem.getDisplayCover())
                     }
                     if (oldItem.lastCheckCount != newItem.lastCheckCount
                         || oldItem.durChapterTime != newItem.durChapterTime
                         || oldItem.getUnreadChapterNum() != newItem.getUnreadChapterNum()
+                        || oldItem.type != newItem.type
                     ) {
                         bundle.putBoolean("refresh", true)
                     }

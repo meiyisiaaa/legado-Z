@@ -63,8 +63,6 @@ class AiSettingsDialog : BaseDialogFragment(R.layout.dialog_ai_settings) {
 
         val reader = AiConfig.readerSnapshot()
         binding.aiReaderAssistantEnabled.isChecked = reader.readerAssistantEnabled
-        binding.aiRetrievalTopK.setText(reader.retrievalTopK.toString())
-        binding.aiRetrievalMaxChars.setText(reader.retrievalMaxChars.toString())
         binding.aiExplainMaxChars.setText(reader.explainMaxChars.toString())
     }
 
@@ -76,10 +74,6 @@ class AiSettingsDialog : BaseDialogFragment(R.layout.dialog_ai_settings) {
      */
     private fun readReaderOptions(): AiReaderOptions {
         return AiReaderOptions(
-            retrievalTopK = binding.aiRetrievalTopK.text?.toString()?.toIntOrNull()
-                ?: AiReaderOptions.DEFAULT_TOP_K,
-            retrievalMaxChars = binding.aiRetrievalMaxChars.text?.toString()?.toIntOrNull()
-                ?: AiReaderOptions.DEFAULT_RETRIEVAL_MAX_CHARS,
             explainMaxChars = binding.aiExplainMaxChars.text?.toString()?.toIntOrNull()
                 ?: AiReaderOptions.DEFAULT_EXPLAIN_MAX_CHARS,
             readerAssistantEnabled = binding.aiReaderAssistantEnabled.isChecked

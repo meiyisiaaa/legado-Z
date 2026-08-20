@@ -28,18 +28,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:text="@string/ai_selection_scope_preview"
             android:textAppearance="?attr/textAppearanceCaption"
             android:textColor="@color/secondaryText"
-            tools:text="@string/ai_qa_scope_window" />
-
-        <Button
-            android:id="@+id/btn_expand"
-            style="?attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/ai_action_expand_full_book"
-            android:visibility="gone"
-            tools:visibility="visible" />
+            tools:text="@string/ai_selection_scope_preview" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

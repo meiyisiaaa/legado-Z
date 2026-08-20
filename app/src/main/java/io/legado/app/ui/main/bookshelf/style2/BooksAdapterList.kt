@@ -4,15 +4,18 @@ import android.content.Context
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.ItemBookshelfList2Binding
 import io.legado.app.databinding.ItemBookshelfListBinding
 import io.legado.app.databinding.ItemBookshelfListGroupBinding
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isUpError
 import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
+import io.legado.app.utils.toTimeAgo
 import io.legado.app.utils.visible
 import splitties.views.onLongClick
 
@@ -68,6 +71,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             ivLast.visible()
             ivRead.visible()
             upRefresh(this, item)
+            upLastUpdateTime(this, item)
         }
 
         fun onBind(item: Book, position: Int, payloads: MutableList<Any>) = binding.run {
@@ -88,6 +92,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                             )
 
                             "refresh" -> upRefresh(this, item)
+                            "lastUpdateTime" -> upLastUpdateTime(this, item)
                         }
                     }
                 }
@@ -118,6 +123,10 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             }
         }
 
+        private fun upLastUpdateTime(binding: ItemBookshelfListBinding, item: Book) {
+            binding.tvLastUpdateTime.text = item.updateStatus()
+        }
+
     }
 
     /**
@@ -136,6 +145,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             ivAuthor.visible()
             ivLast.visible()
             upRefresh(this, item)
+            upLastUpdateTime(this, item)
         }
 
         fun onBind(item: Book, position: Int, payloads: MutableList<Any>) = binding.run {
@@ -156,6 +166,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                             )
 
                             "refresh" -> upRefresh(this, item)
+                            "lastUpdateTime" -> upLastUpdateTime(this, item)
                         }
                     }
                 }
@@ -184,6 +195,10 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                     binding.bvUnread.invisible()
                 }
             }
+        }
+
+        private fun upLastUpdateTime(binding: ItemBookshelfList2Binding, item: Book) {
+            binding.tvLastUpdateTime.text = item.updateStatus()
         }
 
     }
@@ -228,6 +243,12 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
             }
         }
 
+    }
+
+    private fun Book.updateStatus(): String = when {
+        isUpError -> context.getString(R.string.update_book_fail)
+        AppConfig.showLastUpdateTime && !isLocal -> latestChapterTime.toTimeAgo()
+        else -> ""
     }
 
 }

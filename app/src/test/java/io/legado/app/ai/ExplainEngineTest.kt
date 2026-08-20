@@ -1,7 +1,6 @@
 package io.legado.app.ai
 
 import io.legado.app.ai.engine.ExplainEngine
-import io.legado.app.ai.prompt.ReaderPromptTemplates
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,7 +27,7 @@ class ExplainEngineTest {
 
         val outcome = engine.explain(
             AiTestFixtures.options(),
-            ExplainInput(bookName = "红楼梦", chapterTitle = "第五回", selection = "开辟鸿蒙")
+            ExplainInput(selection = "开辟鸿蒙")
         )
 
         assertEquals("### 文意\n讲的是离别。", outcome.answerMarkdown)
@@ -193,28 +192,24 @@ class ExplainEngineTest {
     }
 
     @Test
-    fun `只发送选中文本不含章节其余内容`() = runBlocking {
+    fun `只发送选中文本不含书名章节或其余内容`() = runBlocking {
         val client = engineReplying("赏析")
         val engine = ExplainEngine(client)
 
         engine.explain(
             AiTestFixtures.options(),
-            ExplainInput(
-                bookName = "红楼梦",
-                chapterTitle = "第五回 游幻境指迷十二钗",
-                selection = "开辟鸿蒙"
-            )
+            ExplainInput(selection = "开辟鸿蒙")
         )
 
         val all = client.allContent()
         assertTrue(all.contains("开辟鸿蒙"))
-        assertTrue("章节标题可作定位提示", all.contains("第五回 游幻境指迷十二钗"))
-        assertFalse("赏析链路不该出现片段区块", all.contains(ReaderPromptTemplates.USER_FRAGMENTS_LABEL))
+        assertFalse(all.contains("红楼梦"))
+        assertFalse(all.contains("第五回 游幻境指迷十二钗"))
     }
 
     @Test
     fun `prompt不含apiKey`() = runBlocking {
-        val secret = "sk-explain-secret-key-9876"
+        val secret = "test-api-key-not-for-network-9876"
         val client = engineReplying("赏析")
         val engine = ExplainEngine(client)
 
@@ -235,5 +230,34 @@ class ExplainEngineTest {
         engine.explain(options, ExplainInput(selection = "文本"))
 
         assertEquals("赏析不做温度改写", options, client.optionsSeen.single())
+    }
+
+    @Test
+    fun `选区提问只发送选中文字和问题`() = runBlocking {
+        val client = engineReplying("它表达了惆怅。")
+        val engine = ExplainEngine(client)
+
+        val outcome = engine.ask(
+            AiTestFixtures.options(),
+            ExplainInput(selection = "庭院深深深几许"),
+            "这句话是什么情绪"
+        )
+
+        assertEquals("它表达了惆怅。", outcome.answerMarkdown)
+        val all = client.allContent()
+        assertTrue(all.contains("庭院深深深几许"))
+        assertTrue(all.contains("这句话是什么情绪"))
+        assertFalse(all.contains("未选中的章节正文"))
+    }
+
+    @Test
+    fun `选区提问为空时不发请求`() = runBlocking {
+        val client = engineReplying("不该被用到")
+        val engine = ExplainEngine(client)
+
+        assertThrowsOf<AiError.QuestionEmpty> {
+            engine.ask(AiTestFixtures.options(), ExplainInput(selection = "文本"), "  \n ")
+        }
+        assertEquals(0, client.callCount)
     }
 }

@@ -5,6 +5,7 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.annotation.RequiresApi
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.utils.getPrefBoolean
@@ -111,19 +112,6 @@ object AiConfig {
      * 读出即钳制，下游拿到的一定是合法值。
      */
     fun readerSnapshot(): AiReaderOptions = AiReaderOptions(
-        retrievalTopK = clamp(
-            appCtx.getPrefInt(PreferKey.aiRetrievalTopK, AiReaderOptions.DEFAULT_TOP_K),
-            AiReaderOptions.MIN_TOP_K,
-            AiReaderOptions.MAX_TOP_K
-        ),
-        retrievalMaxChars = clamp(
-            appCtx.getPrefInt(
-                PreferKey.aiRetrievalMaxChars,
-                AiReaderOptions.DEFAULT_RETRIEVAL_MAX_CHARS
-            ),
-            AiReaderOptions.MIN_RETRIEVAL_MAX_CHARS,
-            AiReaderOptions.MAX_RETRIEVAL_MAX_CHARS
-        ),
         explainMaxChars = clamp(
             appCtx.getPrefInt(
                 PreferKey.aiExplainMaxChars,
@@ -145,18 +133,6 @@ object AiConfig {
      * 只影响成本与效果，弹错误对话框打断用户是过度设计。故本方法无返回值。
      */
     fun saveReader(options: AiReaderOptions) {
-        appCtx.putPrefInt(
-            PreferKey.aiRetrievalTopK,
-            clamp(options.retrievalTopK, AiReaderOptions.MIN_TOP_K, AiReaderOptions.MAX_TOP_K)
-        )
-        appCtx.putPrefInt(
-            PreferKey.aiRetrievalMaxChars,
-            clamp(
-                options.retrievalMaxChars,
-                AiReaderOptions.MIN_RETRIEVAL_MAX_CHARS,
-                AiReaderOptions.MAX_RETRIEVAL_MAX_CHARS
-            )
-        )
         appCtx.putPrefInt(
             PreferKey.aiExplainMaxChars,
             clamp(
@@ -205,8 +181,6 @@ object AiConfig {
         appCtx.removePref(PreferKey.aiTimeoutSec)
         appCtx.removePref(PreferKey.aiHtmlMaxChars)
         appCtx.removePref(PreferKey.aiAutoRepair)
-        appCtx.removePref(PreferKey.aiRetrievalTopK)
-        appCtx.removePref(PreferKey.aiRetrievalMaxChars)
         appCtx.removePref(PreferKey.aiExplainMaxChars)
         appCtx.removePref(PreferKey.aiReaderAssistantEnabled)
     }
@@ -266,13 +240,21 @@ object AiConfig {
 
     private fun decryptApiKey(stored: String): String {
         if (stored.startsWith(AES_ENCRYPTED_PREFIX)) {
-            val parts = stored.removePrefix(AES_ENCRYPTED_PREFIX).split(ENCODED_PART_SEPARATOR)
-            require(parts.size == 2)
-            val iv = Base64.decode(parts[0], Base64.NO_WRAP)
-            val ciphertext = Base64.decode(parts[1], Base64.NO_WRAP)
-            val cipher = Cipher.getInstance(AES_TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, androidKeyStoreAesKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-            return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val parts = stored.removePrefix(AES_ENCRYPTED_PREFIX)
+                    .split(ENCODED_PART_SEPARATOR)
+                require(parts.size == 2)
+                val iv = Base64.decode(parts[0], Base64.NO_WRAP)
+                val ciphertext = Base64.decode(parts[1], Base64.NO_WRAP)
+                val cipher = Cipher.getInstance(AES_TRANSFORMATION)
+                cipher.init(
+                    Cipher.DECRYPT_MODE,
+                    androidKeyStoreAesKey(),
+                    GCMParameterSpec(GCM_TAG_BITS, iv)
+                )
+                return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+            }
+            error("AES Android Keystore keys require API 23+")
         }
 
         val parts = stored.removePrefix(ENCRYPTED_PREFIX).split(ENCODED_PART_SEPARATOR)
@@ -290,6 +272,7 @@ object AiConfig {
         return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun androidKeyStoreAesKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         if (!keyStore.containsAlias(AES_KEY_ALIAS)) {

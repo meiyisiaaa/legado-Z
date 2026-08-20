@@ -10,15 +10,12 @@ import io.legado.app.ai.client.AiChatClient
 import io.legado.app.ai.prompt.PromptBuilder
 
 /**
- * 选中文本赏析引擎：把用户在阅读器里划中的一段原文，变成「文意 / 写法 / 回味」三段式解读。
+ * 选中文本 AI 引擎：赏析或回答用户针对选区提出的问题。
  *
  * 编排顺序：`配置守卫 → 空选中拦截 → 超长截断 → PromptBuilder 组装 → AiChatClient 请求`
  *
- * ### 与 [ReaderQaEngine] 的本质区别
- * 问答链路要先本地检索、命中了才发请求；赏析链路**没有检索**，
- * 送出的内容就是用户主动选中的那一段，语义上等同于用户自己复制粘贴。
- * 因此隐私红线在这里的落点是「**只发选中文本**」：
- * 章节标题只作为定位提示（不含正文），所在章节的其余内容一个字都不上传。
+ * 本链路没有检索，送出的书籍内容只有用户主动选中的那一段；
+ * 不发送书名、章节名、相邻段落或其他章节正文。
  *
  * ### 为什么截断而不是报错（决策 A4）
  * 读者长按选中时经常一划就是好几屏，直接拒绝会让功能显得很脆。
@@ -36,6 +33,25 @@ class ExplainEngine(private val client: AiChatClient) {
      * @throws AiError.EmptyResponse 模型返回空内容
      */
     suspend fun explain(options: AiChatOptions, input: ExplainInput): ExplainOutcome {
+        return complete(options, input, question = null)
+    }
+
+    /** 针对选中文本提问。 */
+    suspend fun ask(
+        options: AiChatOptions,
+        input: ExplainInput,
+        rawQuestion: String
+    ): ExplainOutcome {
+        val question = rawQuestion.trim()
+        if (question.isEmpty()) throw AiError.QuestionEmpty()
+        return complete(options, input, question)
+    }
+
+    private suspend fun complete(
+        options: AiChatOptions,
+        input: ExplainInput,
+        question: String?
+    ): ExplainOutcome {
         OutcomeAssembler.requireUsableConfig(options)
 
         val selection = normalize(input.selection)
@@ -44,13 +60,12 @@ class ExplainEngine(private val client: AiChatClient) {
         val limit = clampLimit(input.maxChars)
         val sent = truncate(selection, limit)
 
-        val messages = PromptBuilder.buildExplain(
-            ExplainPromptInput(
-                bookName = input.bookName,
-                chapterTitle = input.chapterTitle,
-                selection = sent
-            )
-        )
+        val promptInput = ExplainPromptInput(selection = sent, question = question.orEmpty())
+        val messages = if (question == null) {
+            PromptBuilder.buildExplain(promptInput)
+        } else {
+            PromptBuilder.buildSelectionQa(promptInput)
+        }
 
         val response = client.chat(options, messages)
         val reply = response.firstContent()
@@ -70,7 +85,7 @@ class ExplainEngine(private val client: AiChatClient) {
      * 规整选中文本。
      *
      * 阅读器的选区常常带着排版留下的连续空行与行首缩进，原样上传纯属浪费 token；
-     * 但**不做**任何改写或删字 —— 送给模型赏析的必须还是那段原文。
+     * 只规整排版空白，不增补、替换任何正文内容。
      */
     private fun normalize(raw: String): String {
         if (raw.isBlank()) return ""

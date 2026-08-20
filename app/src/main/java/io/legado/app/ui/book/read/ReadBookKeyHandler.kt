@@ -5,13 +5,15 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import io.legado.app.R
-import io.legado.app.constant.AppConfig
+import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.utils.Debounce
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.invisible
+import io.legado.app.utils.visible
 
 /**
  * 处理阅读界面的键盘、音量键、鼠标滚轮和触摸事件。
@@ -25,10 +27,11 @@ import io.legado.app.utils.LogUtils
  * 与 ReadBookActivity 解耦，便于单独测试。
  */
 class ReadBookKeyHandler(
-    private val activity: ReadBookActivity,
-    private val nextPageDebounce: Debounce,
-    private val prevPageDebounce: Debounce,
+    private val activity: ReadBookActivity
 ) {
+    private val nextPageDebounce by lazy { Debounce { keyPage(PageDirection.NEXT) } }
+    private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
+
     /** 物理上一页键 */
     fun isPrevKey(keyCode: Int) = activity.isPrevKey(keyCode)
 
@@ -42,12 +45,12 @@ class ReadBookKeyHandler(
         val isDown = action == 0
 
         if (keyCode == KeyEvent.KEYCODE_MENU) {
-            if (isDown && !activity.menuLayoutIsVisible) {
-                activity.binding.readMenu.runMenuIn()
+            if (isDown && !activity.handlerBinding.readMenu.canShowMenu) {
+                activity.handlerBinding.readMenu.runMenuIn()
                 return true
             }
-            if (!isDown && !activity.menuLayoutIsVisible) {
-                activity.binding.readMenu.canShowMenu = true
+            if (!isDown && !activity.handlerBinding.readMenu.canShowMenu) {
+                activity.handlerBinding.readMenu.canShowMenu = true
                 return true
             }
         }
@@ -73,7 +76,7 @@ class ReadBookKeyHandler(
 
     /** 按键按下 */
     fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (activity.menuLayoutIsVisible) return false
+        if (activity.handlerMenuLayoutIsVisible) return false
         val longPress = event.repeatCount > 0
         when {
             isPrevKey(keyCode) -> {
@@ -107,37 +110,37 @@ class ReadBookKeyHandler(
 
     /** 文字选择触摸事件：移动左右光标 */
     fun onTouch(v: View, event: MotionEvent): Boolean {
-        if (!activity.binding.readView.isTextSelected) return false
+        if (!activity.handlerBinding.readView.isTextSelected) return false
         when (event.action) {
             MotionEvent.ACTION_DOWN -> activity.textActionMenu.dismiss()
             MotionEvent.ACTION_MOVE -> {
                 when (v.id) {
-                    R.id.cursor_left -> if (!activity.binding.readView.curPage.getReverseStartCursor()) {
-                        activity.binding.readView.curPage.selectStartMove(
-                            event.rawX + activity.binding.cursorLeft.width,
-                            event.rawY - activity.binding.cursorLeft.height
+                    R.id.cursor_left -> if (!activity.handlerBinding.readView.curPage.getReverseStartCursor()) {
+                        activity.handlerBinding.readView.curPage.selectStartMove(
+                            event.rawX + activity.handlerBinding.cursorLeft.width,
+                            event.rawY - activity.handlerBinding.cursorLeft.height
                         )
                     } else {
-                        activity.binding.readView.curPage.selectEndMove(
-                            event.rawX - activity.binding.cursorRight.width,
-                            event.rawY - activity.binding.cursorRight.height
+                        activity.handlerBinding.readView.curPage.selectEndMove(
+                            event.rawX - activity.handlerBinding.cursorRight.width,
+                            event.rawY - activity.handlerBinding.cursorRight.height
                         )
                     }
-                    R.id.cursor_right -> if (activity.binding.readView.curPage.getReverseEndCursor()) {
-                        activity.binding.readView.curPage.selectStartMove(
-                            event.rawX + activity.binding.cursorLeft.width,
-                            event.rawY - activity.binding.cursorLeft.height
+                    R.id.cursor_right -> if (activity.handlerBinding.readView.curPage.getReverseEndCursor()) {
+                        activity.handlerBinding.readView.curPage.selectStartMove(
+                            event.rawX + activity.handlerBinding.cursorLeft.width,
+                            event.rawY - activity.handlerBinding.cursorLeft.height
                         )
                     } else {
-                        activity.binding.readView.curPage.selectEndMove(
-                            event.rawX - activity.binding.cursorRight.width,
-                            event.rawY - activity.binding.cursorRight.height
+                        activity.handlerBinding.readView.curPage.selectEndMove(
+                            event.rawX - activity.handlerBinding.cursorRight.width,
+                            event.rawY - activity.handlerBinding.cursorRight.height
                         )
                     }
                 }
             }
             MotionEvent.ACTION_UP -> {
-                activity.binding.readView.curPage.resetReverseCursor()
+                activity.handlerBinding.readView.curPage.resetReverseCursor()
                 activity.showTextActionMenu()
             }
         }
@@ -146,7 +149,7 @@ class ReadBookKeyHandler(
 
     /** 更新文字选择开始位置光标 */
     fun upSelectedStart(x: Float, y: Float, top: Float) {
-        with(activity.binding) {
+        with(activity.handlerBinding) {
             cursorLeft.x = x - cursorLeft.width
             cursorLeft.y = y
             cursorLeft.visible(true)
@@ -157,7 +160,7 @@ class ReadBookKeyHandler(
 
     /** 更新文字选择结束位置光标 */
     fun upSelectedEnd(x: Float, y: Float) {
-        with(activity.binding) {
+        with(activity.handlerBinding) {
             cursorRight.x = x
             cursorRight.y = y
             cursorRight.visible(true)
@@ -166,7 +169,7 @@ class ReadBookKeyHandler(
 
     /** 取消文字选择 */
     fun onCancelSelect() {
-        with(activity.binding) {
+        with(activity.handlerBinding) {
             cursorLeft.invisible()
             cursorRight.invisible()
             activity.textActionMenu.dismiss()
@@ -175,15 +178,15 @@ class ReadBookKeyHandler(
 
     /** 长截图事件委托 */
     fun onLongScreenshotTouchEvent(event: MotionEvent): Boolean {
-        return activity.binding.readView.onTouchEvent(event)
+        return activity.handlerBinding.readView.onTouchEvent(event)
     }
 
     // ---------- 内部翻页逻辑 ----------
 
     private fun mouseWheelPage(direction: PageDirection, distance: Float) {
-        if (activity.menuLayoutIsVisible || !AppConfig.mouseWheelPage) return
-        if (activity.binding.readView.isScroll) {
-            (activity.binding.readView.pageDelegate as? ScrollPageDelegate)
+        if (activity.handlerMenuLayoutIsVisible || !AppConfig.mouseWheelPage) return
+        if (activity.handlerBinding.readView.isScroll) {
+            (activity.handlerBinding.readView.pageDelegate as? ScrollPageDelegate)
                 ?.curPage?.scroll((distance * 50).toInt())
         } else {
             keyPageDebounce(direction, mouseWheel = true, longPress = false)
@@ -229,8 +232,8 @@ class ReadBookKeyHandler(
     }
 
     private fun keyPage(direction: PageDirection) {
-        activity.binding.readView.cancelSelect()
-        activity.binding.readView.pageDelegate?.isCancel = false
-        activity.binding.readView.pageDelegate?.keyTurnPage(direction)
+        activity.handlerBinding.readView.cancelSelect()
+        activity.handlerBinding.readView.pageDelegate?.isCancel = false
+        activity.handlerBinding.readView.pageDelegate?.keyTurnPage(direction)
     }
 }

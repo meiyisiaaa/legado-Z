@@ -6,8 +6,10 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Looper
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -84,8 +86,6 @@ import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TIP_COLOR
 import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TIP_DIVIDER_COLOR
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.ReadView
-import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
-import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
@@ -104,8 +104,6 @@ import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.PopupAction
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.ACache
-import io.legado.app.utils.Debounce
-import io.legado.app.utils.LogUtils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyOpenTint
@@ -186,7 +184,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 viewModel.replaceRuleChanged()
             }
         }
-    private val searchContentActivity =
+    internal val searchContentActivity =
         registerForActivityResult(StartActivityContract(SearchContentActivity::class.java)) {
             val data = it.data ?: return@registerForActivityResult
             val key = data.getLongExtra("key", System.currentTimeMillis())
@@ -245,9 +243,10 @@ class ReadBookActivity : BaseReadBookActivity(),
     override val pageDelegate get() = binding.readView.pageDelegate
     override val headerHeight: Int get() = binding.readView.curPage.headerHeight
     override val imgBgPaddingStart: Int get() = binding.readView.curPage.imgBgPaddingStart
-    private val nextPageDebounce by lazy { Debounce { keyPage(PageDirection.NEXT) } }
-    private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
-    private val keyHandler by lazy { ReadBookKeyHandler(this, nextPageDebounce, prevPageDebounce) }
+    internal val handlerBinding get() = binding
+    internal val handlerViewModel get() = viewModel
+    internal val handlerMenuLayoutIsVisible get() = menuLayoutIsVisible
+    private val keyHandler by lazy { ReadBookKeyHandler(this) }
     private val navigationHandler by lazy { ReadBookNavigationHandler(this) }
     private var bookChanged = false
     private var pageChanged = false
@@ -524,14 +523,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
 
             R.id.menu_download -> showDownloadDialog()
-            // 阅读菜单里的「AI 问书」：与选区菜单 menu_ai_qa 复用同一套唤起逻辑，
-            // 两处入口都走 showAiChat()，可用性判断只在 showAiChat() 里做一次。
-            // 先收起阅读菜单（同 menu_change_source 的处理）：问书面板是从底部升起的
-            // BottomSheet，会正好压住底部菜单栏，不收起来关掉面板后菜单还杵在那儿。
-            R.id.menu_ai_qa -> {
-                binding.readMenu.runMenuOut()
-                showAiChat(AiChatBottomSheet.MODE_QA)
-            }
             R.id.menu_reading_notes -> {
                 binding.readMenu.runMenuOut()
                 openReadingNotes()
@@ -789,13 +780,12 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
 
             R.id.menu_ai_qa -> {
-                showAiChat(AiChatBottomSheet.MODE_QA)
+                showSelectedTextAi(AiChatBottomSheet.MODE_QA)
                 return true
             }
 
             R.id.menu_ai_explain -> {
-                // 必须在这里就把选中文本取走：紧随其后的 onMenuActionFinally() 会清掉选区
-                showAiChat(AiChatBottomSheet.MODE_EXPLAIN, selectedText)
+                showSelectedTextAi(AiChatBottomSheet.MODE_EXPLAIN)
                 return true
             }
         }
@@ -808,7 +798,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 菜单项常驻（和词典一样不做动态增删），可用性在点击时判断：
      * 总开关关了或三要素没配全，就只给一句提示，绝不打开一个必定失败的面板。
      */
-    private fun showAiChat(mode: Int, selection: String = "") {
+    private fun showSelectedTextAi(mode: Int) {
         if (!AiConfig.isReaderAssistantAvailable()) {
             toastOnUi(
                 if (AiConfig.isConfigured()) R.string.ai_reader_disabled
@@ -816,7 +806,17 @@ class ReadBookActivity : BaseReadBookActivity(),
             )
             return
         }
-        showDialogFragment(AiChatBottomSheet(mode, selection))
+        val bookmark = binding.readView.curPage.createBookmark()
+        if (bookmark == null) {
+            toastOnUi(R.string.create_bookmark_error)
+            return
+        }
+        showDialogFragment(AiChatBottomSheet(mode, bookmark))
+    }
+
+    private fun speak(text: String) {
+        if (tts == null) tts = TTS()
+        tts?.speak(text)
     }
 
     /**

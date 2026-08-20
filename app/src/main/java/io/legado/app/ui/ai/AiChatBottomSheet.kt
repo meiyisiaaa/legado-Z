@@ -7,14 +7,15 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import io.legado.app.R
-import io.legado.app.ai.Citation
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.Bookmark
 import io.legado.app.databinding.DialogAiChatBinding
 import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.book.read.ReadMenu
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.gone
 import io.legado.app.utils.sendToClip
@@ -22,15 +23,18 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * 阅读器 AI 助手面板（问答 + 赏析共用）。
+ * 阅读器选区 AI 助手面板（问答 + 赏析共用）。
  *
  * 用 BottomSheet 而不是全屏对话框：读者是「读到一半顺手问一句」，
  * 面板盖住下半屏、上半屏仍能看见原文，比全屏切走上下文更贴合场景。
  *
  * 两种入口模式：
- * - [MODE_QA]：空白面板，读者自己输入问题；
+ * - [MODE_QA]：针对选中文字输入问题；
  * - [MODE_EXPLAIN]：带着选中文本进来，**打开即自动发起一次赏析**。
  *
  * 隐私与成本的判断全在 [AiChatViewModel]：这里只负责渲染与转发用户动作，
@@ -39,10 +43,10 @@ import io.legado.app.utils.visible
 class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
     Toolbar.OnMenuItemClickListener {
 
-    constructor(mode: Int, selection: String = "") : this() {
+    constructor(mode: Int, bookmark: Bookmark) : this() {
         arguments = Bundle().apply {
             putInt(ARG_MODE, mode)
-            putString(ARG_SELECTION, selection)
+            putParcelable(ARG_BOOKMARK, bookmark)
         }
     }
 
@@ -52,7 +56,6 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
     private val adapter by lazy {
         AiChatAdapter(
             context = requireContext(),
-            onCitationClick = ::jumpToCitation,
             onCopy = ::copyAnswer,
             onImageLongClick = { source -> showDialogFragment(PhotoDialog(source)) }
         )
@@ -60,6 +63,10 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
 
     private var mode = MODE_QA
     private var loading = false
+    private var bookmark: Bookmark? = null
+    private var latestItems: List<AiChatItem> = emptyList()
+    private var lastSavedItemId: Long? = null
+    private var saving = false
 
     override fun onStart() {
         super.onStart()
@@ -80,17 +87,24 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         mode = arguments?.getInt(ARG_MODE, MODE_QA) ?: MODE_QA
+        @Suppress("DEPRECATION")
+        bookmark = arguments?.getParcelable(ARG_BOOKMARK)
+        val selectedText = bookmark?.bookText.orEmpty()
+        if (selectedText.isBlank()) {
+            dismissAllowingStateLoss()
+            return
+        }
 
         initToolBar()
         initRecycler()
         initInput()
         observeViewModel()
+        binding.tvScope.text = getString(R.string.ai_selection_scope, selectedText.length)
 
         // 只在首次创建时自动发起赏析：横竖屏重建时 ViewModel 里的结果还在，
         // 再发一次等于让用户白花一次 token
         if (savedInstanceState == null && mode == MODE_EXPLAIN) {
-            val selection = arguments?.getString(ARG_SELECTION).orEmpty()
-            viewModel.explain(selection)
+            viewModel.explain(selectedText)
         }
     }
 
@@ -100,6 +114,7 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             if (mode == MODE_EXPLAIN) R.string.ai_explain_title else R.string.ai_qa_title
         )
         binding.toolBar.inflateMenu(R.menu.menu_ai_chat)
+        binding.toolBar.menu.findItem(R.id.menu_ai_chat_save_note)?.isEnabled = false
         binding.toolBar.setOnMenuItemClickListener(this)
     }
 
@@ -110,10 +125,6 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
 
     private fun initInput() {
         binding.btnSend.setOnClickListener { onSendOrStop() }
-        binding.btnExpand.setOnClickListener {
-            binding.btnExpand.gone()
-            viewModel.expandToFullBook()
-        }
         binding.etQuestion.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 onSendOrStop()
@@ -136,12 +147,14 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             return
         }
         binding.etQuestion.setText("")
-        viewModel.ask(question)
+        viewModel.ask(bookmark?.bookText.orEmpty(), question)
     }
 
     private fun observeViewModel() {
         viewModel.items.observe(viewLifecycleOwner) { items ->
+            latestItems = items
             adapter.setItems(items)
+            updateSaveAction()
             if (items.isNotEmpty()) {
                 binding.recyclerChat.scrollToPosition(items.lastIndex)
             }
@@ -157,32 +170,61 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
                 viewModel.clearError()
             }
         }
-        viewModel.canExpand.observe(viewLifecycleOwner) { canExpand ->
-            if (canExpand) binding.btnExpand.visible() else binding.btnExpand.gone()
-        }
-        viewModel.scopeText.observe(viewLifecycleOwner) { scope ->
-            binding.tvScope.text = scope
-        }
-    }
-
-    /**
-     * 点出处 → 跳章 → 关面板。
-     *
-     * 依赖 [ReadMenu.CallBack] 而不是直接转型成 ReadBookActivity：
-     * 「跳到第 N 章」在阅读器里本来就有这条既定契约，蹭它比新开一个回调接口干净。
-     */
-    private fun jumpToCitation(citation: Citation) {
-        val callBack = activity as? ReadMenu.CallBack ?: return
-        callBack.skipToChapter(citation.chapterIndex)
-        dismiss()
     }
 
     private fun copyAnswer(text: String) {
         requireContext().sendToClip(text)
     }
 
+    private fun updateSaveAction() {
+        val latestAnswer = latestItems.lastOrNull { it.role == AiChatRole.ASSISTANT }
+        binding.toolBar.menu.findItem(R.id.menu_ai_chat_save_note)?.isEnabled =
+            !saving && latestAnswer != null && latestAnswer.id != lastSavedItemId
+    }
+
+    private fun saveLatestAsNote() {
+        if (saving) return
+        val source = bookmark ?: return
+        val answerIndex = latestItems.indexOfLast { it.role == AiChatRole.ASSISTANT }
+        if (answerIndex < 0) return
+        val answer = latestItems[answerIndex]
+        if (answer.id == lastSavedItemId) return
+        val question = latestItems.subList(0, answerIndex)
+            .lastOrNull { it.role == AiChatRole.USER }
+            ?.text
+            .orEmpty()
+        val isInitialExplain = mode == MODE_EXPLAIN && question.trim() == source.bookText.trim()
+        val content = if (isInitialExplain) {
+            getString(R.string.ai_note_explain_format, answer.text)
+        } else {
+            getString(R.string.ai_note_qa_format, question, answer.text)
+        }
+        val note = source.copy(time = System.currentTimeMillis(), content = content)
+
+        saving = true
+        updateSaveAction()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val saved = try {
+                withContext(IO) {
+                    runCatching { appDb.bookmarkDao.insert(note) }.isSuccess
+                }
+            } finally {
+                saving = false
+            }
+            if (saved) {
+                lastSavedItemId = answer.id
+                requireContext().toastOnUi(R.string.ai_note_saved)
+            } else {
+                requireContext().toastOnUi(R.string.ai_note_save_failed)
+            }
+            updateSaveAction()
+        }
+    }
+
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.menu_ai_chat_save_note -> saveLatestAsNote()
+
             R.id.menu_ai_chat_clear -> {
                 viewModel.clear()
                 requireContext().toastOnUi(R.string.ai_qa_cleared)
@@ -194,14 +236,14 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
     }
 
     companion object {
-        /** 问答模式：空白面板，等用户提问 */
+        /** 选区问答模式：等用户针对选中文字提问 */
         const val MODE_QA = 0
 
         /** 赏析模式：带选中文本进来，打开即请求 */
         const val MODE_EXPLAIN = 1
 
         private const val ARG_MODE = "mode"
-        private const val ARG_SELECTION = "selection"
+        private const val ARG_BOOKMARK = "bookmark"
 
         /** 面板占屏高比例：留出上方三成让读者还能看见原文 */
         private const val SHEET_HEIGHT_RATIO = 0.7f

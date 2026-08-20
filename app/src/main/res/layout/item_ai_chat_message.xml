@@ -25,6 +25,6 @@
         android:textAppearance="?attr/textAppearanceCaption"
         android:textColor="@color/secondaryText"
         android:visibility="gone"
-        tools:text="扫描 40/300 章（已缓存 12），耗时 137 ms"
+        tools:text="选区较长，已截断为 1000 字发送"
         tools:visibility="visible" />
 </LinearLayout>

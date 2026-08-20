@@ -5,10 +5,12 @@ import android.os.Bundle
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
+import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ItemBookshelfListBinding
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isUpError
 import io.legado.app.help.config.AppConfig
 import io.legado.app.utils.invisible
 import io.legado.app.utils.toTimeAgo
@@ -79,13 +81,13 @@ class BooksAdapterList(
     }
 
     private fun upLastUpdateTime(binding: ItemBookshelfListBinding, item: Book) {
-        if (AppConfig.showLastUpdateTime && !item.isLocal) {
-            val time = item.latestChapterTime.toTimeAgo()
-            if (binding.tvLastUpdateTime.text != time) {
-                binding.tvLastUpdateTime.text = time
-            }
-        } else {
-            binding.tvLastUpdateTime.text = ""
+        val status = when {
+            item.isUpError -> context.getString(R.string.update_book_fail)
+            AppConfig.showLastUpdateTime && !item.isLocal -> item.latestChapterTime.toTimeAgo()
+            else -> ""
+        }
+        if (binding.tvLastUpdateTime.text != status) {
+            binding.tvLastUpdateTime.text = status
         }
     }
 

@@ -1,8 +1,9 @@
 package io.legado.app.ui.book.read
 
-import io.legado.app.data.entities.SearchResult
 import io.legado.app.help.IntentData
 import io.legado.app.model.ReadBook
+import io.legado.app.ui.book.searchContent.SearchResult
+import io.legado.app.utils.launch
 
 /**
  * 处理全文搜索导航逻辑。
@@ -18,13 +19,13 @@ class ReadBookNavigationHandler(
 ) {
     /** 导航到搜索结果 */
     fun navigateToSearch(searchResult: SearchResult, index: Int) {
-        activity.viewModel.searchResultIndex = index
+        activity.handlerViewModel.searchResultIndex = index
         skipToSearch(searchResult)
     }
 
     private fun skipToSearch(searchResult: SearchResult) {
         if (searchResult.chapterIndex != ReadBook.durChapterIndex) {
-            activity.viewModel.openChapter(searchResult.chapterIndex) {
+            activity.handlerViewModel.openChapter(searchResult.chapterIndex) {
                 jumpToPosition(searchResult)
             }
         } else {
@@ -35,26 +36,26 @@ class ReadBookNavigationHandler(
     /** 定位到搜索结果在页面中的具体位置 */
     fun jumpToPosition(searchResult: SearchResult) {
         val curTextChapter = ReadBook.curTextChapter ?: return
-        activity.binding.searchMenu.updateSearchInfo()
+        activity.handlerBinding.searchMenu.updateSearchInfo()
         val searchResultPositions =
-            activity.viewModel.searchResultPositions(curTextChapter, searchResult)
+            activity.handlerViewModel.searchResultPositions(curTextChapter, searchResult)
         val (pageIndex, lineIndex, charIndex, addLine, charIndex2) = searchResultPositions
         ReadBook.skipToPage(pageIndex) {
             activity.isSelectingSearchResult = true
-            activity.binding.readView.curPage.selectStartMoveIndex(0, lineIndex, charIndex)
+            activity.handlerBinding.readView.curPage.selectStartMoveIndex(0, lineIndex, charIndex)
             when (addLine) {
-                0 -> activity.binding.readView.curPage.selectEndMoveIndex(
+                0 -> activity.handlerBinding.readView.curPage.selectEndMoveIndex(
                     0,
                     lineIndex,
                     charIndex + searchResultPositions[5] - 1
                 )
-                1 -> activity.binding.readView.curPage.selectEndMoveIndex(
+                1 -> activity.handlerBinding.readView.curPage.selectEndMoveIndex(
                     0, lineIndex + 1, charIndex2
                 )
                 //consider change page, jump to scroll position
-                -1 -> activity.binding.readView.curPage.selectEndMoveIndex(1, 0, charIndex2)
+                -1 -> activity.handlerBinding.readView.curPage.selectEndMoveIndex(1, 0, charIndex2)
             }
-            activity.binding.readView.isTextSelected = true
+            activity.handlerBinding.readView.isTextSelected = true
             activity.isSelectingSearchResult = false
         }
     }
@@ -64,11 +65,11 @@ class ReadBookNavigationHandler(
         val book = ReadBook.book ?: return
         activity.searchContentActivity.launch {
             putExtra("bookUrl", book.bookUrl)
-            putExtra("searchWord", searchWord ?: activity.viewModel.searchContentQuery)
-            putExtra("searchResultIndex", activity.viewModel.searchResultIndex)
-            activity.viewModel.searchResultList?.first()?.let {
-                if (it.query == activity.viewModel.searchContentQuery) {
-                    IntentData.put("searchResultList", activity.viewModel.searchResultList)
+            putExtra("searchWord", searchWord ?: activity.handlerViewModel.searchContentQuery)
+            putExtra("searchResultIndex", activity.handlerViewModel.searchResultIndex)
+            activity.handlerViewModel.searchResultList?.first()?.let {
+                if (it.query == activity.handlerViewModel.searchContentQuery) {
+                    IntentData.put("searchResultList", activity.handlerViewModel.searchResultList)
                 }
             }
         }

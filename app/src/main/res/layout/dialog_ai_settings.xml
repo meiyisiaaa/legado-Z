@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--
   AI 配置对话框。
-  Phase 2 新增「读者助手」分组（topK / 单片段字符 / 赏析字符 / 总开关），
+  Phase 2 新增「读者助手」分组（选区字符上限 / 总开关），
   条目变多后正文改由 ScrollView 承载，工具栏与底部按钮保持常驻不随滚动。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -134,30 +134,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/ai_reader_assistant_enabled" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/ai_hint_retrieval_top_k">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/ai_retrieval_top_k"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/ai_hint_retrieval_max_chars">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/ai_retrieval_max_chars"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number" />
-            </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"

@@ -9,26 +9,20 @@ package io.legado.app.ai.prompt
  *
  * 硬约定：
  * - `PromptBuilder` / Engine / UI 中**禁止**出现内联 prompt 字符串字面量；
- * - prompt 中**严禁**出现 apiKey、endpoint，以及任何**未被检索命中**的章节正文。
+ * - prompt 中**严禁**出现 apiKey、endpoint，以及用户未主动选中的章节正文或元信息。
  */
 object ReaderPromptTemplates {
 
-    /**
-     * 检索问答的 system prompt。
-     *
-     * 三条硬约束都是为了对抗大模型在 RAG 场景下最常见的两种失败：
-     * 「拿训练数据里的同名小说糊弄」和「片段里没有就自由发挥」。
-     */
-    const val SYSTEM_QA = """你是一位耐心的读书伙伴，正在陪用户读一本小说。
-用户会给你若干段**从这本书里检索出来的原文片段**，以及一个问题。
+    /** 选区问答的 system prompt。 */
+    const val SYSTEM_SELECTION_QA = """你是一位耐心的阅读伴读。
+用户会主动选中一小段原文，并针对这段文字提出问题。
 
 硬性要求：
-1. **只能**依据给出的原文片段作答，绝不使用你对同名作品的任何先验记忆。
-2. 片段里找不到答案时，直接说"给出的片段里没有提到"，并简要说明片段讲了什么，
-   不要猜测、不要编造情节、不要用"可能""也许"来搪塞。
+1. **只能**依据用户选中的文字作答，不要使用对作品的先验记忆。
+2. 选中文字不足以回答时，直接说明"选中内容里没有足够信息"，不要猜测或补写上下文。
 3. 回答用简体中文，控制在 300 字以内，用 Markdown 组织（可用小标题、列表、引用）。
-4. 引用原文时用 > 引用块，并在句末标注片段编号，如 `（片段 2）`。
-5. 不要复述整段片段，只摘取与问题直接相关的部分。
+4. 引用原文时用 > 引用块，不要复述整段文字。
+5. 不要剧透，不要脑补选区前后的剧情。
 6. 只回答问题本身，不要输出"根据您提供的片段"这类客套开场白。"""
 
     /**
@@ -51,31 +45,17 @@ object ReaderPromptTemplates {
 
     /* ---------------- user prompt 片段 ---------------- */
 
-    const val USER_BOOK_LABEL = "【书名】"
-    const val USER_CHAPTER_LABEL = "【所在章节】"
-    const val USER_FRAGMENTS_LABEL = "【原文片段】"
-    const val USER_HISTORY_LABEL = "【此前的对话】"
     const val USER_QUESTION_LABEL = "【我的问题】"
     const val USER_SELECTION_LABEL = "【我选中的原文】"
 
-    const val USER_QA_TAIL = "请只依据上面的原文片段回答我的问题。"
+    const val USER_SELECTION_QA_TAIL = "请只依据我选中的原文回答问题。"
     const val USER_EXPLAIN_TAIL = "请赏析这段文字。"
-
-    /** 历史轮次的行前缀。 */
-    const val HISTORY_QUESTION_PREFIX = "问："
-    const val HISTORY_ANSWER_PREFIX = "答："
-
-    /** 片段区块的表头模板：`片段 1｜第 12 章 · 归途`。 */
-    const val FRAGMENT_HEADER_FORMAT = "片段 %d｜第 %d 章 · %s"
-
-    /** 章节标题缺失时的占位。 */
-    const val UNTITLED_CHAPTER = "（无标题）"
 
     /** 无内容时的占位说明，避免 prompt 出现空标签块（与 [PromptTemplates.PLACEHOLDER_NONE] 一致）。 */
     const val PLACEHOLDER_NONE = "（未提供）"
 
-    /** 问答完整 system prompt。 */
-    fun systemQa(): String = SYSTEM_QA
+    /** 选区问答完整 system prompt。 */
+    fun systemSelectionQa(): String = SYSTEM_SELECTION_QA
 
     /** 赏析完整 system prompt。 */
     fun systemExplain(): String = SYSTEM_EXPLAIN

@@ -3,7 +3,6 @@ package io.legado.app.ai.prompt
 import io.legado.app.ai.DebugInput
 import io.legado.app.ai.ExplainPromptInput
 import io.legado.app.ai.GenerateInput
-import io.legado.app.ai.QaPromptInput
 import io.legado.app.ai.ValidationResult
 import io.legado.app.ai.client.ChatMessage
 
@@ -69,51 +68,27 @@ object PromptBuilder {
 
     /* ==================== Phase 2：读者助手 ==================== */
 
-    /**
-     * 检索问答：system（只准依据片段作答）+ user（书名 + 片段 + 历史 + 问题）。
-     *
-     * 隐私红线：本方法**只**拼装 [QaPromptInput] 里已经准备好的内容。
-     * 片段由 [io.legado.app.ai.retrieval.BookRetriever] 检索命中后交给
-     * [io.legado.app.ai.engine.ReaderQaEngine] 裁剪，**未命中的正文永远进不到这里**。
-     *
-     * 历史轮次只带问与答的文本、不重复携带当时的片段：既省 token，
-     * 也避免"早期片段"随着对话变长被反复上传。
-     */
-    fun buildQa(input: QaPromptInput): List<ChatMessage> {
-        val fragments = input.fragmentBlocks
-            .filter { it.isNotBlank() }
-            .joinToString("\n\n")
-        val history = input.history
-            .filter { it.isUsable() }
-            .joinToString("\n") { turn ->
-                ReaderPromptTemplates.HISTORY_QUESTION_PREFIX + turn.question.trim() + "\n" +
-                        ReaderPromptTemplates.HISTORY_ANSWER_PREFIX + turn.answer.trim()
-            }
+    /** 选区问答：只拼装用户主动选中的文字与当前问题。 */
+    fun buildSelectionQa(input: ExplainPromptInput): List<ChatMessage> {
         val user = buildString {
-            appendReaderSection(ReaderPromptTemplates.USER_BOOK_LABEL, input.bookName)
-            appendReaderSection(ReaderPromptTemplates.USER_FRAGMENTS_LABEL, fragments)
-            if (history.isNotBlank()) {
-                appendReaderSection(ReaderPromptTemplates.USER_HISTORY_LABEL, history)
-            }
+            appendReaderSection(ReaderPromptTemplates.USER_SELECTION_LABEL, input.selection)
             appendReaderSection(ReaderPromptTemplates.USER_QUESTION_LABEL, input.question)
-            append(ReaderPromptTemplates.USER_QA_TAIL)
+            append(ReaderPromptTemplates.USER_SELECTION_QA_TAIL)
         }
         return listOf(
-            ChatMessage.system(ReaderPromptTemplates.systemQa()),
+            ChatMessage.system(ReaderPromptTemplates.systemSelectionQa()),
             ChatMessage.user(user)
         )
     }
 
     /**
-     * 选中文本赏析：system（三段式赏析）+ user（书名 + 章节 + 选中原文）。
+     * 选中文本赏析：system（三段式赏析）+ user（选中原文）。
      *
      * 隐私红线：**只**发送 [ExplainPromptInput.selection]（用户主动选中的文本），
      * 绝不附带所在章节的其余内容 —— 这是与问答链路最本质的区别。
      */
     fun buildExplain(input: ExplainPromptInput): List<ChatMessage> {
         val user = buildString {
-            appendReaderSection(ReaderPromptTemplates.USER_BOOK_LABEL, input.bookName)
-            appendReaderSection(ReaderPromptTemplates.USER_CHAPTER_LABEL, input.chapterTitle)
             appendReaderSection(ReaderPromptTemplates.USER_SELECTION_LABEL, input.selection)
             append(ReaderPromptTemplates.USER_EXPLAIN_TAIL)
         }

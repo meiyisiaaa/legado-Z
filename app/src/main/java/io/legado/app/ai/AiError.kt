@@ -69,15 +69,6 @@ sealed class AiError(
 
     /* ---------------- Phase 2：读者助手 ---------------- */
 
-    /**
-     * 本地检索零命中。
-     *
-     * **这是隐私红线的兜底闸门**：[io.legado.app.ai.engine.ReaderQaEngine] 在检索结果为空时
-     * 抛出本异常并**立即返回**，绝不把用户问题发往任何网络端点。
-     * 做成异常而非「空产出」，是为了让"没发请求"这件事在类型层面无法被调用方忽略。
-     */
-    class RetrievalEmpty : AiError(R.string.ai_err_retrieval_empty)
-
     /** 问题为空白 */
     class QuestionEmpty : AiError(R.string.ai_err_question_empty)
 
