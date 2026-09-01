@@ -288,6 +288,7 @@ abstract class BaseReadBookActivity :
         }
     }
 
+    @SuppressLint("SetTextI18n")
     fun showSimulatedReading() {
         val book = ReadBook.book ?: return
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
