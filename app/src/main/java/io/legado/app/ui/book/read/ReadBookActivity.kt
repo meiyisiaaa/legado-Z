@@ -680,7 +680,10 @@ class ReadBookActivity : BaseReadBookActivity(),
     /**
      * view触摸,文字选择
      */
-    override fun onTouch(v: View, event: MotionEvent): Boolean = keyHandler.onTouch(v, event)
+    override fun onTouch(v: View, event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_UP) v.performClick()
+        return keyHandler.onTouch(v, event)
+    }
 
     /**
      * 更新文字选择开始位置
