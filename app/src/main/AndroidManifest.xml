@@ -38,6 +38,10 @@
             android:name=".service.McpService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".service.RoleTtsReadAloudService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
         <!-- 主入口 -->
         <activity
             android:name=".ui.welcome.WelcomeActivity"

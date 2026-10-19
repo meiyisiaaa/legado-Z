@@ -238,10 +238,8 @@ abstract class BaseReadAloudService : BaseService(),
                 return@execute
             }
             readAloudNumber = textChapter.getReadLength(pageIndex) + startPos
-            readAloudByPage = getPrefBoolean(PreferKey.readAloudByPage)
-            contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0)
-                .split("\n")
-                .filter { it.isNotEmpty() }
+            readAloudByPage = useReadAloudByPage()
+            contentList = createReadAloudContentList(textChapter, readAloudByPage)
             var pos = startPos
             val page = textChapter.getPage(pageIndex)!!
             if (pos > 0) {
@@ -290,6 +288,15 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     abstract fun playStop()
+
+    protected open fun useReadAloudByPage(): Boolean = getPrefBoolean(PreferKey.readAloudByPage)
+
+    protected open fun createReadAloudContentList(
+        chapter: TextChapter,
+        byPage: Boolean
+    ): List<String> = chapter.getNeedReadAloud(0, byPage, 0)
+        .split("\n")
+        .filter { it.isNotEmpty() }
 
     @CallSuper
     open fun pauseReadAloud(abandonFocus: Boolean = true) {

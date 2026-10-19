@@ -11,6 +11,7 @@ import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.HttpReadAloudService
+import io.legado.app.service.RoleTtsReadAloudService
 import io.legado.app.service.TTSReadAloudService
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.StringUtils
@@ -25,6 +26,9 @@ object ReadAloud {
     var httpTTS: HttpTTS? = null
 
     private fun getReadAloudClass(): Class<*> {
+        if (ReadBook.book?.config?.roleTtsEnabled == true) {
+            return RoleTtsReadAloudService::class.java
+        }
         val ttsEngine = ttsEngine
         if (ttsEngine.isNullOrBlank()) {
             return TTSReadAloudService::class.java

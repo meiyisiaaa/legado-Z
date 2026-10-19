@@ -152,6 +152,23 @@ interface BookDao {
     @Update
     fun update(vararg book: Book)
 
+    @Transaction
+    fun updateRoleTtsConfig(bookUrl: String, roleTtsConfigJson: String?) {
+        val latest = getBook(bookUrl) ?: return
+        latest.config.roleTtsConfigJson = roleTtsConfigJson
+        updateReadConfigColumn(bookUrl, Book.Converters().readConfigToString(latest.readConfig))
+    }
+
+    @Transaction
+    fun updateRoleTtsEnabled(bookUrl: String, enabled: Boolean) {
+        val latest = getBook(bookUrl) ?: return
+        latest.config.roleTtsEnabled = enabled
+        updateReadConfigColumn(bookUrl, Book.Converters().readConfigToString(latest.readConfig))
+    }
+
+    @Query("UPDATE books SET readConfig = :readConfig WHERE bookUrl = :bookUrl")
+    fun updateReadConfigColumn(bookUrl: String, readConfig: String)
+
     @Delete
     fun delete(vararg book: Book)
 

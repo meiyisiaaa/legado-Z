@@ -61,7 +61,12 @@
 -keep class * extends io.legado.app.help.JsExtensions{*;}
 # 数据类
 -keep class **.data.entities.**{*;}
-# Gson fields form the JS login protocol.
+# Gson fields form the persisted casting format and the JS login protocol.
+-keep class io.legado.app.ai.tts.RoleTtsStoryboard { *; }
+-keep class io.legado.app.ai.tts.RoleTtsSegment { *; }
+-keep class io.legado.app.ai.tts.BookTtsRole { *; }
+-keep class io.legado.app.ai.tts.RoleTtsVoiceBinding** { *; }
+-keep class io.legado.app.ai.tts.RoleTtsRolesConfig { *; }
 -keep class io.legado.app.ui.login.SourceLoginV2Ui** { *; }
 # Ktor's optional JVM debugger probe catches missing management APIs on Android.
 -dontwarn java.lang.management.ManagementFactory

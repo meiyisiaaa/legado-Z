@@ -79,6 +79,8 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             tvToBackstage.setTextColor(textColor)
             ivSetting.setColorFilter(textColor)
             tvSetting.setTextColor(textColor)
+            ivRoleTts.setColorFilter(textColor)
+            tvRoleTts.setTextColor(textColor)
             cbTtsFollowSys.setTextColor(textColor)
         }
         initData()
@@ -100,6 +102,9 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         }
         llSetting.setOnClickListener {
             ReadAloudConfigDialog().show(childFragmentManager, "readAloudConfigDialog")
+        }
+        llRoleTts.setOnClickListener {
+            RoleTtsDialog().show(childFragmentManager, "roleTtsDialog")
         }
         tvPre.setOnClickListener { ReadBook.moveToPrevChapter(upContent = true, toLast = false) }
         tvNext.setOnClickListener { ReadBook.moveToNextChapter(true) }
