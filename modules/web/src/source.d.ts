@@ -28,6 +28,10 @@ type BaseSource = {
    * js库
    */
   jsLib?: string
+  /**
+   * 单文件 JavaScript 书源
+   */
+  mainJs?: string
 }
 type BookSoure = BaseSource & {
   // 地址，包括 http/https

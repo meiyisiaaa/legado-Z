@@ -7,6 +7,7 @@ import androidx.documentfile.provider.DocumentFile
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.DirectLinkUpload
@@ -31,7 +32,6 @@ import io.legado.app.utils.openOutputStream
 import io.legado.app.utils.outputStream
 import io.legado.app.utils.writeToOutputStream
 import kotlinx.coroutines.Dispatchers.IO
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -140,7 +140,7 @@ object Backup {
         writeListToJson(appDb.bookDao.all, "bookshelf.json", backupPath)
         writeListToJson(appDb.bookmarkDao.all, "bookmark.json", backupPath)
         writeListToJson(appDb.bookGroupDao.all, "bookGroup.json", backupPath)
-        writeListToJson(appDb.bookSourceDao.all, "bookSource.json", backupPath)
+        writeBookSources(appDb.bookSourceDao.all, backupPath)
         writeListToJson(appDb.rssSourceDao.all, "rssSources.json", backupPath)
         writeListToJson(appDb.rssStarDao.all, "rssStar.json", backupPath)
         writeListToJson(appDb.replaceRuleDao.all, "replaceRule.json", backupPath)
@@ -277,6 +277,20 @@ object Backup {
                 LogUtils.d(TAG, "阅读备份 $fileName 写入大小 ${file.length()}")
             } else {
                 LogUtils.d(TAG, "阅读备份 $fileName 列表为空")
+            }
+        }
+    }
+
+    private suspend fun writeBookSources(sources: List<BookSource>, path: String) {
+        currentCoroutineContext().ensureActive()
+        withContext(IO) {
+            if (sources.isNotEmpty()) {
+                LogUtils.d(TAG, "阅读备份 bookSource.json 列表大小 ${sources.size}")
+                val file = FileUtils.createFileIfNotExist(path + File.separator + "bookSource.json")
+                file.writeText(BookSourceBackupCodec.encode(sources))
+                LogUtils.d(TAG, "阅读备份 bookSource.json 写入大小 ${file.length()}")
+            } else {
+                LogUtils.d(TAG, "阅读备份 bookSource.json 列表为空")
             }
         }
     }

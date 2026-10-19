@@ -7,8 +7,12 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.legado.app.data.AppDatabase
+import io.legado.app.data.DatabaseMigrations
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 import java.io.IOException
 
@@ -47,5 +51,68 @@ class MigrationTest {
                 openHelper.writableDatabase
                 close()
             }
+    }
+
+    @Test
+    @Throws(IOException::class)
+    fun migrate89To90AddsNullableMainJsWithoutLosingSources() {
+        helper.createDatabase(TEST_DB, 89).apply {
+            execSQL(
+                """INSERT INTO `book_sources`
+                    (`bookSourceUrl`, `bookSourceName`, `bookSourceType`, `lastUpdateTime`, `respondTime`, `weight`)
+                    VALUES (?, ?, ?, ?, ?, ?)""".trimIndent(),
+                arrayOf<Any?>("https://example.org/source", "Existing source", 0, 1L, 2L, 3)
+            )
+            execSQL(
+                """INSERT INTO `books`
+                    (`bookUrl`, `name`, `author`, `durChapterIndex`, `durChapterPos`, `readConfig`)
+                    VALUES (?, ?, ?, ?, ?, ?)""".trimIndent(),
+                arrayOf<Any?>(
+                    "https://example.org/book",
+                    "Existing book",
+                    "Existing author",
+                    17,
+                    238,
+                    """{"reverseToc":true,"pageAnim":2,"reSegment":true,"delTag":4}"""
+                )
+            )
+            close()
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, TEST_DB)
+            .addMigrations(*DatabaseMigrations.migrations)
+            .build()
+        try {
+            val sqlite = database.openHelper.writableDatabase
+            val columns = mutableSetOf<String>()
+            sqlite.query("PRAGMA table_info(`book_sources`)").use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow("name")
+                while (cursor.moveToNext()) columns += cursor.getString(nameColumn)
+            }
+            assertTrue("mainJs column missing after 89→90", "mainJs" in columns)
+
+            sqlite.query(
+                "SELECT bookSourceName, mainJs FROM book_sources WHERE bookSourceUrl = ?",
+                arrayOf("https://example.org/source")
+            ).use { cursor ->
+                assertTrue("existing source was lost", cursor.moveToFirst())
+                assertEquals("Existing source", cursor.getString(0))
+                assertNull(cursor.getString(1))
+            }
+
+            val book = database.bookDao.getBook("https://example.org/book")
+            assertTrue("existing book was lost", book != null)
+            assertEquals("Existing book", book?.name)
+            assertEquals("Existing author", book?.author)
+            assertEquals(17, book?.durChapterIndex)
+            assertEquals(238, book?.durChapterPos)
+            assertEquals(true, book?.readConfig?.reverseToc)
+            assertEquals(2, book?.readConfig?.pageAnim)
+            assertEquals(true, book?.readConfig?.reSegment)
+            assertEquals(4L, book?.readConfig?.delTag)
+        } finally {
+            database.close()
+        }
     }
 }

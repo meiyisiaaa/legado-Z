@@ -89,6 +89,12 @@ export default {
         type: 'String',
         hint: 'js库, 可填写js或者key-value object获取在线js文件',
       },
+      {
+        title: '单文件JS',
+        id: 'mainJs',
+        type: 'String',
+        hint: '完整脚本；配置写入 config，主函数需同步返回 JSON 字符串或对象',
+      },
     ],
   },
   search: {

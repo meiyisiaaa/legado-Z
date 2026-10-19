@@ -48,6 +48,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_export_main_js"
+        android:title="@string/export_main_js_file"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_share_source"
         android:title="@string/share_selected_source"
         app:showAsAction="never" />

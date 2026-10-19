@@ -591,6 +591,10 @@
     <string name="enable_selection">Kích hoạt mục đã chọn</string>
     <string name="disable_selection">Vô hiệu hóa mục đã chọn</string>
     <string name="export_selection">Xuất mục đã chọn</string>
+    <string name="export_main_js_file">Xuất một tệp JS</string>
+    <string name="export_main_js_select_one">Chỉ chọn một nguồn sách để xuất tệp JS.</string>
+    <string name="export_main_js_source_missing">Không tìm thấy nguồn sách đã chọn.</string>
+    <string name="export_main_js_empty">Nguồn sách đã chọn không có tập lệnh mainJs để xuất.</string>
     <string name="export">Xuất</string>
     <string name="load_toc">Tải chương</string>
     <string name="load_info">Tải chi tiết sách</string>

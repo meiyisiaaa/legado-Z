@@ -599,6 +599,10 @@
     <string name="enable_selection">启用所选</string>
     <string name="disable_selection">禁用所选</string>
     <string name="export_selection">导出所选</string>
+    <string name="export_main_js_file">导出单文件 JS</string>
+    <string name="export_main_js_select_one">导出 JS 文件时只能选择一个书源。</string>
+    <string name="export_main_js_source_missing">找不到所选书源。</string>
+    <string name="export_main_js_empty">所选书源没有可导出的 mainJs 脚本。</string>
     <string name="export">导出</string>
     <string name="load_toc">加载目录</string>
     <string name="load_info">加载详情页</string>

@@ -15,6 +15,14 @@
       导出</el-button
     >
     <el-button
+      v-if="isBookSource"
+      :disabled="!selectedJsSource"
+      @click="outExportJs"
+      :icon="Download"
+    >
+      导出 JS</el-button
+    >
+    <el-button
       type="danger"
       :icon="Delete"
       @click="deleteSelectSources"
@@ -101,17 +109,49 @@ const clearAllSources = () => {
 const importSourceFile = () => {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = '.json,.txt'
+  input.accept = isBookSource ? '.json,.txt,.js' : '.json,.txt'
   input.addEventListener('change', () => {
     const files = input.files
-    if (files === null) {
+    if (files === null || files.length === 0) {
       return ElMessage.info('未选择文件')
     }
+    const file = files[0]
     const reader = new FileReader()
-    reader.readAsText(files[0])
+    reader.readAsText(file)
     reader.onload = () => {
+      const content = reader.result
+      if (typeof content !== 'string') {
+        return ElMessage.error('无法读取文件内容')
+      }
+      if (file.name.toLowerCase().endsWith('.js')) {
+        if (!isBookSource) return ElMessage.error('单文件 JS 仅支持书源')
+        const loadingMessage = ElMessage({
+          message: '正在安全解析单文件书源…',
+          showClose: true,
+          duration: 0,
+        })
+        API.parseBookSource(content)
+          .then(({ data }) => {
+            if (!data.isSuccess) {
+              return ElMessage.error(data.errorMsg || '单文件书源解析失败')
+            }
+            if (!('bookSourceUrl' in data.data)) {
+              return ElMessage.error('解析结果不是书源')
+            }
+            store.saveSources([data.data])
+            searchKey.value = ''
+            sourceUrlSelect.value = [data.data.bookSourceUrl]
+            ElMessage.success('已解析单文件书源，请检查后推送')
+          })
+          .catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : '请求失败'
+            ElMessage.error('单文件书源解析失败: ' + message)
+          })
+          .finally(() => loadingMessage.close())
+        return
+      }
       try {
-        const jsonData = JSON.parse(reader.result as string)
+        const jsonData = JSON.parse(content)
         store.saveSources(jsonData)
       } catch (e: unknown) {
         ElMessage.error('上传的源格式错误: ' + (e as Error).message)
@@ -122,6 +162,12 @@ const importSourceFile = () => {
 }
 
 const isBookSource = /bookSource/i.test(window.location.href)
+const selectedJsSource = computed(() => {
+  if (sourceUrlSelect.value.length !== 1) return undefined
+  const source = sourceSelect.value[0]
+  return source?.mainJs?.trim() ? source : undefined
+})
+
 const outExport = () => {
   const exportFile = document.createElement('a')
   const sources =
@@ -140,6 +186,19 @@ const outExport = () => {
   exportFile.href = window.URL.createObjectURL(myBlob)
   exportFile.click()
   window.URL.revokeObjectURL(exportFile.href) //avoid memory leak
+}
+
+const outExportJs = () => {
+  const source = selectedJsSource.value
+  if (!source?.mainJs) return
+  const sourceName = 'bookSourceName' in source ? source.bookSourceName : 'BookSource'
+  const safeName = sourceName.replace(/[\\/:*?"<>|]/g, '_') || 'BookSource'
+  const exportFile = document.createElement('a')
+  const blob = new Blob([source.mainJs], { type: 'text/javascript;charset=utf-8' })
+  exportFile.download = `${safeName}.js`
+  exportFile.href = window.URL.createObjectURL(blob)
+  exportFile.click()
+  window.URL.revokeObjectURL(exportFile.href)
 }
 </script>
 

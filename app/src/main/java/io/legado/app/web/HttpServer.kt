@@ -52,6 +52,7 @@ class HttpServer(port: Int) : NanoHTTPD(port) {
 
                     returnData = runBlocking {
                         when (uri) {
+                            "/parseBookSource" -> BookSourceController.parseBookSource(postData)
                             "/saveBookSource" -> BookSourceController.saveSource(postData)
                             "/saveBookSources" -> BookSourceController.saveSources(postData)
                             "/deleteBookSources" -> BookSourceController.deleteSources(postData)

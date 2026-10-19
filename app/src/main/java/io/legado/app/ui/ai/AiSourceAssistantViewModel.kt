@@ -30,8 +30,7 @@ import io.legado.app.ai.source.SourceJsonExtractor
 import io.legado.app.base.BaseViewModel
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.okHttpClient
-import io.legado.app.data.entities.BookSource
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.help.source.BookSourceImport
 import io.legado.app.model.Debug
 import io.legado.app.model.DebugRunKind
 import io.legado.app.model.DebugRunResult
@@ -39,6 +38,7 @@ import io.legado.app.model.DebugRunSnapshot
 import io.legado.app.model.DebugRunner
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import java.util.UUID
 
 /**
@@ -116,7 +116,7 @@ class AiSourceAssistantViewModel(application: Application) : BaseViewModel(appli
         _debugTrialStatus.postValue(context.getString(R.string.ai_debug_trial_running))
         execute {
             val source = try {
-                GSON.fromJsonObject<BookSource>(sourceText).getOrThrow()
+                BookSourceImport.parse(sourceText, currentCoroutineContext())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -192,7 +192,7 @@ class AiSourceAssistantViewModel(application: Application) : BaseViewModel(appli
             manualSampleHtml = manualSampleHtml
         )
         execute {
-            val source = GSON.fromJsonObject<BookSource>(sourceText).getOrThrow()
+            val source = BookSourceImport.parse(sourceText, currentCoroutineContext())
             debugEngine.debug(
                 options,
                 DebugInput(

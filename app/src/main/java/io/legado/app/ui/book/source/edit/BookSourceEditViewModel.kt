@@ -16,10 +16,8 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.storage.ImportOldData
+import io.legado.app.help.source.BookSourceImport
 import io.legado.app.model.SharedJsScope
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
@@ -28,6 +26,7 @@ import io.legado.app.utils.jsonPath
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 
 
 class BookSourceEditViewModel(application: Application) : BaseViewModel(application) {
@@ -51,31 +50,35 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
 
     fun save(source: BookSource, success: ((BookSource) -> Unit)? = null) {
         execute {
-            if (source.bookSourceUrl.isBlank() || source.bookSourceName.isBlank()) {
+            val normalizedSource = BookSourceImport.canonicalize(
+                source,
+                currentCoroutineContext()
+            )
+            if (normalizedSource.bookSourceUrl.isBlank() || normalizedSource.bookSourceName.isBlank()) {
                 throw NoStackTraceException(context.getString(R.string.non_null_name_url))
             }
             val oldSource = bookSource ?: BookSource()
-            if (!source.equal(oldSource)) {
-                source.lastUpdateTime = System.currentTimeMillis()
-                if (oldSource.exploreUrl != source.exploreUrl) {
+            if (!normalizedSource.equal(oldSource)) {
+                normalizedSource.lastUpdateTime = System.currentTimeMillis()
+                if (oldSource.exploreUrl != normalizedSource.exploreUrl) {
                     oldSource.clearExploreKindsCache()
                 }
-                if (oldSource.jsLib != source.jsLib) {
+                if (oldSource.jsLib != normalizedSource.jsLib) {
                     SharedJsScope.remove(oldSource.jsLib)
                 }
             }
             bookSource?.let {
-                if (it.bookSourceUrl != source.bookSourceUrl) {
+                if (it.bookSourceUrl != normalizedSource.bookSourceUrl) {
                     SourceHelp.deleteBookSource(it.bookSourceUrl)
                 } else {
                     appDb.bookSourceDao.delete(it)
                     SourceConfig.removeSource(it.bookSourceUrl)
                 }
             }
-            appDb.bookSourceDao.insert(source)
-            bookSource = source
-            concurrentRecordMap.remove(source.bookSourceUrl) //删除并发限制缓存
-            source
+            appDb.bookSourceDao.insert(normalizedSource)
+            bookSource = normalizedSource
+            concurrentRecordMap.remove(normalizedSource.bookSourceUrl) //删除并发限制缓存
+            normalizedSource
         }.onSuccess {
             success?.invoke(it)
         }.onError {
@@ -110,33 +113,25 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
     }
 
     suspend fun importSource(text: String): BookSource {
-        return when {
-            text.isAbsUrl() -> {
-                val text1 = okHttpClient.newCallStrResponse { url(text) }.body
-                importSource(text1!!)
-            }
-
-            text.isJsonArray() -> {
-                if (text.contains("ruleSearchUrl") || text.contains("ruleFindUrl")) {
-                    val items: List<Map<String, Any>> = jsonPath.parse(text).read("$")
-                    val jsonItem = jsonPath.parse(items[0])
-                    ImportOldData.fromOldBookSource(jsonItem)
-                } else {
-                    GSON.fromJsonArray<BookSource>(text).getOrThrow()[0]
-                }
-            }
-
-            text.isJsonObject() -> {
-                if (text.contains("ruleSearchUrl") || text.contains("ruleFindUrl")) {
-                    val jsonItem = jsonPath.parse(text)
-                    ImportOldData.fromOldBookSource(jsonItem)
-                } else {
-                    GSON.fromJsonObject<BookSource>(text).getOrThrow()
-                }
-            }
-
-            else -> throw NoStackTraceException("格式不对")
+        val input = if (text.isAbsUrl()) {
+            okHttpClient.newCallStrResponse { url(text) }.body
+                ?: throw NoStackTraceException("书源链接返回空内容")
+        } else {
+            text
         }
+        val trimmed = input.trim()
+        if (trimmed.contains("ruleSearchUrl") || trimmed.contains("ruleFindUrl")) {
+            return when {
+                trimmed.isJsonArray() -> {
+                    val items: List<Map<String, Any>> = jsonPath.parse(trimmed).read("$")
+                    val first = items.firstOrNull() ?: throw NoStackTraceException("书源数组为空")
+                    ImportOldData.fromOldBookSource(jsonPath.parse(first))
+                }
+                trimmed.isJsonObject() -> ImportOldData.fromOldBookSource(jsonPath.parse(trimmed))
+                else -> throw NoStackTraceException("格式不对")
+            }
+        }
+        return BookSourceImport.parse(input, currentCoroutineContext())
     }
 
     fun clearCookie(url: String) {

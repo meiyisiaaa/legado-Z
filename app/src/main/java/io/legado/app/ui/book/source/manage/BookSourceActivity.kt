@@ -194,7 +194,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_local -> importDoc.launch {
                 mode = HandleFileContract.FILE
-                allowExtensions = arrayOf("txt", "json")
+                allowExtensions = arrayOf("txt", "json", "js")
             }
 
             R.id.menu_import_onLine -> showImportDialog()
@@ -505,6 +505,17 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         name,
                         file,
                         "application/json"
+                    )
+                }
+            }
+
+            R.id.menu_export_main_js -> viewModel.saveMainJsToFile(adapter.selection) { file, name ->
+                exportResult.launch {
+                    mode = HandleFileContract.EXPORT
+                    fileData = HandleFileContract.FileData(
+                        name,
+                        file,
+                        "text/javascript"
                     )
                 }
             }

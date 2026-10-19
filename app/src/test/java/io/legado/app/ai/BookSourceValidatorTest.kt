@@ -52,6 +52,21 @@ class BookSourceValidatorTest {
     }
 
     @Test
+    fun `单文件JS书源不要求声明式核心规则`() {
+        val result = BookSourceValidator.validate(
+            parse(
+                """{"bookSourceUrl":"https://example.com","bookSourceName":"单文件源","mainJs":"function search(){}"}"""
+            )
+        )
+
+        assertFalse(result.hasError())
+        assertFalse(result.warnings().any {
+            it.messageRes == R.string.ai_issue_core_rules_missing ||
+                    it.messageRes == R.string.ai_issue_search_url_missing
+        })
+    }
+
+    @Test
     fun `缺少bookSourceUrl是ERROR`() {
         val result = BookSourceValidator.validate(
             parse("""{"bookSourceName":"x","ruleSearch":{"bookList":"a","name":"b","bookUrl":"c"},"searchUrl":"https://a.com"}""")

@@ -127,6 +127,9 @@ const isBookSource = /bookSource/i.test(location.href)
 const getSources = () =>
   isBookSource ? ajax.get('getBookSources') : ajax.get('getRssSources')
 
+const parseBookSource = (text: string) =>
+  ajax.post<LeagdoApiResponse<Source>>('parseBookSource', { text })
+
 const saveSource = (data: Source) =>
   isBookSource
     ? ajax.post<LeagdoApiResponse<string>>('saveBookSource', data)
@@ -216,6 +219,7 @@ export default {
   deleteBook,
 
   getSources,
+  parseBookSource,
   saveSources,
   saveSource,
   deleteSource,

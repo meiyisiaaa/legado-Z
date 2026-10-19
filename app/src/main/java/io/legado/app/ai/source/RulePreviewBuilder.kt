@@ -38,6 +38,7 @@ object RulePreviewBuilder {
         BookSourceSchema.BOOK_SOURCE_NAME,
         BookSourceSchema.BOOK_SOURCE_GROUP,
         BookSourceSchema.BOOK_SOURCE_TYPE,
+        BookSourceSchema.MAIN_JS,
         BookSourceSchema.SEARCH_URL,
         BookSourceSchema.EXPLORE_URL
     )

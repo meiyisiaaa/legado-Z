@@ -602,6 +602,10 @@
     <string name="enable_selection">Enable selected</string>
     <string name="disable_selection">Disable selected</string>
     <string name="export_selection">Export selected</string>
+    <string name="export_main_js_file">Export single JS file</string>
+    <string name="export_main_js_select_one">Select exactly one book source to export its JS file.</string>
+    <string name="export_main_js_source_missing">The selected book source could not be found.</string>
+    <string name="export_main_js_empty">The selected book source has no mainJs script to export.</string>
     <string name="export">Export</string>
     <string name="load_toc">Load chapters</string>
     <string name="load_info">Load book detail</string>

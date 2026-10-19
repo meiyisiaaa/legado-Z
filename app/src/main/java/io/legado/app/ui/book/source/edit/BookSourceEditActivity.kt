@@ -327,6 +327,7 @@ class BookSourceEditActivity :
             add(EditEntity("variableComment", bs.variableComment, R.string.variable_comment))
             add(EditEntity("concurrentRate", bs.concurrentRate, R.string.concurrent_rate))
             add(EditEntity("jsLib", bs.jsLib, "jsLib"))
+            add(EditEntity("mainJs", bs.mainJs, "单文件JS（完整脚本）"))
         }
         // 搜索
         val sr = bs.getSearchRule()
@@ -461,6 +462,7 @@ class BookSourceEditActivity :
                 "concurrentRate" -> source.concurrentRate = it.value
                 "variableComment" -> source.variableComment = it.value
                 "jsLib" -> source.jsLib = it.value
+                "mainJs" -> source.mainJs = it.value
             }
         }
         searchEntities.forEach {

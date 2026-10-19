@@ -583,6 +583,10 @@
     <string name="enable_selection">啟用所選</string>
     <string name="disable_selection">禁用所選</string>
     <string name="export_selection">導出所選</string>
+    <string name="export_main_js_file">匯出單一 JS 檔案</string>
+    <string name="export_main_js_select_one">匯出 JS 檔案時只能選擇一個書源。</string>
+    <string name="export_main_js_source_missing">找不到所選書源。</string>
+    <string name="export_main_js_empty">所選書源沒有可匯出的 mainJs 腳本。</string>
     <string name="export">導出</string>
     <string name="load_toc">加載目錄</string>
     <string name="load_info">加載詳情頁</string>

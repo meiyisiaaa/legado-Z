@@ -27,6 +27,7 @@ object BookSourceSchema {
     const val RULE_TOC = "ruleToc"
     const val RULE_CONTENT = "ruleContent"
     const val RULE_REVIEW = "ruleReview"
+    const val MAIN_JS = "mainJs"
 
     /** 预览分组中"基础信息"这一组的标识（非书源字段名）。 */
     const val PREVIEW_GROUP_BASE = "base"
@@ -42,6 +43,7 @@ object BookSourceSchema {
         "enabled",
         "enabledExplore",
         "jsLib",
+        MAIN_JS,
         "enabledCookieJar",
         "concurrentRate",
         "header",
@@ -183,6 +185,7 @@ object BookSourceSchema {
         BOOK_SOURCE_NAME to "书源名称，必填",
         BOOK_SOURCE_GROUP to "分组，可空",
         BOOK_SOURCE_TYPE to "类型整数：0 文本 / 1 音频 / 2 图片 / 3 文件 / 4 视频",
+        MAIN_JS to "单文件 JS 书源脚本：顶层定义 config 与同步函数；普通源需 search/getChapters/getContent，文件源需 search/getBookInfo。发现、登录和评论等可选函数按配对协议声明。当前运行时为 Mozilla Rhino 1.8.1。",
         SEARCH_URL to "搜索地址，支持 {{key}} 关键词与 {{page}} 页码占位符",
         EXPLORE_URL to "发现地址，多个用换行分隔，格式为 分类名::地址",
         RULE_SEARCH to "搜索结果列表规则",

@@ -20,7 +20,14 @@ object DatabaseMigrations {
             migration_31_32, migration_32_33, migration_33_34, migration_34_35,
             migration_35_36, migration_36_37, migration_37_38, migration_38_39,
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
+            migration_89_90,
         )
+    }
+
+    private val migration_89_90 = object : Migration(89, 90) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `book_sources` ADD COLUMN `mainJs` TEXT")
+        }
     }
 
     private val migration_10_11 = object : Migration(10, 11) {

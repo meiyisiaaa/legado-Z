@@ -61,6 +61,8 @@
 -keep class * extends io.legado.app.help.JsExtensions{*;}
 # 数据类
 -keep class **.data.entities.**{*;}
+# Gson fields form the JS login protocol.
+-keep class io.legado.app.ui.login.SourceLoginV2Ui** { *; }
 # hutool-core hutool-crypto
 -keep class
 !cn.hutool.core.util.RuntimeUtil,

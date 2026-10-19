@@ -53,6 +53,8 @@ data class BookSource(
     var enabledExplore: Boolean = true,
     // js库
     override var jsLib: String? = null,
+    // 单文件JS书源；非空时由脚本 config 作为源规则唯一来源
+    var mainJs: String? = null,
     // 启用okhttp CookieJAr 自动保存每次请求的cookie
     @ColumnInfo(defaultValue = "0")
     override var enabledCookieJar: Boolean? = true,
@@ -153,6 +155,8 @@ data class BookSource(
         return rule
     }
 
+    fun isJsSource(): Boolean = !mainJs.isNullOrBlank()
+
 //    fun getReviewRule(): ReviewRule {
 //        ruleReview?.let { return it }
 //        val rule = ReviewRule()
@@ -247,6 +251,7 @@ data class BookSource(
                 && equal(variableComment, source.variableComment)
                 && equal(concurrentRate, source.concurrentRate)
                 && equal(jsLib, source.jsLib)
+                && equal(mainJs, source.mainJs)
                 && equal(header, source.header)
                 && equal(loginUrl, source.loginUrl)
                 && equal(loginUi, source.loginUi)

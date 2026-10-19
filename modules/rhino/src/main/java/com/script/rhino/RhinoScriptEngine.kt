@@ -268,6 +268,22 @@ object RhinoScriptEngine : AbstractScriptEngine(), Invocable, Compilable {
         return bindings
     }
 
+    /**
+     * Creates an isolated ECMAScript global without Rhino's Java package globals.
+     * The global ContextFactory still supplies the class shutter and instruction
+     * observer used by normal evaluation.
+     */
+    fun getSafeRuntimeScope(): Scriptable {
+        val cx = Context.enter() as RhinoContext
+        try {
+            val scope = cx.initSafeStandardObjects()
+            SAFE_HOST_GLOBALS.forEach { ScriptableObject.deleteProperty(scope, it) }
+            return scope
+        } finally {
+            Context.exit()
+        }
+    }
+
     @Throws(ScriptException::class)
     override fun compile(script: String): CompiledScript {
         return this.compile(StringReader(script) as Reader)
@@ -442,5 +458,10 @@ object RhinoScriptEngine : AbstractScriptEngine(), Invocable, Compilable {
             }
         }
     }
+
+    private val SAFE_HOST_GLOBALS = arrayOf(
+        "Packages", "java", "javax", "org", "com", "edu", "net",
+        "JavaAdapter", "JavaImporter"
+    )
 
 }

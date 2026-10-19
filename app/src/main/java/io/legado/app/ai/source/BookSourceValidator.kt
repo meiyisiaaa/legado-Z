@@ -97,8 +97,9 @@ object BookSourceValidator {
         }
 
         // 有搜索规则却没有搜索地址：书源仍可导入（发现页可用），故只给 WARNING。
+        val hasMainJs = json.readString(BookSourceSchema.MAIN_JS).isNotBlank()
         val hasSearchRule = json.get(BookSourceSchema.RULE_SEARCH)?.isJsonObject == true
-        if (hasSearchRule && json.readString(BookSourceSchema.SEARCH_URL).isBlank()) {
+        if (!hasMainJs && hasSearchRule && json.readString(BookSourceSchema.SEARCH_URL).isBlank()) {
             issues.add(
                 ValidationIssue(
                     field = BookSourceSchema.SEARCH_URL,
@@ -132,6 +133,7 @@ object BookSourceValidator {
     /* ---------------- 规则子对象 ---------------- */
 
     private fun validateRuleObjects(json: JsonObject, issues: MutableList<ValidationIssue>) {
+        if (json.readString(BookSourceSchema.MAIN_JS).isNotBlank()) return
         BookSourceSchema.RULE_OBJECT_FIELDS.forEach { (ruleName, allowedFields) ->
             val element = json.get(ruleName) ?: return@forEach
             if (element.isJsonNull) return@forEach
@@ -193,6 +195,7 @@ object BookSourceValidator {
         json: JsonObject,
         issues: MutableList<ValidationIssue>
     ) {
+        if (json.readString(BookSourceSchema.MAIN_JS).isNotBlank()) return
         val hasAnyCoreRule = BookSourceSchema.CORE_RULE_FIELDS.any {
             json.get(it)?.isJsonObject == true
         }
