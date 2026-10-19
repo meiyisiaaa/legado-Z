@@ -1,13 +1,10 @@
 package io.legado.app.ai
 
 import android.security.KeyPairGeneratorSpec
-import android.os.Build
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Base64
-import androidx.annotation.RequiresApi
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
+import io.legado.app.help.crypto.KeystoreSecret
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
@@ -20,13 +17,10 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.SecureRandom
 import java.util.Calendar
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
 import javax.security.auth.x500.X500Principal
 
 /**
@@ -38,7 +32,7 @@ import javax.security.auth.x500.X500Principal
  * 存储选型（架构文档 Q3）：SharedPreferences 而非 Room / DataStore ——
  * v1 是**单实例全局配置**，语义等同 `AppConfig`，工程零 DataStore 依赖。
  *
- * apiKey 使用 Android Keystore AES-GCM 密文存储（API 23+；API 21/22 使用 RSA 包裹 AES），
+ * apiKey 使用 Android Keystore AES-GCM 密文存储，仍可读取旧版 RSA 包裹的 AES 密文，
  * 并在备份/导出中显式排除，见 [io.legado.app.help.storage.BackupConfig] 的
  * `ignorePrefKeys`。读取到旧版明文时会立即迁移并覆盖。
  */
@@ -197,7 +191,7 @@ object AiConfig {
     private fun readApiKey(): String {
         val stored = appCtx.getPrefString(PreferKey.aiApiKey, "").orEmpty()
         if (stored.isBlank()) return ""
-        if (!stored.startsWith(ENCRYPTED_PREFIX)) {
+        if (!stored.startsWith(ENCRYPTED_PREFIX) && !stored.startsWith(AES_ENCRYPTED_PREFIX)) {
             return runCatching {
                 saveEncryptedApiKey(stored)
                 stored
@@ -215,46 +209,12 @@ object AiConfig {
     }
 
     private fun encryptApiKey(value: String): String {
-        val iv = ByteArray(GCM_IV_BYTES).also(SecureRandom()::nextBytes)
-        val cipher = Cipher.getInstance(AES_TRANSFORMATION)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            cipher.init(Cipher.ENCRYPT_MODE, androidKeyStoreAesKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-            val ciphertext = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
-            return listOf(iv, ciphertext)
-                .joinToString(ENCODED_PART_SEPARATOR) { Base64.encodeToString(it, Base64.NO_WRAP) }
-                .let { AES_ENCRYPTED_PREFIX + it }
-        }
-
-        val aesKey = ByteArray(AES_KEY_BYTES).also(SecureRandom()::nextBytes)
-        cipher.init(
-            Cipher.ENCRYPT_MODE,
-            SecretKeySpec(aesKey, AES_ALGORITHM),
-            GCMParameterSpec(GCM_TAG_BITS, iv)
-        )
-        val ciphertext = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
-        val wrappedKey = rsaCipher(Cipher.ENCRYPT_MODE).doFinal(aesKey)
-        return listOf(wrappedKey, iv, ciphertext)
-            .joinToString(ENCODED_PART_SEPARATOR) { Base64.encodeToString(it, Base64.NO_WRAP) }
-            .let { ENCRYPTED_PREFIX + it }
+        return AES_ENCRYPTED_PREFIX + KeystoreSecret.encrypt(value, AES_KEY_ALIAS)
     }
 
     private fun decryptApiKey(stored: String): String {
         if (stored.startsWith(AES_ENCRYPTED_PREFIX)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val parts = stored.removePrefix(AES_ENCRYPTED_PREFIX)
-                    .split(ENCODED_PART_SEPARATOR)
-                require(parts.size == 2)
-                val iv = Base64.decode(parts[0], Base64.NO_WRAP)
-                val ciphertext = Base64.decode(parts[1], Base64.NO_WRAP)
-                val cipher = Cipher.getInstance(AES_TRANSFORMATION)
-                cipher.init(
-                    Cipher.DECRYPT_MODE,
-                    androidKeyStoreAesKey(),
-                    GCMParameterSpec(GCM_TAG_BITS, iv)
-                )
-                return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-            }
-            error("AES Android Keystore keys require API 23+")
+            return KeystoreSecret.decrypt(stored.removePrefix(AES_ENCRYPTED_PREFIX), AES_KEY_ALIAS)
         }
 
         val parts = stored.removePrefix(ENCRYPTED_PREFIX).split(ENCODED_PART_SEPARATOR)
@@ -270,28 +230,6 @@ object AiConfig {
             GCMParameterSpec(GCM_TAG_BITS, iv)
         )
         return String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun androidKeyStoreAesKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        if (!keyStore.containsAlias(AES_KEY_ALIAS)) {
-            KeyGenerator.getInstance(AES_ALGORITHM, ANDROID_KEYSTORE).apply {
-                init(
-                    KeyGenParameterSpec.Builder(
-                        AES_KEY_ALIAS,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                    )
-                        .setKeySize(AES_KEY_BYTES * 8)
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .build()
-                )
-                generateKey()
-            }
-            keyStore.load(null)
-        }
-        return requireNotNull(keyStore.getKey(AES_KEY_ALIAS, null) as? SecretKey)
     }
 
     private fun rsaCipher(mode: Int): Cipher {
@@ -329,8 +267,6 @@ object AiConfig {
     private const val RSA_TRANSFORMATION = "RSA/ECB/PKCS1Padding"
     private const val AES_ALGORITHM = "AES"
     private const val AES_TRANSFORMATION = "AES/GCM/NoPadding"
-    private const val AES_KEY_BYTES = 32
-    private const val GCM_IV_BYTES = 12
     private const val GCM_TAG_BITS = 128
     private const val KEY_VALID_YEARS = 30
 }

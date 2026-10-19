@@ -64,7 +64,8 @@ object BackupConfig {
         // AI 服务凭据：即使本地已加密，备份文件可能被上传到 WebDAV /
         // 导出到公共目录 / 在设备间流转，一旦随备份外泄等同于泄露用户自付费的 LLM 账号。
         // 因此显式排除，用户在新设备恢复备份后需要重新填写 apiKey（其余 AI 配置照常恢复）。
-        PreferKey.aiApiKey
+        PreferKey.aiApiKey,
+        io.legado.app.mcp.McpConfig.TOKEN_KEY
     )
 
     //阅读配置

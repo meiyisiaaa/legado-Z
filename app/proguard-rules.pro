@@ -63,6 +63,9 @@
 -keep class **.data.entities.**{*;}
 # Gson fields form the JS login protocol.
 -keep class io.legado.app.ui.login.SourceLoginV2Ui** { *; }
+# Ktor's optional JVM debugger probe catches missing management APIs on Android.
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn java.lang.management.RuntimeMXBean
 # hutool-core hutool-crypto
 -keep class
 !cn.hutool.core.util.RuntimeUtil,

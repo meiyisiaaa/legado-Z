@@ -97,6 +97,7 @@ class OtherConfigFragment : PreferenceFragment(),
 
     override fun onPreferenceTreeClick(preference: Preference): Boolean {
         when (preference.key) {
+            "mcpSession" -> showDialogFragment<McpSessionDialog>()
             PreferKey.userAgent -> showUserAgentDialog()
             PreferKey.customHosts -> showCustomHostsDialog()
             PreferKey.videoSetting -> showDialogFragment(SettingsDialog(requireActivity()))

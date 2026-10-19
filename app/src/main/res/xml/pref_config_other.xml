@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <io.legado.app.lib.prefs.Preference
+        android:key="mcpSession"
+        android:title="@string/mcp_title"
+        android:summary="@string/mcp_summary" />
 
     <io.legado.app.lib.prefs.NameListPreference
         android:defaultValue="auto"

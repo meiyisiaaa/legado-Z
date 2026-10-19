@@ -15,3 +15,11 @@ eddef32898e6767e70e676e867004e93afd02607 - 大文本安全编辑器
 skybbk1001 / legadoT (GPL-3.0)
 https://github.com/skybbk1001/legadoT
 869eb25511f48e2748ee3c3dede3cb1a9a60e143 - 单文件同步 JS 书源协议
+
+MCP Kotlin SDK 0.14.0 (MIT / Apache-2.0 过渡，按各贡献的原始许可)
+https://github.com/modelcontextprotocol/kotlin-sdk/tree/0.14.0
+完整许可说明：app/src/main/assets/licenses/mcp-kotlin-sdk-0.14.0.txt
+
+Ktor 3.4.3 (Apache-2.0)
+https://github.com/ktorio/ktor
+完整许可证：app/src/main/assets/licenses/ktor-3.4.3.txt

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mcp_title">MCP 书源调试会话</string>
+    <string name="mcp_summary">手动开启局域网书源维护，使用 Bearer Token 鉴权</string>
+    <string name="mcp_scope">仅开放书源读取、保存、删除、校验和调试。开启后，持有令牌的局域网客户端可以修改书源。移除 App 任务或系统超时后停止，不会自动重启。</string>
+    <string name="mcp_port">监听端口（1024–65535）</string>
+    <string name="mcp_start">开启调试会话</string>
+    <string name="mcp_stop">停止调试会话</string>
+    <string name="mcp_copy_token">复制访问令牌</string>
+    <string name="mcp_regenerate_token">停止会话并重新生成令牌</string>
+    <string name="mcp_stopped">会话已停止</string>
+    <string name="mcp_starting">正在启动…</string>
+    <string name="mcp_start_failed">MCP 启动失败，请检查端口是否被占用，或重新生成访问令牌</string>
+    <string name="mcp_token_failed">令牌无法读取，请重新生成</string>
+    <string name="mcp_port_invalid">请输入 1024–65535 之间的端口</string>
+    <string name="mcp_running_notification">局域网书源维护已开启，点击停止结束会话</string>
+    <string name="mcp_token_copied">已复制令牌，仅与可信客户端共享</string>
+    <string name="mcp_token_regenerated">已更新令牌，旧令牌立即失效</string>
+</resources>

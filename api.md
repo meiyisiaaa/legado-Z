@@ -1,5 +1,26 @@
 # 阅读[API](/app/src/main/java/io/legado/app/api/controller)
 
+## MCP 书源维护
+
+在「设置 → 其他设置 → MCP 书源调试会话」中手动开启。默认端口为 `1236`，
+Streamable HTTP 地址为 `http://手机局域网IP:1236/mcp`。客户端须发送
+`Authorization: Bearer <访问令牌>`；可在同一面板复制或重新生成令牌。
+服务默认关闭，不随 App 或系统启动。通知和设置面板均可停止；移除 App 任务或系统时限到达也会停止。
+
+| 工具 | 参数 | 行为 |
+| --- | --- | --- |
+| `list_sources` | `query?`, `page?`, `limit?` | 分页摘要，单页最多 100 条 |
+| `get_source` | `url`, `format?` (`json`/`js`) | 导出 JSON 或原始单文件 JS |
+| `save_source` | `source`, `overwrite?` | 接收 JSON/JS；默认拒绝覆盖，显式覆盖时保留现有分组、启停、排序等用户设置 |
+| `delete_sources` | `urls` | 仅删除明确列出的书源，最多 100 个 |
+| `check_source` | `url` 或 `source` | 无网络、无写入的本地结构校验，返回 `validationOnly=true` |
+| `debug_source` | `url` 或 `draft`, `key` | 运行已保存书源或内存草稿；两者互斥，草稿不落库 |
+
+调试与 App 调试页、WebSocket、批量校验共用运行所有权，其他会话占用时返回 `BUSY`。
+调试返回有界、脱敏的阶段诊断，不提供书架正文或阅读记录。书源导出本身保留可还原的代码，
+因此请仅向可信客户端提供令牌。浏览器 `Origin` 与请求 `Host` 必须匹配当前监听地址及端口。
+令牌只保存在设备加密存储中，不进入 App 备份或系统备份。
+
 ## 对于[Web](/app/src/main/java/io/legado/app/web/)的配置
 
 您需要先在设置中启用"Web 服务"。
