@@ -38,6 +38,11 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
 
     private var diffJob: Coroutine<*>? = null
 
+    protected var listUpdatesPaused = false
+        private set
+    private var listUpdateVersion = 0L
+    private var pendingListUpdate: (() -> Unit)? = null
+
     private var isResumed = false
 
     var itemAnimation: ItemAnimation? = null
@@ -97,12 +102,20 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
     @SuppressLint("NotifyDataSetChanged")
     @Synchronized
     fun setItems(items: List<ITEM>?) {
+        val snapshot = items?.toList()
+        listUpdateVersion++
+        diffJob?.cancel()
+        diffJob = null
+        if (listUpdatesPaused) {
+            pendingListUpdate = { setItems(snapshot) }
+            return
+        }
         kotlin.runCatching {
             if (this.items.isNotEmpty()) {
                 this.items.clear()
             }
-            if (items != null) {
-                this.items.addAll(items)
+            if (snapshot != null) {
+                this.items.addAll(snapshot)
             }
             notifyDataSetChanged()
             onCurrentListChanged()
@@ -115,18 +128,24 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         itemCallback: DiffUtil.ItemCallback<ITEM>,
         skipDiff: Boolean = false
     ) {
+        val snapshot = items?.toList()
+        val version = ++listUpdateVersion
+        if (listUpdatesPaused) {
+            pendingListUpdate = { setItems(snapshot, itemCallback, skipDiff) }
+            return
+        }
         kotlin.runCatching {
             if (!isResumed) { //全量标记更新
-                setItems(items)
+                setItems(snapshot)
                 return@runCatching
             }
             val oldItems = this.items.toList()
-            val itemsSize = items?.size ?: 0
+            val itemsSize = snapshot?.size ?: 0
             val headerCount = getHeaderCount()
             val footerCount = getFooterCount()
             val callback = object : DiffUtil.Callback() {
                 override fun getOldListSize(): Int {
-                    return itemCount
+                    return oldItems.size + headerCount + footerCount
                 }
 
                 override fun getNewListSize(): Int {
@@ -136,7 +155,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = snapshot?.getOrNull(newItemPosition - headerCount)
                         ?: return true
                     return itemCallback.areItemsTheSame(oldItem, newItem)
                 }
@@ -147,7 +166,7 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 ): Boolean {
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return true
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = snapshot?.getOrNull(newItemPosition - headerCount)
                         ?: return true
                     return itemCallback.areContentsTheSame(oldItem, newItem)
                 }
@@ -155,13 +174,13 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 override fun getChangePayload(oldItemPosition: Int, newItemPosition: Int): Any? {
                     val oldItem = oldItems.getOrNull(oldItemPosition - headerCount)
                         ?: return null
-                    val newItem = items?.getOrNull(newItemPosition - headerCount)
+                    val newItem = snapshot?.getOrNull(newItemPosition - headerCount)
                         ?: return null
                     return itemCallback.getChangePayload(oldItem, newItem)
                 }
             }
             if (!isResumed) {
-                setItems(items)
+                setItems(snapshot)
                 return@runCatching
             }
             diffJob?.cancel()
@@ -173,15 +192,16 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
                 }
                 ensureActive()
                 handler.post {
+                    if (listUpdatesPaused || version != listUpdateVersion) return@post
                     if (isResumed || diffResult == null) {
-                        setItems(items)
+                        setItems(snapshot)
                         return@post
                     }
                     if (this@RecyclerAdapter.items.isNotEmpty()) {
                         this@RecyclerAdapter.items.clear()
                     }
-                    if (items != null) {
-                        this@RecyclerAdapter.items.addAll(items)
+                    if (snapshot != null) {
+                        this@RecyclerAdapter.items.addAll(snapshot)
                     }
                     if (!isResumed) {
                         return@post
@@ -450,9 +470,28 @@ abstract class RecyclerAdapter<ITEM, VB : ViewBinding>(protected val context: Co
         if (!isResumed) {
             diffJob?.cancel()
             diffJob = null
+            listUpdateVersion++
             handler.removeCallbacksAndMessages(null)
         }
         this.isResumed = isResumed
+    }
+
+    @Synchronized
+    protected fun pauseListUpdates() {
+        if (listUpdatesPaused) return
+        listUpdatesPaused = true
+        listUpdateVersion++
+        diffJob?.cancel()
+        diffJob = null
+    }
+
+    @Synchronized
+    protected fun resumeListUpdates() {
+        if (!listUpdatesPaused) return
+        listUpdatesPaused = false
+        val pending = pendingListUpdate
+        pendingListUpdate = null
+        pending?.invoke()
     }
 
     private fun isHeader(position: Int) = position < getHeaderCount()

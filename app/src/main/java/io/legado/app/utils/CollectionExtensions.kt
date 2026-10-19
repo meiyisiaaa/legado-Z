@@ -1,5 +1,25 @@
 package io.legado.app.utils
 
+/**
+ * Moves one uniquely identified row relative to another in the complete current list.
+ * Items between a filtered view's visible rows keep their relative order.
+ */
+internal fun <T, K> moveRelativeTo(
+    allItems: List<T>,
+    movedKey: K,
+    targetKey: K,
+    after: Boolean,
+    keySelector: (T) -> K,
+): List<T> {
+    if (movedKey == targetKey) return allItems
+    val from = allItems.indexOfFirst { keySelector(it) == movedKey }
+    if (from < 0) return allItems
+    val withoutMoved = allItems.toMutableList().apply { removeAt(from) }
+    val target = withoutMoved.indexOfFirst { keySelector(it) == targetKey }
+    if (target < 0) return allItems
+    return withoutMoved.apply { add(target + if (after) 1 else 0, allItems[from]) }
+}
+
 fun List<Float>.fastSum(): Float {
     var sum = 0f
     for (i in indices) {

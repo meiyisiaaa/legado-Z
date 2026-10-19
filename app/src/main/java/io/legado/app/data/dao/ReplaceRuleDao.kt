@@ -5,10 +5,12 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.utils.cnCompare
+import io.legado.app.utils.moveRelativeTo
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.Flow
@@ -19,25 +21,25 @@ import kotlinx.coroutines.flow.map
 @Dao
 interface ReplaceRuleDao {
 
-    @Query("SELECT * FROM replace_rules ORDER BY sortOrder ASC")
+    @Query("SELECT * FROM replace_rules ORDER BY sortOrder ASC, id ASC")
     fun flowAll(): Flow<List<ReplaceRule>>
 
-    @Query("SELECT * FROM replace_rules where `group` like :key or name like :key ORDER BY sortOrder ASC")
+    @Query("SELECT * FROM replace_rules where `group` like :key or name like :key ORDER BY sortOrder ASC, id ASC")
     fun flowSearch(key: String): Flow<List<ReplaceRule>>
 
-    @Query("SELECT * FROM replace_rules WHERE isEnabled = 1 ORDER BY sortOrder ASC")
+    @Query("SELECT * FROM replace_rules WHERE isEnabled = 1 ORDER BY sortOrder ASC, id ASC")
     fun flowEnabled(): Flow<List<ReplaceRule>>
 
-    @Query("SELECT * FROM replace_rules WHERE isEnabled = 0 ORDER BY sortOrder ASC")
+    @Query("SELECT * FROM replace_rules WHERE isEnabled = 0 ORDER BY sortOrder ASC, id ASC")
     fun flowDisabled(): Flow<List<ReplaceRule>>
 
-    @Query("SELECT * FROM replace_rules where `group` like :key ORDER BY sortOrder ASC")
+    @Query("SELECT * FROM replace_rules where `group` like :key ORDER BY sortOrder ASC, id ASC")
     fun flowGroupSearch(key: String): Flow<List<ReplaceRule>>
 
     @Query("select `group` from replace_rules where `group` is not null and `group` <> ''")
     fun flowGroupsUnProcessed(): Flow<List<String>>
 
-    @Query("select * from replace_rules where `group` is null or trim(`group`) = '' or trim(`group`) like '%未分组%'")
+    @Query("select * from replace_rules where `group` is null or trim(`group`) = '' or trim(`group`) like '%未分组%' ORDER BY sortOrder ASC, id ASC")
     fun flowNoGroup(): Flow<List<ReplaceRule>>
 
     @get:Query("SELECT MIN(sortOrder) FROM replace_rules")
@@ -48,6 +50,9 @@ interface ReplaceRuleDao {
 
     @get:Query("SELECT * FROM replace_rules ORDER BY sortOrder ASC")
     val all: List<ReplaceRule>
+
+    @get:Query("SELECT * FROM replace_rules ORDER BY sortOrder ASC, id ASC")
+    val allForOrder: List<ReplaceRule>
 
     @get:Query("select distinct `group` from replace_rules where trim(`group`) <> ''")
     val allGroupsUnProcessed: List<String>
@@ -94,6 +99,17 @@ interface ReplaceRuleDao {
 
     @Update
     fun update(vararg replaceRules: ReplaceRule)
+
+    @Query("UPDATE replace_rules SET sortOrder = :sortOrder WHERE id = :id")
+    fun upOrder(id: Long, sortOrder: Int)
+
+    @Transaction
+    fun moveRelativeTo(ruleId: Long, targetId: Long, after: Boolean) {
+        val current = allForOrder
+        val reordered = moveRelativeTo(current, ruleId, targetId, after) { it.id }
+        if (reordered == current) return
+        reordered.forEachIndexed { index, rule -> upOrder(rule.id, index) }
+    }
 
     @Delete
     fun delete(vararg replaceRules: ReplaceRule)

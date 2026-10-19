@@ -91,8 +91,11 @@ interface JsExtensions : JsEncodeUtils {
     fun getSource(): BaseSource?
     fun getTag(): String?
 
+    /** Native WebView bridges supply the request job; Rhino hosts use their current context. */
+    fun getCoroutineContext(): CoroutineContext? = null
+
     private val context: CoroutineContext
-        get() = rhinoContextOrNull?.coroutineContext ?: EmptyCoroutineContext
+        get() = getCoroutineContext() ?: rhinoContextOrNull?.coroutineContext ?: EmptyCoroutineContext
 
     /**
      * 访问网络,返回String

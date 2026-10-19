@@ -2,6 +2,7 @@ package io.legado.app.ui.code
 
 import android.app.Application
 import android.content.Intent
+import android.os.Bundle
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
@@ -40,6 +41,34 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
     private val themeRegistry: ThemeRegistry = ThemeRegistry.getInstance()
     var writable = true
     var title: String? = null
+    var useSafeEditor = false
+        internal set
+    var safeDraft: String? = null
+        private set
+    var safeCursorPosition = 0
+        private set
+    var editorDraft: String? = null
+        private set
+    var editorDraftCursorPosition = 0
+        private set
+    private var initStarted = false
+    var dataReady = false
+        private set
+    private var ownedInputToken: String? = null
+    private val ownedOutputTokens = mutableSetOf<String>()
+    private var processDraftToken: String? = null
+    private var pendingProcessDraft: ProcessDraft? = null
+    private var processDraftUnavailable = false
+    private var initCallback: (() -> Unit)? = null
+    private var restoreFailureCallback: (() -> Unit)? = null
+
+    private data class ProcessDraft(val token: String, val cursorPosition: Int)
+
+    companion object {
+        internal const val STATE_PROCESS_DRAFT_TOKEN = "codeEditProcessDraftToken"
+        internal const val STATE_PROCESS_DRAFT_CURSOR = "codeEditProcessDraftCursor"
+        private const val STATE_PROCESS_DRAFT_REQUIRED = "codeEditProcessDraftRequired"
+    }
 
     fun initSora() {
         //初始化sora加载
@@ -50,17 +79,46 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
     }
 
     fun initData(
-        intent: Intent, success: () -> Unit
+        intent: Intent,
+        savedInstanceState: Bundle?,
+        success: () -> Unit,
+        onRestoreFailure: () -> Unit
     ) {
+        if (dataReady) {
+            success()
+            return
+        }
+        prepareProcessRestore(savedInstanceState)
+        initCallback = success
+        restoreFailureCallback = onRestoreFailure
+        if (initStarted) return
+        initStarted = true
         execute {
             val cacheKey = intent.getStringExtra("cacheKey")
-            if (cacheKey != null) {
-                val cacheText = CacheManager.getFromMemory(cacheKey) as? String ?: throw Exception("未获取到查看文本")
-                writable = false
-                initialText = cacheText
-            } else {
-                initialText = intent.getStringExtra("text") ?: throw Exception("未获取到待编辑文本")
+            if (cacheKey == null && intent.getBooleanExtra(CodeTextTransfer.EXTRA_USE_TEXT_FILE, false)) {
+                ownedInputToken = intent.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)
             }
+            if (processDraftUnavailable) {
+                throw IllegalStateException("Unable to restore the editor draft")
+            }
+            var restoredDraftText: String? = null
+            val pendingDraft = pendingProcessDraft
+            if (pendingDraft != null) {
+                restoredDraftText = CodeTextTransfer.read(context, pendingDraft.token)
+            }
+            if (cacheKey != null) {
+                val cacheText = CacheManager.getFromMemory(cacheKey) as? String
+                writable = false
+                initialText = cacheText ?: restoredDraftText ?: throw Exception("未获取到查看文本")
+            } else {
+                writable = !intent.getBooleanExtra(CodeTextTransfer.EXTRA_READ_ONLY, false)
+                val incoming = CodeTextTransfer.readInput(context, intent)
+                ownedInputToken = incoming.ownedToken
+                initialText = incoming.text
+            }
+            useSafeEditor = EditSafety.requiresSafeEditor(initialText) ||
+                (restoredDraftText?.let { EditSafety.requiresSafeEditor(it) } == true)
+            restoredDraftText?.let(::applyProcessDraft)
             if (isHtmlStr(initialText)) {
                 languageName = "text.html.basic"
             } else {
@@ -70,11 +128,136 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
             cursorPosition = intent.getIntExtra("cursorPosition", 0)
             title = intent.getStringExtra("title")
         }.onSuccess {
-            success.invoke()
+            dataReady = true
+            initCallback?.invoke()
+            initCallback = null
+            restoreFailureCallback = null
         }.onError {
+            val failedRestore = pendingProcessDraft != null || processDraftUnavailable
+            if (failedRestore) {
+                processDraftUnavailable = true
+            }
+            ownedInputToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
+            ownedInputToken = null
             context.toastOnUi("error\n${it.localizedMessage}")
             it.printOnDebug()
+            initCallback = null
+            val failureCallback = if (failedRestore) restoreFailureCallback else null
+            restoreFailureCallback = null
+            failureCallback?.invoke()
         }
+    }
+
+    fun removeInitCallback(callback: () -> Unit, restoreFailure: () -> Unit) {
+        if (initCallback === callback) initCallback = null
+        if (restoreFailureCallback === restoreFailure) restoreFailureCallback = null
+    }
+
+    fun updateSafeDraft(text: String, cursorPosition: Int) {
+        safeDraft = text
+        safeCursorPosition = cursorPosition.coerceIn(0, text.length)
+    }
+
+    fun updateEditorDraft(text: String, cursorPosition: Int) {
+        editorDraft = text
+        editorDraftCursorPosition = cursorPosition.coerceIn(0, text.length)
+    }
+
+    fun updateSafeCursor(cursorPosition: Int) {
+        safeCursorPosition = cursorPosition.coerceAtLeast(0)
+    }
+
+    internal fun saveProcessState(outState: Bundle, text: String, cursorPosition: Int) {
+        val previousToken = processDraftToken
+        try {
+            val token = previousToken?.also {
+                CodeTextTransfer.writeReplacing(context, it, text)
+            } ?: CodeTextTransfer.write(context, text).also { processDraftToken = it }
+            outState.putBoolean(STATE_PROCESS_DRAFT_REQUIRED, true)
+            outState.putString(STATE_PROCESS_DRAFT_TOKEN, token)
+            outState.putInt(STATE_PROCESS_DRAFT_CURSOR, cursorPosition.coerceIn(0, text.length))
+        } catch (error: Exception) {
+            outState.putBoolean(STATE_PROCESS_DRAFT_REQUIRED, true)
+            if (previousToken == null) {
+                processDraftToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
+                processDraftToken = null
+            } else {
+                outState.putString(STATE_PROCESS_DRAFT_TOKEN, previousToken)
+                outState.putInt(STATE_PROCESS_DRAFT_CURSOR, cursorPosition.coerceAtLeast(0))
+            }
+            context.toastOnUi(error.localizedMessage ?: "Unable to preserve editor draft")
+        }
+    }
+
+    internal fun prepareProcessRestore(savedInstanceState: Bundle?) {
+        val savedState = savedInstanceState ?: return
+        if (!savedState.getBoolean(STATE_PROCESS_DRAFT_REQUIRED, false)) return
+        val token = savedState.getString(STATE_PROCESS_DRAFT_TOKEN)
+        if (token == null) {
+            processDraftUnavailable = true
+            return
+        }
+        processDraftToken = token
+        pendingProcessDraft = ProcessDraft(
+            token = token,
+            cursorPosition = savedState.getInt(STATE_PROCESS_DRAFT_CURSOR, 0)
+        )
+    }
+
+    internal fun preservePendingProcessState(outState: Bundle) {
+        val pending = pendingProcessDraft
+        if (pending != null) {
+            outState.putBoolean(STATE_PROCESS_DRAFT_REQUIRED, true)
+            outState.putString(STATE_PROCESS_DRAFT_TOKEN, pending.token)
+            outState.putInt(STATE_PROCESS_DRAFT_CURSOR, pending.cursorPosition)
+        } else if (processDraftUnavailable) {
+            outState.putBoolean(STATE_PROCESS_DRAFT_REQUIRED, true)
+        }
+    }
+
+    internal fun restorePendingProcessDraft() {
+        val pending = pendingProcessDraft ?: return
+        val text = CodeTextTransfer.read(context, pending.token)
+        useSafeEditor = EditSafety.requiresSafeEditor(initialText) || EditSafety.requiresSafeEditor(text)
+        applyProcessDraft(text)
+    }
+
+    private fun applyProcessDraft(text: String) {
+        val pending = pendingProcessDraft ?: return
+        if (useSafeEditor) {
+            updateSafeDraft(text, pending.cursorPosition)
+        } else {
+            updateEditorDraft(text, pending.cursorPosition)
+        }
+        pendingProcessDraft = null
+    }
+
+    internal fun releaseProcessState() {
+        processDraftToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
+        processDraftToken = null
+        pendingProcessDraft = null
+    }
+
+    fun createResult(text: String?, cursorPosition: Int): Intent =
+        CodeTextTransfer.createResult(context, text, cursorPosition) { token ->
+            synchronized(ownedOutputTokens) { ownedOutputTokens += token }
+        }
+
+    fun releaseOutput(result: Intent) {
+        result.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)?.let { token ->
+            synchronized(ownedOutputTokens) { ownedOutputTokens -= token }
+        }
+    }
+
+    override fun onCleared() {
+        ownedInputToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
+        ownedInputToken = null
+        releaseProcessState()
+        synchronized(ownedOutputTokens) {
+            ownedOutputTokens.forEach { runCatching { CodeTextTransfer.delete(context, it) } }
+            ownedOutputTokens.clear()
+        }
+        super.onCleared()
     }
 
     private fun isHtmlStr(text: String): Boolean {

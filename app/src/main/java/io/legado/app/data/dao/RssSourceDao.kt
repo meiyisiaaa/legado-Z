@@ -5,10 +5,12 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.RssSource
 import io.legado.app.utils.cnCompare
+import io.legado.app.utils.moveRelativeTo
 import io.legado.app.utils.splitNotBlank
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.Flow
@@ -27,10 +29,13 @@ interface RssSourceDao {
     @get:Query("SELECT * FROM rssSources order by customOrder")
     val all: List<RssSource>
 
+    @get:Query("SELECT * FROM rssSources order by customOrder, sourceUrl")
+    val allForOrder: List<RssSource>
+
     @get:Query("select count(sourceUrl) from rssSources")
     val size: Int
 
-    @Query("SELECT * FROM rssSources order by customOrder")
+    @Query("SELECT * FROM rssSources order by customOrder, sourceUrl")
     fun flowAll(): Flow<List<RssSource>>
 
     @Query(
@@ -39,7 +44,7 @@ interface RssSourceDao {
         or sourceUrl like '%' || :key || '%' 
         or sourceGroup like '%' || :key || '%'
         or sourceComment like '%' || :key || '%'
-        order by customOrder"""
+        order by customOrder, sourceUrl"""
     )
     fun flowSearch(key: String): Flow<List<RssSource>>
 
@@ -49,20 +54,20 @@ interface RssSourceDao {
         or sourceGroup like :key || ',%' 
         or sourceGroup like  '%,' || :key
         or sourceGroup like  '%,' || :key || ',%')
-        order by customOrder"""
+        order by customOrder, sourceUrl"""
     )
     fun flowGroupSearch(key: String): Flow<List<RssSource>>
 
-    @Query("SELECT * FROM rssSources where enabled = 1 order by customOrder")
+    @Query("SELECT * FROM rssSources where enabled = 1 order by customOrder, sourceUrl")
     fun flowEnabled(): Flow<List<RssSource>>
 
-    @Query("SELECT * FROM rssSources where enabled = 0 order by customOrder")
+    @Query("SELECT * FROM rssSources where enabled = 0 order by customOrder, sourceUrl")
     fun flowDisabled(): Flow<List<RssSource>>
 
-    @Query("select * from rssSources where loginUrl is not null and loginUrl != ''")
+    @Query("select * from rssSources where loginUrl is not null and loginUrl != '' order by customOrder, sourceUrl")
     fun flowLogin(): Flow<List<RssSource>>
 
-    @Query("select * from rssSources where sourceGroup is null or sourceGroup = '' or sourceGroup like '%未分组%'")
+    @Query("select * from rssSources where sourceGroup is null or sourceGroup = '' or sourceGroup like '%未分组%' order by customOrder, sourceUrl")
     fun flowNoGroup(): Flow<List<RssSource>>
 
     @Query(
@@ -72,7 +77,7 @@ interface RssSourceDao {
             or sourceGroup like '%' || :searchKey || '%' 
             or sourceUrl like '%' || :searchKey || '%'
             or sourceComment like '%' || :searchKey || '%') 
-        order by customOrder"""
+        order by customOrder, sourceUrl"""
     )
     fun flowEnabled(searchKey: String): Flow<List<RssSource>>
 
@@ -82,7 +87,7 @@ interface RssSourceDao {
         or sourceGroup like :searchKey || ',%' 
         or sourceGroup like  '%,' || :searchKey
         or sourceGroup like  '%,' || :searchKey || ',%') 
-        order by customOrder"""
+        order by customOrder, sourceUrl"""
     )
     fun flowEnabledByGroup(searchKey: String): Flow<List<RssSource>>
 
@@ -127,6 +132,17 @@ interface RssSourceDao {
 
     @Query("update rssSources set enabled = :enable where sourceUrl = :sourceUrl")
     fun enable(sourceUrl: String, enable: Boolean)
+
+    @Query("update rssSources set customOrder = :customOrder where sourceUrl = :sourceUrl")
+    fun upOrder(sourceUrl: String, customOrder: Int)
+
+    @Transaction
+    fun moveRelativeTo(sourceUrl: String, targetUrl: String, after: Boolean) {
+        val current = allForOrder
+        val reordered = moveRelativeTo(current, sourceUrl, targetUrl, after) { it.sourceUrl }
+        if (reordered == current) return
+        reordered.forEachIndexed { index, source -> upOrder(source.sourceUrl, index) }
+    }
 
     private fun dealGroups(list: List<String>): List<String> {
         val groups = linkedSetOf<String>()

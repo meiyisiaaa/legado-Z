@@ -33,7 +33,9 @@ import io.legado.app.model.Debug
 import io.legado.app.utils.get
 import io.legado.app.utils.runOnUI
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Runnable
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import okhttp3.Protocol
@@ -42,6 +44,7 @@ import okhttp3.Response
 import org.apache.commons.text.StringEscapeUtils
 import splitties.init.appCtx
 import java.lang.ref.WeakReference
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -75,27 +78,29 @@ class BackstageWebView(
                     destroy()
                 }
             }
-            callback = object : Callback() {
-                override fun onResult(response: StrResponse) {
-                    if (!block.isCompleted) {
-                        block.resume(response)
+            runOnUI {
+                if (!block.isActive) return@runOnUI
+                callback = object : Callback() {
+                    override fun onResult(response: StrResponse) {
+                        if (block.isActive) {
+                            block.resume(response)
+                        }
+                    }
+
+                    override fun onError(error: Throwable) {
+                        if (block.isActive) {
+                            block.resumeWithException(error)
+                        }
                     }
                 }
-
-                override fun onError(error: Throwable) {
-                    if (!block.isCompleted)
-                        block.resumeWithException(error)
+                if (javaScript == null && delayTime == 0L) {
+                    delayTime = 900L
                 }
-            }
-            if (javaScript == null && delayTime == 0L) {
-                delayTime = 900L
-            }
-            runOnUI {
                 try {
-                    load()
+                    load(block.context)
                 } catch (error: Throwable) {
+                    callback?.onError(error)
                     destroy()
-                    block.resumeWithException(error)
                 }
             }
         }
@@ -106,28 +111,33 @@ class BackstageWebView(
     }
 
     @Throws(AndroidRuntimeException::class)
-    private fun load() {
-        val webView = createWebView()
+    private fun load(navigationContext: CoroutineContext) {
+        if (!navigationContext.isActive) return
+        val webView = createWebView(navigationContext)
         try {
             when {
                 !html.isNullOrEmpty() -> {
                     if (isRule) {
                         webView.addJavascriptInterface(WebCacheManager, nameCache)
-                        tag?.let { key ->
-                           appDb.bookSourceDao.getBookSource(key)?.let {
-                               webView.webChromeClient = object : WebChromeClient() {
-                                   /* 监听网页日志 */
-                                   override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                                       val messageLevel = consoleMessage.messageLevel().name
-                                       val message = consoleMessage.message()
-                                       Debug.log(it.bookSourceUrl, "${messageLevel}: $message", true)
-                                       return true
-                                   }
-                               }
-                               webView.addJavascriptInterface(it as BaseSource, nameSource)
-                               val webJsExtensions = WebJsExtensions(it, null, webView)
-                               webView.addJavascriptInterface(webJsExtensions, nameJava)
+                        tag?.let(appDb.bookSourceDao::getBookSource)?.let { activeSource ->
+                            webView.webChromeClient = object : WebChromeClient() {
+                                /* 监听网页日志 */
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                                    if (!ownsWebView(webView, navigationContext)) return true
+                                    val messageLevel = consoleMessage.messageLevel().name
+                                    val message = consoleMessage.message()
+                                    Debug.log(activeSource.getKey(), "$messageLevel: $message", true)
+                                    return true
+                                }
                             }
+                            webView.addJavascriptInterface(activeSource, nameSource)
+                            val webJsExtensions = WebJsExtensions(
+                                activeSource,
+                                null,
+                                webView,
+                                navigationContext = navigationContext
+                            )
+                            webView.addJavascriptInterface(webJsExtensions, nameJava)
                         }
                     }
                     result?.let {
@@ -149,7 +159,7 @@ class BackstageWebView(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(): WebView {
+    private fun createWebView(navigationContext: CoroutineContext): WebView {
         val pooledWebView = WebViewPool.acquire(appCtx)
         this.pooledWebView = pooledWebView
         val webView = pooledWebView.realWebView
@@ -159,17 +169,25 @@ class BackstageWebView(
         settings.userAgentString = headerMap?.get(AppConst.UA_NAME, true) ?: AppConfig.userAgent
         settings.cacheMode = if(cacheFirst) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
         if (sourceRegex.isNullOrBlank() && overrideUrlRegex.isNullOrBlank()) {
-            webView.webViewClient = HtmlWebViewClient()
+            webView.webViewClient = HtmlWebViewClient(navigationContext)
         } else {
-            webView.webViewClient = SnifferWebClient()
+            webView.webViewClient = SnifferWebClient(navigationContext)
         }
         return webView
     }
 
     private fun destroy() {
-        pooledWebView?.let { WebViewPool.release(it) }
+        mHandler.removeCallbacksAndMessages(null)
+        callback = null
+        val released = pooledWebView
         pooledWebView = null
+        released?.let { WebViewPool.release(it) }
     }
+
+    private fun ownsWebView(
+        view: WebView,
+        navigationContext: CoroutineContext
+    ): Boolean = navigationContext.isActive && pooledWebView?.realWebView === view
 
     private fun getJs(): String {
         javaScript?.let {
@@ -189,7 +207,9 @@ class BackstageWebView(
         }
     }
 
-    private inner class HtmlWebViewClient : WebViewClient() {
+    private inner class HtmlWebViewClient(
+        private val navigationContext: CoroutineContext
+    ) : WebViewClient() {
 
         private var runnable: EvalJsRunnable? = null
         private var isRedirect = false
@@ -198,6 +218,7 @@ class BackstageWebView(
             view: WebView,
             request: WebResourceRequest
         ): Boolean {
+            if (!ownsWebView(view, navigationContext)) return true
             isRedirect = isRedirect || if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 request.isRedirect
             } else {
@@ -207,6 +228,7 @@ class BackstageWebView(
         }
 
         override fun onPageFinished(view: WebView, url: String) {
+            if (!ownsWebView(view, navigationContext)) return
             setCookie(url)
             result?.let {
                 view.evaluateJavascript("window.result = $nameCache.getFromMemory('webview_result')", null)
@@ -224,7 +246,11 @@ class BackstageWebView(
             handler: SslErrorHandler?,
             error: SslError?
         ) {
-            handler?.proceed()
+            if (view != null && ownsWebView(view, navigationContext)) {
+                handler?.proceed()
+            } else {
+                handler?.cancel()
+            }
         }
 
         private inner class EvalJsRunnable(
@@ -239,34 +265,39 @@ class BackstageWebView(
                 "$getInjectionString\n$mJavaScript"
             } else mJavaScript
             override fun run() {
-                mWebView.get()?.evaluateJavascript(jsStr) {
-                    if (pooledWebView != null) {
-                        handleResult(it)
+                val webView = mWebView.get() ?: return
+                if (!ownsWebView(webView, navigationContext)) return
+                webView.evaluateJavascript(jsStr) {
+                    if (ownsWebView(webView, navigationContext)) {
+                        handleResult(it, webView)
                     }
                 }
             }
 
-            private fun handleResult(result: String) = Coroutine.async {
+            private fun handleResult(result: String, webView: WebView) {
+                if (!ownsWebView(webView, navigationContext)) return
                 if (result.isNotEmpty() && result != "null") {
-                    val content = StringEscapeUtils.unescapeJson(result)
-                        .replace(quoteRegex, "")
-                    try {
-                        val response = buildStrResponse(content)
-                        callback?.onResult(response)
-                    } catch (e: Exception) {
-                        callback?.onError(e)
+                    Coroutine.async(scope = CoroutineScope(navigationContext), context = IO) {
+                        val content = StringEscapeUtils.unescapeJson(result)
+                            .replace(quoteRegex, "")
+                        buildStrResponse(content)
+                    }.onSuccess { response ->
+                        if (ownsWebView(webView, navigationContext)) {
+                            callback?.onResult(response)
+                            destroy()
+                        }
+                    }.onError { error ->
+                        if (ownsWebView(webView, navigationContext)) {
+                            callback?.onError(error)
+                            destroy()
+                        }
                     }
-                    mHandler.post {
-                        destroy()
-                    }
-                    return@async
+                    return
                 }
                 if (retry > 30) {
                     callback?.onError(NoStackTraceException("js执行超时"))
-                    mHandler.post {
-                        destroy()
-                    }
-                    return@async
+                    destroy()
+                    return
                 }
                 val nextDelay = if (retry < intervals.size) {
                     intervals[retry]
@@ -301,12 +332,15 @@ class BackstageWebView(
 
     }
 
-    private inner class SnifferWebClient : WebViewClient() {
+    private inner class SnifferWebClient(
+        private val navigationContext: CoroutineContext
+    ) : WebViewClient() {
 
         override fun shouldOverrideUrlLoading(
             view: WebView,
             request: WebResourceRequest
         ): Boolean {
+            if (!ownsWebView(view, navigationContext)) return true
             if (shouldOverrideUrlLoading(request.url.toString())) {
                 return true
             }
@@ -315,6 +349,7 @@ class BackstageWebView(
 
         @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION", "KotlinRedundantDiagnosticSuppress")
         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+            if (!ownsWebView(view, navigationContext)) return true
             if (shouldOverrideUrlLoading(url)) {
                 return true
             }
@@ -338,6 +373,7 @@ class BackstageWebView(
         }
 
         override fun onLoadResource(view: WebView, resUrl: String) {
+            if (!ownsWebView(view, navigationContext)) return
             sourceRegex?.let {
                 if (resUrl.matches(it.toRegex())) {
                     try {
@@ -352,6 +388,7 @@ class BackstageWebView(
         }
 
         override fun onPageFinished(webView: WebView, url: String) {
+            if (!ownsWebView(webView, navigationContext)) return
             setCookie(url)
             if (!javaScript.isNullOrEmpty()) {
                 val runnable = LoadJsRunnable(webView, javaScript)
@@ -365,7 +402,11 @@ class BackstageWebView(
             handler: SslErrorHandler?,
             error: SslError?
         ) {
-            handler?.proceed()
+            if (view != null && ownsWebView(view, navigationContext)) {
+                handler?.proceed()
+            } else {
+                handler?.cancel()
+            }
         }
 
         private inner class LoadJsRunnable(
@@ -374,7 +415,9 @@ class BackstageWebView(
         ) : Runnable {
             private val mWebView: WeakReference<WebView> = WeakReference(webView)
             override fun run() {
-                mWebView.get()?.loadUrl("javascript:${mJavaScript}")
+                val webView = mWebView.get() ?: return
+                if (!ownsWebView(webView, navigationContext)) return
+                webView.loadUrl("javascript:${mJavaScript}")
             }
         }
 

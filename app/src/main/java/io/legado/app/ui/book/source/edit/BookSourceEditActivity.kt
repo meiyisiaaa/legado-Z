@@ -34,6 +34,7 @@ import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
@@ -126,13 +127,16 @@ class BookSourceEditActivity :
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val editedText = CodeTextTransfer.readResult(this, result.data) {
+            toastOnUi(R.string.error_read_file)
+        }
         if (result.resultCode == RESULT_OK) {
             val view = window.decorView.findFocus()
             if (view is EditText) {
-                result.data?.getStringExtra("text")?.let {
+                editedText?.let {
                     view.setText(it)
                 }
-                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
+                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0..view.text.length }?.let {
                     view.setSelection(it)
                 }
             } else {
@@ -147,11 +151,10 @@ class BookSourceEditActivity :
             val hint = findParentTextInputLayout(view)?.hint?.toString()
             val currentText = view.text.toString()
             val intent = Intent(this, CodeEditActivity::class.java).apply {
-                putExtra("text", currentText)
                 putExtra("title", hint)
                 putExtra("cursorPosition", view.selectionStart)
             }
-            textEditLauncher.launch(intent)
+            CodeTextTransfer.launch(this, intent, currentText) { textEditLauncher.launch(it) }
         }
         else {
             toastOnUi(R.string.please_focus_cursor_on_textbox)

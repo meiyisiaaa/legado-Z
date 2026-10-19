@@ -432,8 +432,17 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         viewModel.bottomSource(source)
     }
 
-    override fun upOrder() {
-        viewModel.upOrder()
+    override fun move(
+        sourceUrl: String,
+        targetUrl: String,
+        after: Boolean,
+        onFinally: () -> Unit
+    ) {
+        viewModel.move(sourceUrl, targetUrl, after, onFinally)
+    }
+
+    override fun reload() {
+        upSourceFlow(searchView.query?.toString())
     }
 
 }

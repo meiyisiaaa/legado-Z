@@ -4,9 +4,20 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.core.view.isGone
@@ -38,7 +49,17 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import org.json.JSONObject
+import org.json.JSONTokener
+import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class CodeEditActivity :
     VMBaseActivity<ActivityCodeEditBinding, CodeEditViewModel>(),
@@ -48,6 +69,9 @@ class CodeEditActivity :
         private var findText = ""
         private var replaceText = ""
         private var isRegex = true
+        internal const val SAFE_EDITOR_TAG = "safe_code_editor"
+        private const val SAFE_BRIDGE_NAME = "EditorBridge"
+        private const val SAFE_STATE_TIMEOUT_MS = 5_000L
     }
     override val binding by viewBinding(ActivityCodeEditBinding::inflate)
     override val viewModel by viewModels<CodeEditViewModel>()
@@ -58,6 +82,41 @@ class CodeEditActivity :
     private val editorSearcher: EditorSearcher by lazy { editor.searcher }
     private var searchOptions: SearchOptions? = null
     private var menuSaveBtn: MenuItem? = null
+    private var optionsMenu: Menu? = null
+    private var safeWebView: WebView? = null
+    private var safePageReady = false
+    private var safeEditorDestroyed = false
+    private var saveInProgress = false
+    private val safeStateHandler = Handler(Looper.getMainLooper())
+    private val initDataCallback: () -> Unit = {
+        viewModel.title?.let { binding.titleBar.title = it }
+        menuSaveBtn?.isVisible = viewModel.writable
+        if (viewModel.useSafeEditor) {
+            setupSafeEditor()
+        } else {
+            editor.colorScheme = TextMateColorScheme2.create(ThemeRegistry.getInstance()) //先设置颜色,避免一开始的白屏
+            editor.apply {
+                nonPrintablePaintingFlags = AppConfig.editNonPrintable
+                setEditorLanguage(viewModel.language)
+                upEdit(AppConfig.editFontScale, null, AppConfig.editAutoWrap)
+                setText(viewModel.editorDraft ?: viewModel.initialText)
+                editable = viewModel.writable
+                requestFocus()
+                postDelayed({
+                    val cursorPosition = if (viewModel.editorDraft == null) {
+                        viewModel.cursorPosition
+                    } else {
+                        viewModel.editorDraftCursorPosition
+                    }
+                    val pos = cursor.indexer.getCharPosition(cursorPosition)
+                    setSelection(pos.line, pos.column, true)
+                }, 360) // 进行延时,确保加载渲染完成,从而确保光标能显示跳转到长文本最后
+            }
+        }
+    }
+    private val initRestoreFailureCallback: () -> Unit = {
+        runOnUiThread { finishAfterRestoreFailure() }
+    }
 
     private val isDark
         get() = AppConfig.editTemeAuto && ThemeConfig.isDarkTheme()
@@ -65,26 +124,221 @@ class CodeEditActivity :
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         softKeyboardTool.attachToWindow(window)
-        editor.colorScheme = TextMateColorScheme2.create(ThemeRegistry.getInstance()) //先设置颜色,避免一开始的白屏
-        viewModel.initData(intent) {
-            editor.apply {
-                viewModel.title?.let {
-                    binding.titleBar.title = it
+        viewModel.initData(intent, savedInstanceState, initDataCallback, initRestoreFailureCallback)
+        initView()
+    }
+
+    private fun finishAfterRestoreFailure() {
+        if (isFinishing) return
+        setResult(RESULT_CANCELED)
+        super.finish()
+    }
+
+    private fun setupSafeEditor() {
+        binding.editText.isGone = true
+        binding.searchGroup.isGone = true
+        updateSafeMenu()
+        safeEditorDestroyed = false
+        val webView = WebView(this).apply {
+            tag = SAFE_EDITOR_TAG
+            isFocusable = true
+            isFocusableInTouchMode = true
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = false
+                allowFileAccess = false
+                allowContentAccess = false
+                javaScriptCanOpenWindowsAutomatically = false
+                setSupportMultipleWindows(false)
+                blockNetworkLoads = true
+                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+            }
+            addJavascriptInterface(SafeEditorBridge(), SAFE_BRIDGE_NAME)
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = true
+
+                @Suppress("DEPRECATION")
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
+
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): WebResourceResponse = blockedResponse()
+
+                @Suppress("DEPRECATION")
+                override fun shouldInterceptRequest(view: WebView, url: String): WebResourceResponse = blockedResponse()
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    if (url == "about:blank") {
+                        safePageReady = true
+                        view.requestFocus()
+                    }
                 }
-                nonPrintablePaintingFlags = AppConfig.editNonPrintable
-                setEditorLanguage(viewModel.language)
-                upEdit(AppConfig.editFontScale, null, AppConfig.editAutoWrap)
-                setText(viewModel.initialText)
-                editable = viewModel.writable
-                menuSaveBtn?.isVisible = viewModel.writable
-                requestFocus()
-                postDelayed({
-                    val pos = cursor.indexer.getCharPosition(viewModel.cursorPosition)
-                    setSelection(pos.line, pos.column, true)
-                }, 360) // 进行延时,确保加载渲染完成,从而确保光标能显示跳转到长文本最后
             }
         }
-        initView()
+        safeWebView = webView
+        binding.editorContainer.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        val draft = viewModel.safeDraft ?: viewModel.initialText
+        val cursor = if (viewModel.safeDraft == null) viewModel.cursorPosition else viewModel.safeCursorPosition
+        webView.loadDataWithBaseURL(
+            "about:blank",
+            safeEditorHtml(draft, cursor, !viewModel.writable),
+            "text/html",
+            "UTF-8",
+            null
+        )
+    }
+
+    private fun updateSafeMenu() {
+        val menu = optionsMenu ?: return
+        listOf(
+            R.id.menu_search,
+            R.id.menu_format_code,
+            R.id.menu_change_theme,
+            R.id.menu_config_settings,
+            R.id.menu_auto_wrap,
+            R.id.menu_log
+        ).forEach { menu.findItem(it)?.isVisible = false }
+    }
+
+    private fun safeEditorHtml(text: String, cursor: Int, readOnly: Boolean): String {
+        val encodedText = Base64.encodeToString(text.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+        val editorFontSizePx = safeEditorFontSizeCssPx(AppConfig.editFontScale, resources.configuration.fontScale)
+        val darkStyle = if (isDark) {
+            "--editor-bg:#15171a;--editor-fg:#e6e8eb;--editor-focus:#82aaff;"
+        } else {
+            "--editor-bg:#ffffff;--editor-fg:#202124;--editor-focus:#365fce;"
+        }
+        return """<!doctype html>
+            <html lang="zh-CN"><head><meta charset="utf-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none';">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                :root{$darkStyle}
+                *{box-sizing:border-box}
+                html,body{width:100%;height:100%;margin:0;background:var(--editor-bg);color:var(--editor-fg)}
+                body{padding:12px}
+                textarea{display:block;width:100%;height:100%;resize:none;border:0;outline:0;padding:8px;
+                    background:transparent;color:inherit;font:${editorFontSizePx}px/1.55 monospace;tab-size:4;white-space:pre-wrap;
+                    overflow-wrap:anywhere;caret-color:var(--editor-focus);-webkit-user-select:text;user-select:text}
+                textarea:focus-visible{outline:2px solid var(--editor-focus);outline-offset:-2px}
+            </style></head><body>
+            <textarea id="editor" aria-label="代码文本编辑器" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ${if (readOnly) "readonly" else ""}></textarea>
+            <script>
+                const editor=document.getElementById('editor');
+                function decodeText(value){
+                    const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));
+                    if(window.TextDecoder)return new TextDecoder('utf-8').decode(bytes);
+                    let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+                    return decodeURIComponent(escape(binary));
+                }
+                editor.value=decodeText('$encodedText');
+                const initialCursor=Math.max(0,Math.min(editor.value.length,$cursor));
+                editor.setSelectionRange(initialCursor,initialCursor);
+                let snapshotTimer;
+                function reportCursor(){try{window.$SAFE_BRIDGE_NAME.onCursor(editor.selectionStart)}catch(e){}}
+                function scheduleSnapshot(){clearTimeout(snapshotTimer);snapshotTimer=setTimeout(()=>{
+                    try{window.$SAFE_BRIDGE_NAME.onSnapshot(editor.value,editor.selectionStart)}catch(e){}
+                },350)}
+                editor.addEventListener('input',scheduleSnapshot);
+                document.addEventListener('selectionchange',reportCursor);
+                window.readEditorState=function(){return JSON.stringify({text:editor.value,cursor:editor.selectionStart})};
+                window.insertEditorText=function(text){
+                    const start=editor.selectionStart,end=editor.selectionEnd;
+                    editor.setRangeText(text,start,end,'end');editor.focus();scheduleSnapshot();reportCursor();
+                };
+                scheduleSnapshot();reportCursor();
+            </script></body></html>"""
+    }
+
+    private fun blockedResponse() = WebResourceResponse(
+        "text/plain",
+        "UTF-8",
+        403,
+        "Blocked",
+        emptyMap(),
+        ByteArrayInputStream(ByteArray(0))
+    )
+
+    private inner class SafeEditorBridge {
+        @JavascriptInterface
+        fun onSnapshot(text: String, cursorPosition: Int) {
+            if (safeEditorDestroyed) return
+            runOnUiThread {
+                if (!safeEditorDestroyed) viewModel.updateSafeDraft(text, cursorPosition)
+            }
+        }
+
+        @JavascriptInterface
+        fun onCursor(cursorPosition: Int) {
+            if (safeEditorDestroyed) return
+            runOnUiThread {
+                if (!safeEditorDestroyed) viewModel.updateSafeCursor(cursorPosition)
+            }
+        }
+    }
+
+    private data class SafeEditorState(val text: String, val cursor: Int)
+
+    private fun readSafeEditorState(onSuccess: (SafeEditorState?) -> Unit) {
+        val webView = safeWebView
+        if (webView == null || !safePageReady) {
+            onSuccess(viewModel.safeDraft?.let { SafeEditorState(it, viewModel.safeCursorPosition) })
+            return
+        }
+        val settled = AtomicBoolean(false)
+        val timeout = Runnable {
+            if (settled.compareAndSet(false, true)) onSuccess(null)
+        }
+        safeStateHandler.postDelayed(timeout, SAFE_STATE_TIMEOUT_MS)
+        webView.evaluateJavascript("window.readEditorState()") { result ->
+            if (!settled.compareAndSet(false, true)) return@evaluateJavascript
+            safeStateHandler.removeCallbacks(timeout)
+            if (safeEditorDestroyed || isFinishing || isDestroyed) return@evaluateJavascript
+            try {
+                val json = JSONTokener(result).nextValue() as? String
+                val value = json?.let(::JSONObject)
+                val text = value?.getString("text")
+                val cursor = value?.getInt("cursor")
+                if (text != null && cursor != null) {
+                    viewModel.updateSafeDraft(text, cursor)
+                    onSuccess(SafeEditorState(text, cursor))
+                } else {
+                    onSuccess(null)
+                }
+            } catch (_: Exception) {
+                onSuccess(null)
+            }
+        }
+    }
+
+    private fun snapshotSafeEditor() {
+        val webView = safeWebView ?: return
+        if (!safePageReady) return
+        webView.evaluateJavascript("window.readEditorState()") { result ->
+            val state = parseSafeEditorState(result) ?: return@evaluateJavascript
+            viewModel.updateSafeDraft(state.text, state.cursor)
+        }
+    }
+
+    private fun parseSafeEditorState(result: String): SafeEditorState? {
+        return try {
+            val json = JSONTokener(result).nextValue() as? String ?: return null
+            val value = JSONObject(json)
+            SafeEditorState(value.getString("text"), value.getInt("cursor"))
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun initView() {
@@ -95,15 +349,67 @@ class CodeEditActivity :
     }
 
     override fun onDestroy() {
+        viewModel.removeInitCallback(initDataCallback, initRestoreFailureCallback)
+        safeEditorDestroyed = true
+        safePageReady = false
+        safeStateHandler.removeCallbacksAndMessages(null)
+        safeWebView?.let { webView ->
+            (webView.parent as? ViewGroup)?.removeView(webView)
+            webView.apply {
+                removeJavascriptInterface(SAFE_BRIDGE_NAME)
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                webChromeClient = null
+                webViewClient = WebViewClient()
+                removeAllViews()
+                destroy()
+            }
+        }
+        safeWebView = null
+        optionsMenu = null
         super.onDestroy()
         editorSearcher.stopSearch()
         editor.release()
+    }
+
+    override fun onPause() {
+        snapshotSafeEditor()
+        super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (viewModel.dataReady) {
+            val text: String
+            val cursor: Int
+            if (viewModel.useSafeEditor) {
+                snapshotSafeEditor()
+                text = viewModel.safeDraft ?: viewModel.initialText
+                cursor = viewModel.safeCursorPosition
+            } else {
+                text = editor.text.toString()
+                cursor = editor.cursor?.left ?: 0
+                viewModel.updateEditorDraft(text, cursor)
+            }
+            viewModel.saveProcessState(outState, text, cursor)
+        } else {
+            viewModel.preservePendingProcessState(outState)
+        }
+        super.onSaveInstanceState(outState)
     }
 
     /**
      * 使用super.finish(),防止循环回调
      * */
     private fun save(check: Boolean) {
+        if (!viewModel.dataReady) {
+            if (check) super.finish() else toastOnUi(R.string.error_read_file)
+            return
+        }
+        if (viewModel.useSafeEditor) {
+            saveSafe(check)
+            return
+        }
         if (!viewModel.writable) return super.finish()
         val text = editor.text.toString()
         val cursorPos = editor.cursor?.left ?: 0
@@ -133,17 +439,67 @@ class CodeEditActivity :
                 }
             }
             else -> {
-                val result = Intent().apply {
-                    putExtra("text", text)
-                    putExtra("cursorPosition", cursorPos)
+                finishWithTextResult(text, cursorPos)
+            }
+        }
+    }
+
+    private fun saveSafe(check: Boolean) {
+        if (!viewModel.writable) return super.finish()
+        readSafeEditorState { state ->
+            if (safeEditorDestroyed || isFinishing || isDestroyed) return@readSafeEditorState
+            if (state == null) {
+                toastOnUi(R.string.error_read_file)
+                return@readSafeEditorState
+            }
+            when {
+                state.text == viewModel.initialText -> {
+                    if (state.cursor > 0) {
+                        setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, state.cursor))
+                    }
+                    super.finish()
+                }
+                check -> {
+                    alert(R.string.exit) {
+                        setMessage(R.string.exit_no_save)
+                        positiveButton(R.string.yes)
+                        negativeButton(R.string.no) {
+                            setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, state.cursor))
+                            super.finish()
+                        }
+                    }
+                }
+                else -> {
+                    finishWithTextResult(state.text, state.cursor)
+                }
+            }
+        }
+    }
+
+    private fun finishWithTextResult(text: String, cursorPosition: Int) {
+        if (saveInProgress) return
+        saveInProgress = true
+        lifecycleScope.launch {
+            try {
+                val result = withContext(IO) {
+                    viewModel.createResult(text, cursorPosition)
                 }
                 setResult(RESULT_OK, result)
+                viewModel.releaseOutput(result)
+                viewModel.releaseProcessState()
                 super.finish()
+            } catch (cancelled: CancellationException) {
+                saveInProgress = false
+                throw cancelled
+            } catch (error: Exception) {
+                saveInProgress = false
+                toastOnUi(error.localizedMessage ?: getString(R.string.error_read_file))
             }
         }
     }
 
     override fun upEdit(fontSize: Int?, autoComplete: Boolean?, autoWarp: Boolean?, editNonPrintable: Int?) {
+        if (viewModel.useSafeEditor) return
         if (fontSize != null) {
             editor.setTextSize(fontSize.toFloat())
         }
@@ -175,6 +531,7 @@ class CodeEditActivity :
     }
 
     override fun upTheme(index: Int) {
+        if (viewModel.useSafeEditor) return
         if (themeIndex != index) {
             viewModel.loadTextMateThemes(index)
             editor.setEditorLanguage(viewModel.language) //每次更改颜色后需要再执行一次语言设置,防止切换主题后高亮颜色不正确
@@ -184,9 +541,11 @@ class CodeEditActivity :
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.code_edit_activity, menu)
+        optionsMenu = menu
         menuSaveBtn = menu.findItem(R.id.menu_save).apply {
             isVisible = viewModel.writable
         }
+        if (viewModel.useSafeEditor) updateSafeMenu()
         return super.onCompatCreateOptionsMenu(menu)
     }
 
@@ -316,17 +675,17 @@ class CodeEditActivity :
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_search -> search()
+            R.id.menu_search -> if (!viewModel.useSafeEditor) search()
             R.id.menu_save -> save(false)
-            R.id.menu_format_code -> viewModel.formatCode(editor)
-            R.id.menu_change_theme -> showDialogFragment(ChangeThemeDialog())
-            R.id.menu_config_settings -> showDialogFragment(SettingsDialog(this, this))
-            R.id.menu_auto_wrap -> {
+            R.id.menu_format_code -> if (!viewModel.useSafeEditor) viewModel.formatCode(editor)
+            R.id.menu_change_theme -> if (!viewModel.useSafeEditor) showDialogFragment(ChangeThemeDialog())
+            R.id.menu_config_settings -> if (!viewModel.useSafeEditor) showDialogFragment(SettingsDialog(this, this))
+            R.id.menu_auto_wrap -> if (!viewModel.useSafeEditor) {
                 item.isChecked = !AppConfig.editAutoWrap
                 upEdit(autoWarp = !AppConfig.editAutoWrap)
                 putPrefBoolean(PreferKey.editAutoWrap, !AppConfig.editAutoWrap)
             }
-            R.id.menu_log -> showDialogFragment<AppLogDialog>()
+            R.id.menu_log -> if (!viewModel.useSafeEditor) showDialogFragment<AppLogDialog>()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -354,6 +713,14 @@ class CodeEditActivity :
     }
 
     override fun sendText(text: String) {
+        if (viewModel.useSafeEditor) {
+            if (text.isNotEmpty() && safePageReady) {
+                val encoded = Base64.encodeToString(text.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+                val js = "window.insertEditorText(decodeURIComponent(Array.prototype.map.call(atob('$encoded'),c=>'%'+('0'+c.charCodeAt(0).toString(16)).slice(-2)).join('')))"
+                safeWebView?.evaluateJavascript(js, null)
+            }
+            return
+        }
         val view = window.decorView.findFocus()
         if (view is TextInputEditText) {
             var start = view.selectionStart
@@ -379,11 +746,14 @@ class CodeEditActivity :
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onUndoClicked() {
-        editor.undo()
+        if (!viewModel.useSafeEditor) editor.undo()
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onRedoClicked() {
-        editor.redo()
+        if (!viewModel.useSafeEditor) editor.redo()
     }
+
 }
+
+internal fun safeEditorFontSizeCssPx(fontSize: Int, fontScale: Float): Float = fontSize * fontScale

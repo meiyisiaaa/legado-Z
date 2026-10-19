@@ -393,8 +393,17 @@ class ReplaceRuleActivity : VMBaseActivity<ActivityReplaceRuleBinding, ReplaceRu
         viewModel.toBottom(rule)
     }
 
-    override fun upOrder() {
+    override fun move(
+        ruleId: Long,
+        targetId: Long,
+        after: Boolean,
+        onFinally: () -> Unit
+    ) {
         setResult(RESULT_OK)
-        viewModel.upOrder()
+        viewModel.move(ruleId, targetId, after, onFinally)
+    }
+
+    override fun reload() {
+        observeReplaceRuleData(searchView.query?.toString())
     }
 }

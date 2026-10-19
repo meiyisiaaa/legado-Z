@@ -153,6 +153,7 @@ class BookSourceAdapter(
     }
 
     override fun onCurrentListChanged() {
+        if (listUpdatesPaused) return
         callBack.upCountView()
         recyclerView.doOnLayout {
             handler.post {
@@ -304,38 +305,53 @@ class BookSourceAdapter(
         return lastHost != curHost
     }
 
+    private var dragStartPosition = RecyclerView.NO_POSITION
+    private var draggedKey: String? = null
+    private var draggedHolder: RecyclerView.ViewHolder? = null
+
+    override fun canStartDrag() = !listUpdatesPaused
+
+    override fun onDragStarted(viewHolder: RecyclerView.ViewHolder) {
+        if (listUpdatesPaused) return
+        val position = viewHolder.bindingAdapterPosition
+        val source = getItem(position) ?: return
+        pauseListUpdates()
+        dragStartPosition = position
+        draggedKey = source.bookSourceUrl
+        draggedHolder = viewHolder
+    }
+
     override fun swap(srcPosition: Int, targetPosition: Int): Boolean {
-        val srcItem = getItem(srcPosition)
-        val targetItem = getItem(targetPosition)
-        if (srcItem != null && targetItem != null) {
-            val srcOrder = srcItem.customOrder
-            srcItem.customOrder = targetItem.customOrder
-            targetItem.customOrder = srcOrder
-            movedItems.add(srcItem)
-            movedItems.add(targetItem)
-        }
+        val source = getItem(srcPosition) ?: return false
+        if (getItem(targetPosition) == null || source.bookSourceUrl != draggedKey) return false
         swapItem(srcPosition, targetPosition)
         return true
     }
 
-    private val movedItems = hashSetOf<BookSourcePart>()
-
     override fun onClearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-        if (movedItems.isNotEmpty()) {
-            val sortNumberSet = hashSetOf<Int>()
-            movedItems.forEach {
-                sortNumberSet.add(it.customOrder)
-            }
-            if (movedItems.size > sortNumberSet.size) {
-                callBack.upOrder(getItems().mapIndexed { index, bookSourcePart ->
-                    bookSourcePart.customOrder = if (callBack.sortAscending) index else -index
-                    bookSourcePart
-                })
-            } else {
-                callBack.upOrder(movedItems.toList())
-            }
-            movedItems.clear()
+        if (viewHolder !== draggedHolder) return
+        val start = dragStartPosition
+        val key = draggedKey
+        dragStartPosition = RecyclerView.NO_POSITION
+        draggedKey = null
+        draggedHolder = null
+        fun finish() {
+            resumeListUpdates()
+            callBack.reload()
         }
+        val end = getItems().indexOfFirst { it.bookSourceUrl == key }
+        val moved = getItem(end)?.takeIf { it.bookSourceUrl == key }
+        if (start == RecyclerView.NO_POSITION || end == RecyclerView.NO_POSITION || start == end || moved == null) {
+            finish()
+            return
+        }
+        val movedDown = end > start
+        val target = getItem(if (movedDown) end - 1 else end + 1)
+        if (target == null) {
+            finish()
+            return
+        }
+        callBack.move(moved.bookSourceUrl, target.bookSourceUrl, movedDown, ::finish)
     }
 
     val dragSelectCallback: DragSelectTouchHelper.Callback =
@@ -372,7 +388,8 @@ class BookSourceAdapter(
         fun toBottom(bookSource: BookSourcePart)
         fun searchBook(bookSource: BookSourcePart)
         fun debug(bookSource: BookSourcePart)
-        fun upOrder(items: List<BookSourcePart>)
+        fun move(sourceUrl: String, targetUrl: String, after: Boolean, onFinally: () -> Unit)
+        fun reload()
         fun enable(enable: Boolean, bookSource: BookSourcePart)
         fun enableExplore(enable: Boolean, bookSource: BookSourcePart)
         fun upCountView()

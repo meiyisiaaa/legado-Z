@@ -20,6 +20,7 @@ import io.legado.app.databinding.DialogDictRuleEditBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.widget.code.addJsPattern
 import io.legado.app.ui.widget.code.addJsonPattern
 import io.legado.app.ui.widget.code.addLegadoPattern
@@ -55,6 +56,9 @@ class DictRuleEditDialog() : BaseDialogFragment(R.layout.dialog_dict_rule_edit, 
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val editedText = CodeTextTransfer.readResult(requireContext(), result.data) {
+            toastOnUi(R.string.error_read_file)
+        }
         if (result.resultCode == RESULT_OK) {
             val view = focusedEditText
             if (view == null) {
@@ -62,10 +66,10 @@ class DictRuleEditDialog() : BaseDialogFragment(R.layout.dialog_dict_rule_edit, 
                 return@registerForActivityResult
             }
             view.requestFocus()
-            result.data?.getStringExtra("text")?.let {
+            editedText?.let {
                 view.setText(it)
             }
-            result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
+            result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0..view.text.length }?.let {
                 view.setSelection(it)
             }
         }
@@ -77,11 +81,10 @@ class DictRuleEditDialog() : BaseDialogFragment(R.layout.dialog_dict_rule_edit, 
             focusedEditText = view
             val currentText = view.text.toString()
             val intent = Intent(requireActivity(), CodeEditActivity::class.java).apply {
-                putExtra("text", currentText)
                 putExtra("title", hint)
                 putExtra("cursorPosition", view.selectionStart)
             }
-            textEditLauncher.launch(intent)
+            CodeTextTransfer.launch(requireContext(), intent, currentText) { textEditLauncher.launch(it) }
         }
         else {
             toastOnUi(R.string.please_focus_cursor_on_textbox)

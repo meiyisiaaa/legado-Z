@@ -14,6 +14,7 @@ import io.legado.app.help.CacheManager
 import io.legado.app.help.IntentData
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.setHtml
 import io.legado.app.utils.setLayout
@@ -110,12 +111,22 @@ class TextDialog() : BaseDialogFragment(R.layout.dialog_text_view) {
                 when (menu.itemId) {
                     R.id.menu_close -> dismissAllowingStateLoss()
                     R.id.menu_fullscreen_edit -> {
-                        val cacheKey = "code_text_${System.currentTimeMillis()}"
-                        CacheManager.putMemory(cacheKey, content)
-                        startActivity<CodeEditActivity> {
-                            putExtra("cacheKey", cacheKey)
+                        val intent = android.content.Intent(requireContext(), CodeEditActivity::class.java).apply {
                             putExtra("title", title)
                             putExtra("languageName", if (mode == Mode.MD.name) "text.html.markdown" else "text.html.basic")
+                        }
+                        if (content.length > CodeTextTransfer.MAX_INLINE_LENGTH) {
+                            intent.putExtra(CodeTextTransfer.EXTRA_READ_ONLY, true)
+                            CodeTextTransfer.launch(requireContext(), intent, content) {
+                                requireContext().startActivity(it)
+                            }
+                        } else {
+                            val cacheKey = "code_text_${System.currentTimeMillis()}"
+                            CacheManager.putMemory(cacheKey, content)
+                            intent.putExtra("cacheKey", cacheKey)
+                            startActivity<CodeEditActivity> {
+                                putExtras(intent)
+                            }
                         }
                     }
                 }

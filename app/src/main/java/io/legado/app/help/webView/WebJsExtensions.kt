@@ -9,6 +9,8 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.CoroutineContext
 import io.legado.app.ui.rss.read.RssJsExtensions
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -21,8 +23,10 @@ class WebJsExtensions(
     activity: AppCompatActivity?,
     webView: WebView,
     bookType: Int = 0,
-    callback: Callback? = null
+    callback: Callback? = null,
+    private val navigationContext: CoroutineContext? = null
 ): RssJsExtensions(activity, source, bookType) {
+    override fun getCoroutineContext(): CoroutineContext? = navigationContext
     private val callbackRef: WeakReference<Callback> = WeakReference(callback)
     private val webViewRef: WeakReference<WebView?> = WeakReference(webView)
 
@@ -169,6 +173,7 @@ class WebJsExtensions(
     }
     @JavascriptInterface
     fun log(msg: String?): String {
+        navigationContext?.ensureActive()
         return super.log(msg).toString()
     }
     @JavascriptInterface

@@ -61,11 +61,15 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         execute { appDb.bookSourceDao.update(*bookSource) }
     }
 
-    fun upOrder(items: List<BookSourcePart>) {
-        if (items.isEmpty()) return
-        execute {
-            appDb.bookSourceDao.upOrder(items)
-        }
+    fun move(
+        sourceUrl: String,
+        targetUrl: String,
+        after: Boolean,
+        onFinally: () -> Unit = {}
+    ) {
+        executeLazy {
+            appDb.bookSourceDao.moveRelativeTo(sourceUrl, targetUrl, after)
+        }.onFinally { onFinally() }.start()
     }
 
     fun enable(enable: Boolean, items: List<BookSourcePart>) {
