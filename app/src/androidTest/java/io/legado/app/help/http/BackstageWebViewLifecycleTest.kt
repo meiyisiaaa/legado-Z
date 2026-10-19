@@ -5,14 +5,22 @@ import android.webkit.WebViewClient
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebViewPool
+import io.legado.app.model.DebugRunKind
+import io.legado.app.model.DebugRunResult
+import io.legado.app.model.DebugRunner
+import io.legado.app.model.analyzeRule.AnalyzeRule
+import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -40,6 +48,51 @@ class BackstageWebViewLifecycleTest {
     @Test
     fun cancelledSnifferCallbacksCannotChangeTheNextBorrowersPage() = runBlocking {
         assertCancelledCallbacksAreIsolated(sniffer = true)
+    }
+
+    @Test
+    fun analyzeRuleWebJsKeepsDebugRunContextAndPropagatesCancellation() = runBlocking {
+        val sourceUrl = "https://backstage-lifecycle.invalid/webjs-debug"
+        val ownerId = "test:analyze-rule-webjs"
+        val marker = "analyze-rule-webjs-run-marker"
+        val markerSeen = CompletableDeferred<Unit>()
+        val source = BookSource(bookSourceUrl = sourceUrl, bookSourceName = "WebJs lifecycle test")
+        val html = "<html><head><title>debug</title></head><body>test</body></html>"
+        var producerRunId = ""
+        val run = async(Dispatchers.Default) {
+            DebugRunner.run(
+                ownerId = ownerId,
+                kind = DebugRunKind.DRAFT_BOOK,
+                sourceUrl = sourceUrl,
+                onEvent = { event ->
+                    if (event.payload.contains(marker)) markerSeen.complete(Unit)
+                }
+            ) { runContext ->
+                producerRunId = runContext.runId
+                AnalyzeRule(source = source)
+                    .setContent(html, sourceUrl)
+                    .setCoroutineContext(currentCoroutineContext())
+                    .getString("@webjs:console.log('$marker'); void 0")
+            }
+        }
+
+        try {
+            withTimeout(5_000) { markerSeen.await() }
+            withTimeout(5_000) { DebugRunner.cancelOwner(ownerId) }
+
+            val snapshot = (withTimeout(TIMEOUT) { run.await() } as DebugRunResult.Completed).snapshot
+            assertEquals("cancelled", snapshot.terminalState)
+            assertEquals(producerRunId, snapshot.runId)
+            assertTrue(snapshot.events.any {
+                it.sourceUrl == sourceUrl && it.payload.contains(marker)
+            })
+            assertNull(DebugRunner.activeOwnerId.value)
+        } finally {
+            withContext(NonCancellable) {
+                runCatching { DebugRunner.cancelOwner(ownerId) }
+                run.cancelAndJoin()
+            }
+        }
     }
 
     private suspend fun assertCancelledCallbacksAreIsolated(sniffer: Boolean) {

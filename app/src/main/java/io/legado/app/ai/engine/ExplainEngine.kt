@@ -6,6 +6,8 @@ import io.legado.app.ai.AiReaderOptions
 import io.legado.app.ai.ExplainInput
 import io.legado.app.ai.ExplainOutcome
 import io.legado.app.ai.ExplainPromptInput
+import io.legado.app.ai.SelectionQaPair
+import io.legado.app.ai.SelectionQaSession
 import io.legado.app.ai.client.AiChatClient
 import io.legado.app.ai.prompt.PromptBuilder
 
@@ -40,17 +42,20 @@ class ExplainEngine(private val client: AiChatClient) {
     suspend fun ask(
         options: AiChatOptions,
         input: ExplainInput,
-        rawQuestion: String
+        rawQuestion: String,
+        history: List<SelectionQaPair> = emptyList()
     ): ExplainOutcome {
         val question = rawQuestion.trim()
         if (question.isEmpty()) throw AiError.QuestionEmpty()
-        return complete(options, input, question)
+        if (question.length > SelectionQaSession.MAX_QUESTION_CHARS) throw AiError.QuestionTooLong()
+        return complete(options, input, question, history)
     }
 
     private suspend fun complete(
         options: AiChatOptions,
         input: ExplainInput,
-        question: String?
+        question: String?,
+        history: List<SelectionQaPair> = emptyList()
     ): ExplainOutcome {
         OutcomeAssembler.requireUsableConfig(options)
 
@@ -60,7 +65,7 @@ class ExplainEngine(private val client: AiChatClient) {
         val limit = clampLimit(input.maxChars)
         val sent = truncate(selection, limit)
 
-        val promptInput = ExplainPromptInput(selection = sent, question = question.orEmpty())
+        val promptInput = ExplainPromptInput(selection = sent, question = question.orEmpty(), history = history)
         val messages = if (question == null) {
             PromptBuilder.buildExplain(promptInput)
         } else {

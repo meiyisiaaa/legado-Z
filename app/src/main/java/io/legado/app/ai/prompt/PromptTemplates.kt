@@ -52,6 +52,7 @@ object PromptTemplates {
     const val USER_SOURCE_JSON_LABEL = "【现有书源 JSON】"
     const val USER_SYMPTOM_LABEL = "【故障症状】"
     const val USER_SAMPLE_HTML_LABEL = "【样例 HTML 片段】"
+    const val USER_DEBUG_LOGS_LABEL = "【用户选择的调试日志】"
     const val USER_RAW_REPLY_LABEL = "【待修复文本】"
     const val USER_ISSUES_LABEL = "【问题清单】"
 

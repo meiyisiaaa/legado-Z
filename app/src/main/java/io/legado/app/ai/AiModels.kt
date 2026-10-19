@@ -205,6 +205,7 @@ data class GenerateInput(
 data class DebugInput(
     val sourceJson: String = "",
     val sampleHtml: String = "",
+    val debugLogs: String = "",
     val symptom: String = "",
     val maxHtmlChars: Int = AiChatOptions.DEFAULT_HTML_MAX_CHARS
 ) {

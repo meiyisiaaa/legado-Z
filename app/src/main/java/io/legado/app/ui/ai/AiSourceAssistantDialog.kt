@@ -83,6 +83,24 @@ class AiSourceAssistantDialog : BaseDialogFragment(R.layout.dialog_ai_source_ass
         initIntentButtons()
 
         binding.btnRun.setOnClickListener { runCurrent() }
+        binding.btnDebugTrial.setOnClickListener {
+            viewModel.runDebugTrial(
+                binding.etSourceJson.text?.toString().orEmpty(),
+                binding.etDebugTrialKey.text?.toString().orEmpty()
+            )
+        }
+        binding.btnDebugPreviewEvidence.setOnClickListener {
+            val preview = viewModel.previewDebugEvidence(
+                includeLogs = binding.cbDebugIncludeLogs.isChecked,
+                includeHtml = binding.cbDebugIncludeHtml.isChecked,
+                manualSampleHtml = binding.etSampleHtml.text?.toString().orEmpty()
+            )
+            if (preview.isBlank()) {
+                requireContext().toastOnUi(R.string.ai_debug_no_evidence)
+            } else {
+                showDialogFragment(CodeDialog(preview, disableEdit = true))
+            }
+        }
 
         binding.btnImport.setOnClickListener {
             val outcome = viewModel.outcome.value
@@ -170,7 +188,9 @@ class AiSourceAssistantDialog : BaseDialogFragment(R.layout.dialog_ai_source_ass
             MODE_DEBUG -> viewModel.debug(
                 binding.etSourceJson.text?.toString().orEmpty(),
                 binding.etSymptom.text?.toString().orEmpty(),
-                binding.etSampleHtml.text?.toString().orEmpty()
+                binding.etSampleHtml.text?.toString().orEmpty(),
+                includeLogs = binding.cbDebugIncludeLogs.isChecked,
+                includeHtml = binding.cbDebugIncludeHtml.isChecked
             )
 
             MODE_BATCH -> viewModel.runBatch(
@@ -205,6 +225,14 @@ class AiSourceAssistantDialog : BaseDialogFragment(R.layout.dialog_ai_source_ass
             upRunningState()
         }
         viewModel.batchProgress.observe(viewLifecycleOwner) { showBatchProgress(it) }
+        viewModel.debugTrialStatus.observe(viewLifecycleOwner) { status ->
+            if (status.isNullOrBlank()) {
+                binding.tvDebugTrialStatus.gone()
+            } else {
+                binding.tvDebugTrialStatus.text = status
+                binding.tvDebugTrialStatus.visible()
+            }
+        }
         viewModel.error.observe(viewLifecycleOwner) { err ->
             if (!err.isNullOrBlank()) requireContext().toastOnUi(err)
         }

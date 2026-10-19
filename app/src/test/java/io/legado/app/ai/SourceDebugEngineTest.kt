@@ -4,6 +4,7 @@ import io.legado.app.ai.engine.SourceDebugEngine
 import io.legado.app.ai.FakeAiChatClient
 import io.legado.app.ai.PageFetcher
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,5 +78,72 @@ class SourceDebugEngineTest {
             )
         }
         Unit
+    }
+
+    @Test
+    fun `调试诊断不自动二次修复且对提示中的凭据脱敏`() = runBlocking {
+        val sourceSecret = "source-secret-987654"
+        val sourceWithCredential = validJson.replace(
+            "\"bookSourceName\": \"示例书源\",",
+            "\"bookSourceName\": \"示例书源\",\n  \"header\": \"Authorization: Bearer $sourceSecret\","
+        )
+        val logSecret = "debug-secret-123456"
+        val htmlSecret = "html-secret-123456"
+        val client = FakeAiChatClient.replying("这不是合法书源 JSON", validJson)
+        val engine = SourceDebugEngine(client)
+
+        assertThrowsOf<AiError.JsonNotFound> {
+            engine.debug(
+                AiTestFixtures.options(autoRepair = true),
+                DebugInput(
+                    sourceJson = sourceWithCredential,
+                    symptom = "目录为空",
+                    sampleHtml = "<div>api_key=$htmlSecret</div>",
+                    debugLogs = "Authorization: Bearer $logSecret"
+                )
+            )
+        }
+
+        assertEquals("Debug diagnosis must not retry a malformed response", 1, client.callCount)
+        val submittedPrompt = client.allContent()
+        assertTrue(submittedPrompt.contains("[REDACTED]"))
+        assertFalse(submittedPrompt.contains(sourceSecret))
+        assertFalse(submittedPrompt.contains(logSecret))
+        assertFalse(submittedPrompt.contains(htmlSecret))
+    }
+
+    @Test
+    fun `诊断成功时提示脱敏但本地结果保留原书源凭据`() = runBlocking {
+        val sourceSecret = "source-secret-987654"
+        val sourceWithCredential = validJson.replace(
+            "\"bookSourceName\": \"示例书源\",",
+            "\"bookSourceName\": \"示例书源\",\n  \"header\": \"Authorization: Bearer $sourceSecret\","
+        )
+        val client = FakeAiChatClient.replying(AiTestFixtures.fenced(validJson))
+        val outcome = SourceDebugEngine(client).debug(
+            AiTestFixtures.options(),
+            DebugInput(sourceJson = sourceWithCredential, debugLogs = "token=debug-secret")
+        )
+
+        assertFalse(client.allContent().contains(sourceSecret))
+        assertFalse(client.allContent().contains("debug-secret"))
+        assertTrue(outcome.sourceJson.contains(sourceSecret))
+    }
+
+    @Test
+    fun `诊断结果省略mainJs时保留原单文件脚本`() = runBlocking {
+        val script = "function search(key, page) { return []; }"
+        val sourceWithScript = validJson.replace(
+            "\"bookSourceName\": \"示例书源\",",
+            "\"bookSourceName\": \"示例书源\",\n  \"mainJs\": ${com.google.gson.Gson().toJson(script)},"
+        )
+        val outcome = SourceDebugEngine(
+            FakeAiChatClient.replying(AiTestFixtures.fenced(validJson))
+        ).debug(
+            AiTestFixtures.options(),
+            DebugInput(sourceJson = sourceWithScript)
+        )
+
+        assertTrue(outcome.sourceJson.contains(script))
     }
 }

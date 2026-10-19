@@ -543,7 +543,6 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 val adapterItems = adapter.getItems()
                 val firstItem = adapterItems.indexOf(selectItems.firstOrNull())
                 val lastItem = adapterItems.indexOf(selectItems.lastOrNull())
-                Debug.isChecking = firstItem >= 0 && lastItem >= 0
                 startCheckMessageRefreshJob(firstItem, lastItem)
             }
             neutralButton(R.string.check_source_config)
@@ -649,7 +648,6 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     .make(binding.root, msg, Snackbar.LENGTH_INDEFINITE)
                     .setAction(R.string.cancel) {
                         CheckSource.stop(this)
-                        Debug.finishChecking()
                     }.apply { show() }
             }
         }

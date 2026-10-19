@@ -7,6 +7,14 @@ import io.legado.app.ai.DebugInput
 import io.legado.app.ai.client.AiChatClient
 import io.legado.app.ai.html.HtmlChunker
 import io.legado.app.ai.prompt.PromptBuilder
+import io.legado.app.ai.source.BookSourceValidator
+import io.legado.app.ai.source.RulePreviewBuilder
+import io.legado.app.ai.source.SourceJsonExtractor
+import io.legado.app.model.DebugLogSanitizer
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 /**
  * 调试模式引擎：拿现有书源 JSON + 样例 HTML + 故障症状，产出诊断建议与修正后的 JSON。
@@ -32,25 +40,95 @@ class SourceDebugEngine(
      */
     suspend fun debug(options: AiChatOptions, input: DebugInput): AiSourceOutcome {
         OutcomeAssembler.requireUsableConfig(options)
+        if (input.sourceJson.length > MAX_SOURCE_JSON_CHARS) {
+            throw AiError.InvalidConfig("书源 JSON 超过调试输入上限")
+        }
 
-        val limit = minOf(options.htmlMaxChars, input.maxHtmlChars)
-        val snippet = HtmlChunker.chunk(input.sampleHtml, limit)
+        val sanitizedInput = input.copy(
+            sourceJson = DebugLogSanitizer.sanitize(input.sourceJson),
+            symptom = DebugLogSanitizer.sanitize(input.symptom.take(MAX_SYMPTOM_CHARS)),
+            sampleHtml = DebugLogSanitizer.sanitize(input.sampleHtml.take(MAX_HTML_INPUT_CHARS)),
+            debugLogs = DebugLogSanitizer.sanitize(input.debugLogs.take(MAX_LOG_INPUT_CHARS))
+        )
 
-        val messages = PromptBuilder.buildDebug(input, snippet)
+        val limit = minOf(options.htmlMaxChars, sanitizedInput.maxHtmlChars)
+        val snippet = HtmlChunker.chunk(sanitizedInput.sampleHtml, limit)
+
+        val messages = PromptBuilder.buildDebug(sanitizedInput, snippet)
         val promptTokenEstimate = HtmlChunker.estimateTokens(messages.map { it.content })
 
         val response = client.chat(options, messages)
         val reply = response.firstContent()
         if (reply.isBlank()) throw AiError.EmptyResponse()
 
-        return OutcomeAssembler.assemble(
+        val outcome = OutcomeAssembler.assemble(
             client = client,
-            options = options,
+            // Debugging is one diagnosis request. A malformed reply is shown for review; it is
+            // never sent back to the provider for an automatic repair round.
+            options = options.copy(autoRepair = false),
             firstReply = reply,
             advice = extractAdvice(reply),
             firstUsage = response.usage,
             promptTokenEstimate = promptTokenEstimate
         )
+        return restoreSensitiveSourceFields(input.sourceJson, outcome)
+    }
+
+    private fun restoreSensitiveSourceFields(
+        originalSource: String,
+        outcome: AiSourceOutcome
+    ): AiSourceOutcome {
+        val original = runCatching { JsonParser.parseString(originalSource).asJsonObject }.getOrNull()
+            ?: return outcome
+        val generated = runCatching { JsonParser.parseString(outcome.sourceJson).asJsonObject }.getOrNull()
+            ?: return outcome
+        val originalMainJs = original.get("mainJs")
+        val hasOriginalScript = originalMainJs?.isJsonPrimitive == true &&
+            originalMainJs.asJsonPrimitive.isString &&
+            originalMainJs.asString.isNotBlank()
+        val generatedMainJs = generated.get("mainJs")
+        val hasGeneratedScript = generatedMainJs?.isJsonPrimitive == true &&
+            generatedMainJs.asJsonPrimitive.isString &&
+            generatedMainJs.asString.isNotBlank()
+        if (hasOriginalScript && !hasGeneratedScript) {
+            generated.add("mainJs", originalMainJs!!.deepCopy())
+        }
+        restoreSensitiveFields(original, generated)
+        val json = SourceJsonExtractor.format(generated)
+        return outcome.copy(
+            sourceJson = json,
+            preview = RulePreviewBuilder.build(generated),
+            validation = BookSourceValidator.validate(generated)
+        )
+    }
+
+    private fun restoreSensitiveFields(original: JsonElement, generated: JsonElement) {
+        when {
+            original.isJsonObject && generated.isJsonObject -> {
+                original.asJsonObject.entrySet().forEach { (key, originalValue) ->
+                    val target = generated.asJsonObject
+                    val originalEntry = JsonObject().apply { add(key, originalValue) }.toString()
+                    val wasRedacted = DebugLogSanitizer.sanitize(originalEntry) != originalEntry
+                    val generatedValue = target.get(key)
+                    val containsPlaceholder = generatedValue?.isJsonPrimitive == true &&
+                        generatedValue.asJsonPrimitive.isString &&
+                        generatedValue.asString.contains(REDACTION_MARKER)
+                    if (wasRedacted && (generatedValue == null || generatedValue.isJsonNull || containsPlaceholder)) {
+                        target.add(key, originalValue.deepCopy())
+                    } else if (generatedValue != null && !generatedValue.isJsonNull) {
+                        restoreSensitiveFields(originalValue, generatedValue)
+                    }
+                }
+            }
+
+            original.isJsonArray && generated.isJsonArray -> {
+                val originalArray = original.asJsonArray
+                val generatedArray = generated.asJsonArray
+                repeat(minOf(originalArray.size(), generatedArray.size())) { index ->
+                    restoreSensitiveFields(originalArray[index], generatedArray[index])
+                }
+            }
+        }
     }
 
     /**
@@ -69,5 +147,10 @@ class SourceDebugEngine(
 
     companion object {
         private const val FENCE_MARKER = "```"
+        private const val MAX_SOURCE_JSON_CHARS = 60_000
+        private const val MAX_SYMPTOM_CHARS = 4_000
+        private const val MAX_HTML_INPUT_CHARS = 80_000
+        private const val MAX_LOG_INPUT_CHARS = 8_000
+        private const val REDACTION_MARKER = "[REDACTED]"
     }
 }

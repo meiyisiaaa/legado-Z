@@ -9,6 +9,12 @@
         app:showAsAction="ifRoom" />
 
     <item
+        android:id="@+id/menu_ai_chat_retry"
+        android:title="@string/ai_qa_retry"
+        android:enabled="false"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_ai_chat_clear"
         android:title="@string/ai_qa_clear"
         app:showAsAction="never" />

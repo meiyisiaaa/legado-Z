@@ -185,7 +185,8 @@ class AnalyzeRule(
                 cacheFirst = true,
                 timeout = 10000,
                 result = GSON.toJson(result),
-                isRule = true
+                isRule = true,
+                source = getSource()
             ).getStrResponse().body.toString()
         }
     }

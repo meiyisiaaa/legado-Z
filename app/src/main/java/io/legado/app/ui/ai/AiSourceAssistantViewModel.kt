@@ -23,12 +23,23 @@ import io.legado.app.ai.client.ChatMessage
 import io.legado.app.ai.client.OpenAiClient
 import io.legado.app.ai.engine.SourceDebugEngine
 import io.legado.app.ai.engine.SourceGenEngine
+import io.legado.app.ai.engine.DebugEvidenceBuilder
 import io.legado.app.ai.source.BookSourceValidator
 import io.legado.app.ai.source.RulePreviewBuilder
 import io.legado.app.ai.source.SourceJsonExtractor
 import io.legado.app.base.BaseViewModel
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.data.entities.BookSource
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.model.Debug
+import io.legado.app.model.DebugRunKind
+import io.legado.app.model.DebugRunResult
+import io.legado.app.model.DebugRunSnapshot
+import io.legado.app.model.DebugRunner
+import io.legado.app.utils.GSON
+import kotlinx.coroutines.CancellationException
+import java.util.UUID
 
 /**
  * AI 书源助手的核心 ViewModel。
@@ -61,6 +72,14 @@ class AiSourceAssistantViewModel(application: Application) : BaseViewModel(appli
     private val _message = MutableLiveData<String?>()
     val message: LiveData<String?> get() = _message
 
+    private val _debugTrialSnapshot = MutableLiveData<DebugRunSnapshot?>()
+    val debugTrialSnapshot: LiveData<DebugRunSnapshot?> get() = _debugTrialSnapshot
+
+    private val _debugTrialStatus = MutableLiveData<String?>()
+    val debugTrialStatus: LiveData<String?> get() = _debugTrialStatus
+
+    private val debugTrialOwnerId = "ai-draft:${UUID.randomUUID()}"
+
     /* ==================== 批量生成（Phase 2） ==================== */
 
     private val _batchProgress = MutableLiveData(BatchProgress.EMPTY)
@@ -90,14 +109,99 @@ class AiSourceAssistantViewModel(application: Application) : BaseViewModel(appli
         }
     }
 
-    fun debug(sourceJson: String, symptom: String, sampleHtml: String) {
+    fun runDebugTrial(sourceText: String, key: String) {
+        _loading.postValue(true)
+        _error.postValue(null)
+        _debugTrialSnapshot.postValue(null)
+        _debugTrialStatus.postValue(context.getString(R.string.ai_debug_trial_running))
+        execute {
+            val source = try {
+                GSON.fromJsonObject<BookSource>(sourceText).getOrThrow()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                throw IllegalArgumentException(
+                    context.getString(R.string.ai_debug_invalid_source_json),
+                    failure
+                )
+            }
+            if (source.bookSourceUrl.isBlank()) {
+                throw IllegalArgumentException(context.getString(R.string.ai_debug_source_url_required))
+            }
+            DebugRunner.run(
+                ownerId = debugTrialOwnerId,
+                kind = DebugRunKind.DRAFT_BOOK,
+                sourceUrl = source.bookSourceUrl,
+                onEvent = { event ->
+                    _debugTrialStatus.postValue(
+                        context.getString(R.string.ai_debug_trial_event_count, event.sequence.toInt())
+                    )
+                }
+            ) {
+                Debug.startDebug(source, key)
+            }
+        }.onSuccess { result ->
+            _loading.postValue(false)
+            when (result) {
+                is DebugRunResult.Busy -> {
+                    _debugTrialStatus.postValue(context.getString(R.string.ai_debug_runner_busy))
+                    _error.postValue(context.getString(R.string.ai_debug_runner_busy))
+                }
+
+                is DebugRunResult.Completed -> {
+                    val snapshot = result.snapshot
+                    _debugTrialSnapshot.postValue(snapshot)
+                    _debugTrialStatus.postValue(
+                        if (snapshot.terminalState == "failed") {
+                            context.getString(
+                                R.string.ai_debug_trial_failed,
+                                snapshot.error.orEmpty()
+                            )
+                        } else {
+                            context.getString(
+                                R.string.ai_debug_trial_complete,
+                                snapshot.events.size
+                            )
+                        }
+                    )
+                }
+            }
+        }.onError { e ->
+            _loading.postValue(false)
+            if (e !is CancellationException) {
+                _debugTrialStatus.postValue(context.getString(R.string.ai_debug_trial_failed, e.localizedMessage.orEmpty()))
+                _error.postValue(mapError(e))
+            }
+        }
+    }
+
+    fun debug(
+        sourceText: String,
+        symptom: String,
+        manualSampleHtml: String,
+        includeLogs: Boolean,
+        includeHtml: Boolean
+    ) {
         _loading.postValue(true)
         _error.postValue(null)
         val options = AiConfig.snapshot()
+        val evidence = DebugEvidenceBuilder.build(
+            snapshot = _debugTrialSnapshot.value,
+            includeLogs = includeLogs,
+            includeHtml = includeHtml,
+            manualSampleHtml = manualSampleHtml
+        )
         execute {
+            val source = GSON.fromJsonObject<BookSource>(sourceText).getOrThrow()
             debugEngine.debug(
                 options,
-                DebugInput(sourceJson = sourceJson, symptom = symptom, sampleHtml = sampleHtml)
+                DebugInput(
+                    sourceJson = GSON.toJson(source),
+                    symptom = symptom,
+                    sampleHtml = evidence.sampleHtml,
+                    debugLogs = evidence.logs,
+                    maxHtmlChars = minOf(options.htmlMaxChars, DebugEvidenceBuilder.MAX_HTML_CHARS)
+                )
             )
         }.onSuccess { result ->
             _loading.postValue(false)
@@ -106,6 +210,21 @@ class AiSourceAssistantViewModel(application: Application) : BaseViewModel(appli
             _loading.postValue(false)
             _error.postValue(mapError(e))
         }
+    }
+
+    fun previewDebugEvidence(
+        includeLogs: Boolean,
+        includeHtml: Boolean,
+        manualSampleHtml: String
+    ): String {
+        val options = AiConfig.snapshot()
+        val evidence = DebugEvidenceBuilder.build(
+            snapshot = _debugTrialSnapshot.value,
+            includeLogs = includeLogs,
+            includeHtml = includeHtml,
+            manualSampleHtml = manualSampleHtml
+        )
+        return evidence.previewText(minOf(options.htmlMaxChars, DebugEvidenceBuilder.MAX_HTML_CHARS))
     }
 
     /**

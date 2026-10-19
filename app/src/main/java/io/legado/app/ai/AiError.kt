@@ -72,6 +72,8 @@ sealed class AiError(
     /** 问题为空白 */
     class QuestionEmpty : AiError(R.string.ai_err_question_empty)
 
+    class QuestionTooLong : AiError(R.string.ai_err_question_too_long)
+
     /** 选中文本为空白 */
     class SelectionEmpty : AiError(R.string.ai_err_selection_empty)
 

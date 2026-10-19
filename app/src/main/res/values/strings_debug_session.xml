@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_debug_trial_section">本地试跑与证据选择</string>
+    <string name="ai_debug_source_input_hint">粘贴书源 JSON 或单文件 JS</string>
+    <string name="ai_debug_trial_key_hint">搜索词、详情链接或 ++目录 / --正文链接</string>
+    <string name="ai_debug_trial_key_default">我的</string>
+    <string name="ai_debug_trial_action">仅试跑当前草稿</string>
+    <string name="ai_debug_trial_running">正在本地试跑草稿…</string>
+    <string name="ai_debug_trial_event_count">已采集 %1$d 条调试事件</string>
+    <string name="ai_debug_trial_complete">本地试跑完成，采集 %1$d 条事件</string>
+    <string name="ai_debug_trial_failed">本地试跑未完成：%1$s</string>
+    <string name="ai_debug_invalid_source_json">书源 JSON 或单文件 JS 无法解析</string>
+    <string name="ai_debug_source_url_required">书源 URL 不能为空</string>
+    <string name="ai_debug_runner_busy">另一个调试或批量校验任务正在运行</string>
+    <string name="ai_debug_include_logs">将普通调试日志发送给 AI</string>
+    <string name="ai_debug_include_html">将本次响应 HTML 和手动样例发送给 AI</string>
+    <string name="ai_debug_preview_evidence">预览脱敏后将发送的资料</string>
+    <string name="ai_debug_no_evidence">当前未选择日志或 HTML 资料</string>
+</resources>

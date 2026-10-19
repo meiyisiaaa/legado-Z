@@ -22,6 +22,9 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.model.CheckSource
 import io.legado.app.model.Debug
+import io.legado.app.model.DebugRunKind
+import io.legado.app.model.DebugRunResult
+import io.legado.app.model.DebugRunner
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.ui.book.source.manage.BookSourceActivity
 import io.legado.app.utils.activityPendingIntent
@@ -30,8 +33,11 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
@@ -54,6 +60,10 @@ import kotlin.math.min
  * 校验书源
  */
 class CheckSourceService : BaseService() {
+    private companion object {
+        const val CHECK_SOURCE_OWNER = "batch:check-source"
+    }
+
     private var threadCount = AppConfig.threadCount
     private var searchCoroutine =
         Executors.newFixedThreadPool(min(threadCount, AppConst.MAX_THREAD)).asCoroutineDispatcher()
@@ -93,8 +103,16 @@ class CheckSourceService : BaseService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Debug.finishChecking()
-        searchCoroutine.close()
+        val runningCheck = checkJob
+        if (runningCheck?.isActive == true) {
+            runningCheck.cancel()
+            kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runningCheck.cancelAndJoin()
+                searchCoroutine.close()
+            }
+        } else {
+            searchCoroutine.close()
+        }
         postEvent(EventBus.CHECK_SOURCE_DONE, 0)
         notificationManager.cancel(NotificationId.CheckSourceService)
     }
@@ -105,32 +123,42 @@ class CheckSourceService : BaseService() {
             return
         }
         checkJob = lifecycleScope.launch(searchCoroutine) {
-            flow {
-                for (origin in ids) {
-                    appDb.bookSourceDao.getBookSource(origin)?.let {
-                        emit(it)
+            val result = DebugRunner.run(
+                ownerId = CHECK_SOURCE_OWNER,
+                kind = DebugRunKind.CHECK_SOURCE_BATCH,
+                capture = false
+            ) {
+                flow {
+                    for (origin in ids) {
+                        appDb.bookSourceDao.getBookSource(origin)?.let {
+                            emit(it)
+                        }
                     }
-                }
-            }.onStart {
-                originSize = ids.size
-                finishCount = 0
-                notificationMsg = getString(R.string.progress_show, "", 0, originSize)
-                upNotification()
-            }.onEachParallel(threadCount) {
-                checkSource(it)
-            }.onEach {
-                finishCount++
-                notificationMsg = getString(
-                    R.string.progress_show,
-                    it.bookSourceName,
-                    finishCount,
-                    originSize
-                )
-                upNotification()
-                appDb.bookSourceDao.update(it)
-            }.onCompletion {
+                }.onStart {
+                    originSize = ids.size
+                    finishCount = 0
+                    notificationMsg = getString(R.string.progress_show, "", 0, originSize)
+                    upNotification()
+                }.onEachParallel(threadCount) {
+                    checkSource(it)
+                }.onEach {
+                    finishCount++
+                    notificationMsg = getString(
+                        R.string.progress_show,
+                        it.bookSourceName,
+                        finishCount,
+                        originSize
+                    )
+                    upNotification()
+                    appDb.bookSourceDao.update(it)
+                }.onCompletion {
+                    stopSelf()
+                }.collect()
+            }
+            if (result is DebugRunResult.Busy) {
+                toastOnUi("已有调试任务在运行：${result.activeOwnerId}")
                 stopSelf()
-            }.collect()
+            }
         }
     }
 

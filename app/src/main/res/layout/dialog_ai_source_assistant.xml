@@ -163,7 +163,7 @@
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="@string/ai_hint_source_json">
+                    android:hint="@string/ai_debug_source_input_hint">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_source_json"
@@ -187,6 +187,52 @@
                         android:minLines="2" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="8dp"
+                    android:text="@string/ai_debug_trial_section"
+                    android:textAppearance="?attr/textAppearanceTitleSmall" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/ai_debug_trial_key_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_debug_trial_key"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:text="@string/ai_debug_trial_key_default" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/btn_debug_trial"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ai_debug_trial_action" />
+
+                <TextView
+                    android:id="@+id/tv_debug_trial_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="4dp"
+                    android:textAppearance="?attr/textAppearanceCaption"
+                    android:visibility="gone" />
+
+                <CheckBox
+                    android:id="@+id/cb_debug_include_logs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ai_debug_include_logs" />
+
+                <CheckBox
+                    android:id="@+id/cb_debug_include_html"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ai_debug_include_html" />
+
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -200,6 +246,13 @@
                         android:inputType="textMultiLine"
                         android:minLines="6" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/btn_debug_preview_evidence"
+                    style="?attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ai_debug_preview_evidence" />
             </LinearLayout>
 
             <LinearLayout

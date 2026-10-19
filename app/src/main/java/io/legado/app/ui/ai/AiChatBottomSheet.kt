@@ -1,6 +1,7 @@
 package io.legado.app.ui.ai
 
 import android.os.Bundle
+import android.content.DialogInterface
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -94,6 +95,10 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             dismissAllowingStateLoss()
             return
         }
+        bookmark?.let { mark ->
+            viewModel.bindSelection(listOf(mark.bookName, mark.bookAuthor,
+                mark.chapterIndex, mark.chapterPos).joinToString("\u0000"), selectedText)
+        }
 
         initToolBar()
         initRecycler()
@@ -146,8 +151,7 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             requireContext().toastOnUi(R.string.ai_err_question_empty)
             return
         }
-        binding.etQuestion.setText("")
-        viewModel.ask(bookmark?.bookText.orEmpty(), question)
+        if (viewModel.ask(bookmark?.bookText.orEmpty(), question)) binding.etQuestion.setText("")
     }
 
     private fun observeViewModel() {
@@ -163,6 +167,7 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             loading = running
             if (running) binding.progress.visible() else binding.progress.gone()
             binding.btnSend.setText(if (running) R.string.ai_qa_stop else R.string.ai_qa_send)
+            updateSaveAction()
         }
         viewModel.error.observe(viewLifecycleOwner) { err ->
             if (!err.isNullOrBlank()) {
@@ -180,6 +185,9 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
         val latestAnswer = latestItems.lastOrNull { it.role == AiChatRole.ASSISTANT }
         binding.toolBar.menu.findItem(R.id.menu_ai_chat_save_note)?.isEnabled =
             !saving && latestAnswer != null && latestAnswer.id != lastSavedItemId
+        val lastQuestion = latestItems.lastOrNull { it.role == AiChatRole.USER }
+        binding.toolBar.menu.findItem(R.id.menu_ai_chat_retry)?.isEnabled = !loading &&
+            (lastQuestion?.status == AiChatStatus.FAILED || lastQuestion?.status == AiChatStatus.CANCELLED)
     }
 
     private fun saveLatestAsNote() {
@@ -189,8 +197,7 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
         if (answerIndex < 0) return
         val answer = latestItems[answerIndex]
         if (answer.id == lastSavedItemId) return
-        val question = latestItems.subList(0, answerIndex)
-            .lastOrNull { it.role == AiChatRole.USER }
+        val question = latestItems.firstOrNull { it.id == answer.replyTo && it.role == AiChatRole.USER }
             ?.text
             .orEmpty()
         val isInitialExplain = mode == MODE_EXPLAIN && question.trim() == source.bookText.trim()
@@ -224,6 +231,7 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_ai_chat_save_note -> saveLatestAsNote()
+            R.id.menu_ai_chat_retry -> viewModel.retry()
 
             R.id.menu_ai_chat_clear -> {
                 viewModel.clear()
@@ -233,6 +241,11 @@ class AiChatBottomSheet() : BottomSheetDialogFragment(R.layout.dialog_ai_chat),
             R.id.menu_ai_settings -> showDialogFragment(AiSettingsDialog())
         }
         return true
+    }
+
+    override fun onDismiss(dialog: DialogInterface) {
+        if (activity?.isChangingConfigurations != true) viewModel.clear()
+        super.onDismiss(dialog)
     }
 
     companion object {

@@ -71,5 +71,44 @@ data class ExplainOutcome(
 /** 组装选区 AI prompt 所需的全部素材。[selection] 已由 Engine 截断到上限。 */
 data class ExplainPromptInput(
     val selection: String = "",
-    val question: String = ""
+    val question: String = "",
+    val history: List<SelectionQaPair> = emptyList()
 )
+
+/** 仅包含成功完成的同选区问答。 */
+data class SelectionQaPair(val question: String, val answer: String)
+
+/** 面板独占的有界上下文；令牌同时隔离已取消及旧会话的结果。 */
+class SelectionQaSession {
+    private val pairs = ArrayDeque<SelectionQaPair>()
+    private var generation = 0L
+    private var key: String? = null
+    val history: List<SelectionQaPair> get() = pairs.toList()
+
+    fun bind(value: String): Boolean {
+        if (key == value) return false
+        clear()
+        key = value
+        return true
+    }
+
+    fun begin(): Long = ++generation
+    fun isCurrent(token: Long): Boolean = token == generation
+    fun cancel() { generation++ }
+    fun clear() { cancel(); pairs.clear() }
+
+    fun complete(token: Long, pair: SelectionQaPair): Boolean {
+        if (!isCurrent(token)) return false
+        pairs.addLast(pair)
+        while (pairs.size > MAX_PAIRS || pairs.sumOf { it.question.length + it.answer.length } > MAX_CHARS) {
+            pairs.removeFirst()
+        }
+        return true
+    }
+
+    companion object {
+        const val MAX_PAIRS = 4
+        const val MAX_CHARS = 8000
+        const val MAX_QUESTION_CHARS = 2000
+    }
+}

@@ -6,10 +6,14 @@ import fi.iki.elonen.NanoWSD
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.model.Debug
+import io.legado.app.model.DebugRunKind
+import io.legado.app.model.DebugRunResult
+import io.legado.app.model.DebugRunner
 import io.legado.app.utils.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import splitties.init.appCtx
+import java.util.UUID
 
 import java.io.IOException
 
@@ -18,10 +22,10 @@ import java.io.IOException
  */
 class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
     NanoWSD.WebSocket(handshakeRequest),
-    CoroutineScope by MainScope(),
-    Debug.Callback {
+    CoroutineScope by MainScope() {
 
     private val notPrintState = arrayOf(10, 20, 30, 40)
+    private val runOwnerId = "book-ws:${UUID.randomUUID()}"
 
     override fun onOpen() {
         launch(IO) {
@@ -40,7 +44,6 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
         initiatedByRemote: Boolean
     ) {
         cancel()
-        Debug.cancelDebug(true)
     }
 
     override fun onMessage(message: NanoWSD.WebSocketFrame) {
@@ -61,9 +64,30 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
                         close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
                         return@launch
                     }
-                    appDb.bookSourceDao.getBookSource(tag)?.let {
-                        Debug.callback = this@BookSourceDebugWebSocket
-                        Debug.startDebug(this, it, key)
+                    appDb.bookSourceDao.getBookSource(tag)?.let { source ->
+                        when (
+                            val result = DebugRunner.run(
+                                ownerId = runOwnerId,
+                                kind = DebugRunKind.BOOK_WEBSOCKET,
+                                sourceUrl = source.bookSourceUrl,
+                                onEvent = { event ->
+                                    if (isOpen && event.state !in notPrintState) {
+                                        runCatching { send(event.displayMessage) }
+                                    }
+                                }
+                            ) {
+                                Debug.startDebug(source, key)
+                            }
+                        ) {
+                            is DebugRunResult.Busy -> if (isOpen) send("调试任务忙：${result.activeOwnerId}")
+                            is DebugRunResult.Completed -> if (isOpen) {
+                                close(
+                                    NanoWSD.WebSocketFrame.CloseCode.NormalClosure,
+                                    "调试结束",
+                                    false
+                                )
+                            }
+                        }
                     }
                 } else {
                     send("数据必须为Json格式")
@@ -79,24 +103,7 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
     }
 
     override fun onException(exception: IOException) {
-        Debug.cancelDebug(true)
-    }
-
-    override fun printLog(state: Int, msg: String) {
-        if (state in notPrintState) {
-            return
-        }
-        runOnIO {
-            runCatching {
-                send(msg)
-                if (state == -1 || state == 1000) {
-                    Debug.cancelDebug(true)
-                    close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
-                }
-            }.onFailure {
-                it.printOnDebug()
-            }
-        }
+        cancel()
     }
 
 }

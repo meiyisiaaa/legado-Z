@@ -9,6 +9,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
+import io.legado.app.model.DebugRunContext
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.CoroutineContext
 import io.legado.app.ui.rss.read.RssJsExtensions
@@ -174,7 +175,9 @@ class WebJsExtensions(
     @JavascriptInterface
     fun log(msg: String?): String {
         navigationContext?.ensureActive()
-        return super.log(msg).toString()
+        val token = navigationContext?.get(DebugRunContext)
+        return if (token == null) super.log(msg).toString()
+        else DebugRunContext.with(token) { super.log(msg).toString() }
     }
     @JavascriptInterface
     @JvmOverloads

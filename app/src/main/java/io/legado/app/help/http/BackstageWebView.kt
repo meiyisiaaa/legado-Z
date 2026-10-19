@@ -30,6 +30,7 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.model.Debug
+import io.legado.app.model.DebugRunContext
 import io.legado.app.utils.get
 import io.legado.app.utils.runOnUI
 import kotlinx.coroutines.Dispatchers.IO
@@ -64,7 +65,9 @@ class BackstageWebView(
     private val cacheFirst: Boolean = false,
     private val timeout: Long? = null,
     private val result: String? = null,
-    private val isRule: Boolean = false
+    private val isRule: Boolean = false,
+    /** Use the in-memory source for draft trials; [tag] remains the persisted-source fallback. */
+    private val source: BaseSource? = null
 ) {
 
     private val mHandler = Handler(Looper.getMainLooper())
@@ -119,14 +122,18 @@ class BackstageWebView(
                 !html.isNullOrEmpty() -> {
                     if (isRule) {
                         webView.addJavascriptInterface(WebCacheManager, nameCache)
-                        tag?.let(appDb.bookSourceDao::getBookSource)?.let { activeSource ->
+                        (source ?: tag?.let(appDb.bookSourceDao::getBookSource))?.let { activeSource ->
                             webView.webChromeClient = object : WebChromeClient() {
                                 /* 监听网页日志 */
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                                     if (!ownsWebView(webView, navigationContext)) return true
                                     val messageLevel = consoleMessage.messageLevel().name
                                     val message = consoleMessage.message()
-                                    Debug.log(activeSource.getKey(), "$messageLevel: $message", true)
+                                    navigationContext[DebugRunContext]?.let { token ->
+                                        DebugRunContext.with(token) {
+                                            Debug.log(activeSource.getKey(), "$messageLevel: $message", true)
+                                        }
+                                    }
                                     return true
                                 }
                             }

@@ -36,6 +36,9 @@ object PromptBuilder {
         val user = buildString {
             appendSection(PromptTemplates.USER_SOURCE_JSON_LABEL, input.sourceJson)
             appendSection(PromptTemplates.USER_SYMPTOM_LABEL, input.symptom)
+            if (input.debugLogs.isNotBlank()) {
+                appendSection(PromptTemplates.USER_DEBUG_LOGS_LABEL, input.debugLogs)
+            }
             appendSection(PromptTemplates.USER_SAMPLE_HTML_LABEL, snippet)
             append(PromptTemplates.USER_DEBUG_TAIL)
         }
@@ -75,10 +78,14 @@ object PromptBuilder {
             appendReaderSection(ReaderPromptTemplates.USER_QUESTION_LABEL, input.question)
             append(ReaderPromptTemplates.USER_SELECTION_QA_TAIL)
         }
-        return listOf(
-            ChatMessage.system(ReaderPromptTemplates.systemSelectionQa()),
-            ChatMessage.user(user)
-        )
+        return buildList {
+            add(ChatMessage.system(ReaderPromptTemplates.systemSelectionQa()))
+            input.history.forEach { pair ->
+                add(ChatMessage.user(pair.question))
+                add(ChatMessage.assistant(pair.answer))
+            }
+            add(ChatMessage.user(user))
+        }
     }
 
     /**
