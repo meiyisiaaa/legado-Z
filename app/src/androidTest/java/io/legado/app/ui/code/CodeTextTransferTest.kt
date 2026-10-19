@@ -4,10 +4,16 @@ import android.app.Application
 import android.content.Intent
 import android.os.Bundle
 import android.system.Os
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -65,6 +71,104 @@ class CodeTextTransferTest {
         }
         assertNotNull(token)
         assertFalse(File(context.filesDir, "code-edit-transfer/$token").exists())
+    }
+
+    @Test
+    fun lateLargeOutputAfterViewModelStoreClearIsRejectedAndLeavesNoFile() {
+        val transferDirectory = File(context.filesDir, "code-edit-transfer")
+        val filesBefore = transferDirectory.list()?.toSet().orEmpty()
+        val store = ViewModelStore()
+        val viewModel = createViewModel(store)
+
+        try {
+            clear(store)
+
+            var rejected = false
+            try {
+                viewModel.createResult("x".repeat(CodeTextTransfer.MAX_INLINE_LENGTH + 1), 17)
+            } catch (_: CancellationException) {
+                rejected = true
+            }
+
+            assertTrue("a cleared ViewModel must reject late output ownership", rejected)
+            assertEquals(filesBefore, transferDirectory.list()?.toSet().orEmpty())
+        } finally {
+            clear(store)
+        }
+    }
+
+    @Test
+    fun canceledViewModelScopeStillRegistersInputBeforeStoreClear() {
+        val intent = Intent()
+        val inputToken = checkNotNull(
+            CodeTextTransfer.setInput(
+                context,
+                intent,
+                "large input".repeat(CodeTextTransfer.MAX_INLINE_LENGTH / 11 + 2)
+            )
+        )
+        val inputFile = File(context.filesDir, "code-edit-transfer/$inputToken")
+        val store = ViewModelStore()
+        val viewModel = createViewModel(store)
+
+        try {
+            assertTrue(inputFile.exists())
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                viewModel.viewModelScope.cancel()
+                assertFalse("the test must cancel initData's actual owner scope", viewModel.viewModelScope.isActive)
+                viewModel.initData(intent, null, {}, {})
+            }
+            assertTrue("initData should leave the input owned until ViewModel cleanup", inputFile.exists())
+
+            clear(store)
+            assertFalse("ViewModelStore.clear must delete the synchronously registered input", inputFile.exists())
+        } finally {
+            clear(store)
+            if (inputFile.exists()) CodeTextTransfer.delete(context, inputToken)
+        }
+    }
+
+    @Test
+    fun clearingViewModelStoreDeletesOwnedOutput() {
+        val store = ViewModelStore()
+        val viewModel = createViewModel(store)
+        var outputToken: String? = null
+
+        try {
+            val result = viewModel.createResult("owned".repeat(4_001), 0)
+            outputToken = result.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)
+            assertNotNull(outputToken)
+            val outputFile = File(context.filesDir, "code-edit-transfer/$outputToken")
+            assertTrue(outputFile.exists())
+
+            clear(store)
+            assertFalse(outputFile.exists())
+        } finally {
+            clear(store)
+            outputToken?.let { CodeTextTransfer.delete(context, it) }
+        }
+    }
+
+    @Test
+    fun clearingViewModelStoreKeepsReleasedOutputForCaller() {
+        val store = ViewModelStore()
+        val viewModel = createViewModel(store)
+        var outputToken: String? = null
+
+        try {
+            val result = viewModel.createResult("released".repeat(2_001), 0)
+            outputToken = result.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)
+            assertNotNull(outputToken)
+            val outputFile = File(context.filesDir, "code-edit-transfer/$outputToken")
+            assertTrue(outputFile.exists())
+
+            viewModel.releaseOutput(result)
+            clear(store)
+            assertTrue("released output belongs to the caller", outputFile.exists())
+        } finally {
+            clear(store)
+            outputToken?.let { CodeTextTransfer.delete(context, it) }
+        }
     }
 
     @Test
@@ -235,5 +339,21 @@ class CodeTextTransferTest {
             link.delete()
             outside.delete()
         }
+    }
+
+    private fun createViewModel(store: ViewModelStore): CodeEditViewModel {
+        var viewModel: CodeEditViewModel? = null
+        val application = context.applicationContext as Application
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            viewModel = ViewModelProvider(
+                store,
+                ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+            ).get(CodeEditViewModel::class.java)
+        }
+        return checkNotNull(viewModel)
+    }
+
+    private fun clear(store: ViewModelStore) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { store.clear() }
     }
 }

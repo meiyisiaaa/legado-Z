@@ -1,7 +1,6 @@
 package io.legado.app
 
 import androidx.room.Room
-import androidx.room.migration.Migration
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -20,10 +19,6 @@ import java.io.IOException
 class MigrationTest {
 
     private val TEST_DB = "migration-test"
-
-    private val ALL_MIGRATIONS = arrayOf<Migration>(
-
-    )
 
     @get:Rule
     val helper: MigrationTestHelper = MigrationTestHelper(
@@ -46,7 +41,7 @@ class MigrationTest {
             InstrumentationRegistry.getInstrumentation().targetContext,
             AppDatabase::class.java,
             TEST_DB
-        ).addMigrations(*ALL_MIGRATIONS)
+        ).addMigrations(*DatabaseMigrations.migrations)
             .build().apply {
                 openHelper.writableDatabase
                 close()

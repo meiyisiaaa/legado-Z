@@ -2,24 +2,22 @@ package io.legado.app.ui.code
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.Base64
+import android.text.InputType
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
@@ -51,11 +49,6 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import org.json.JSONObject
-import org.json.JSONTokener
-import java.io.ByteArrayInputStream
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
@@ -70,8 +63,6 @@ class CodeEditActivity :
         private var replaceText = ""
         private var isRegex = true
         internal const val SAFE_EDITOR_TAG = "safe_code_editor"
-        private const val SAFE_BRIDGE_NAME = "EditorBridge"
-        private const val SAFE_STATE_TIMEOUT_MS = 5_000L
     }
     override val binding by viewBinding(ActivityCodeEditBinding::inflate)
     override val viewModel by viewModels<CodeEditViewModel>()
@@ -83,11 +74,8 @@ class CodeEditActivity :
     private var searchOptions: SearchOptions? = null
     private var menuSaveBtn: MenuItem? = null
     private var optionsMenu: Menu? = null
-    private var safeWebView: WebView? = null
-    private var safePageReady = false
-    private var safeEditorDestroyed = false
+    private var safeEditText: AppCompatEditText? = null
     private var saveInProgress = false
-    private val safeStateHandler = Handler(Looper.getMainLooper())
     private val initDataCallback: () -> Unit = {
         viewModel.title?.let { binding.titleBar.title = it }
         menuSaveBtn?.isVisible = viewModel.writable
@@ -138,65 +126,48 @@ class CodeEditActivity :
         binding.editText.isGone = true
         binding.searchGroup.isGone = true
         updateSafeMenu()
-        safeEditorDestroyed = false
-        val webView = WebView(this).apply {
+        val draft = viewModel.safeDraft ?: viewModel.initialText
+        val cursor = if (viewModel.safeDraft == null) viewModel.cursorPosition else viewModel.safeCursorPosition
+        val horizontalScrolling = !AppConfig.editAutoWrap
+        val safeEditor = AppCompatEditText(this).apply {
             tag = SAFE_EDITOR_TAG
-            isFocusable = true
-            isFocusableInTouchMode = true
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = false
-                allowFileAccess = false
-                allowContentAccess = false
-                javaScriptCanOpenWindowsAutomatically = false
-                setSupportMultipleWindows(false)
-                blockNetworkLoads = true
-                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                setSupportZoom(true)
-                builtInZoomControls = true
-                displayZoomControls = false
-            }
-            addJavascriptInterface(SafeEditorBridge(), SAFE_BRIDGE_NAME)
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = true
-
-                @Suppress("DEPRECATION")
-                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
-
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): WebResourceResponse = blockedResponse()
-
-                @Suppress("DEPRECATION")
-                override fun shouldInterceptRequest(view: WebView, url: String): WebResourceResponse = blockedResponse()
-
-                override fun onPageFinished(view: WebView, url: String) {
-                    if (url == "about:blank") {
-                        safePageReady = true
-                        view.requestFocus()
-                    }
-                }
-            }
+            id = View.generateViewId()
+            hint = getString(R.string.edit_code)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, AppConfig.editFontScale.toFloat())
+            typeface = Typeface.MONOSPACE
+            setTextColor(if (isDark) Color.rgb(230, 232, 235) else Color.rgb(32, 33, 36))
+            setBackgroundColor(if (isDark) Color.rgb(21, 23, 26) else Color.WHITE)
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+            setSingleLine(false)
+            setHorizontallyScrolling(horizontalScrolling)
+            isHorizontalScrollBarEnabled = horizontalScrolling
+            isVerticalScrollBarEnabled = true
+            gravity = Gravity.TOP or Gravity.START
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            setLineSpacing(0f, 1.55f)
+            val padding = (20 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            isSaveEnabled = false
+            setTextIsSelectable(!viewModel.writable)
+            isCursorVisible = viewModel.writable
+            if (!viewModel.writable) keyListener = null
+            setText(draft)
+            setSelection(cursor.coerceIn(0, draft.length))
         }
-        safeWebView = webView
         binding.editorContainer.addView(
-            webView,
+            safeEditor,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        val draft = viewModel.safeDraft ?: viewModel.initialText
-        val cursor = if (viewModel.safeDraft == null) viewModel.cursorPosition else viewModel.safeCursorPosition
-        webView.loadDataWithBaseURL(
-            "about:blank",
-            safeEditorHtml(draft, cursor, !viewModel.writable),
-            "text/html",
-            "UTF-8",
-            null
-        )
+        safeEditText = safeEditor
+        safeEditor.requestFocus()
+        viewModel.updateSafeDraft(draft, safeEditor.selectionStart.takeIf { it >= 0 } ?: cursor)
     }
 
     private fun updateSafeMenu() {
@@ -211,134 +182,11 @@ class CodeEditActivity :
         ).forEach { menu.findItem(it)?.isVisible = false }
     }
 
-    private fun safeEditorHtml(text: String, cursor: Int, readOnly: Boolean): String {
-        val encodedText = Base64.encodeToString(text.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-        val editorFontSizePx = safeEditorFontSizeCssPx(AppConfig.editFontScale, resources.configuration.fontScale)
-        val darkStyle = if (isDark) {
-            "--editor-bg:#15171a;--editor-fg:#e6e8eb;--editor-focus:#82aaff;"
-        } else {
-            "--editor-bg:#ffffff;--editor-fg:#202124;--editor-focus:#365fce;"
-        }
-        return """<!doctype html>
-            <html lang="zh-CN"><head><meta charset="utf-8">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none';">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                :root{$darkStyle}
-                *{box-sizing:border-box}
-                html,body{width:100%;height:100%;margin:0;background:var(--editor-bg);color:var(--editor-fg)}
-                body{padding:12px}
-                textarea{display:block;width:100%;height:100%;resize:none;border:0;outline:0;padding:8px;
-                    background:transparent;color:inherit;font:${editorFontSizePx}px/1.55 monospace;tab-size:4;white-space:pre-wrap;
-                    overflow-wrap:anywhere;caret-color:var(--editor-focus);-webkit-user-select:text;user-select:text}
-                textarea:focus-visible{outline:2px solid var(--editor-focus);outline-offset:-2px}
-            </style></head><body>
-            <textarea id="editor" aria-label="代码文本编辑器" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ${if (readOnly) "readonly" else ""}></textarea>
-            <script>
-                const editor=document.getElementById('editor');
-                function decodeText(value){
-                    const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));
-                    if(window.TextDecoder)return new TextDecoder('utf-8').decode(bytes);
-                    let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
-                    return decodeURIComponent(escape(binary));
-                }
-                editor.value=decodeText('$encodedText');
-                const initialCursor=Math.max(0,Math.min(editor.value.length,$cursor));
-                editor.setSelectionRange(initialCursor,initialCursor);
-                let snapshotTimer;
-                function reportCursor(){try{window.$SAFE_BRIDGE_NAME.onCursor(editor.selectionStart)}catch(e){}}
-                function scheduleSnapshot(){clearTimeout(snapshotTimer);snapshotTimer=setTimeout(()=>{
-                    try{window.$SAFE_BRIDGE_NAME.onSnapshot(editor.value,editor.selectionStart)}catch(e){}
-                },350)}
-                editor.addEventListener('input',scheduleSnapshot);
-                document.addEventListener('selectionchange',reportCursor);
-                window.readEditorState=function(){return JSON.stringify({text:editor.value,cursor:editor.selectionStart})};
-                window.insertEditorText=function(text){
-                    const start=editor.selectionStart,end=editor.selectionEnd;
-                    editor.setRangeText(text,start,end,'end');editor.focus();scheduleSnapshot();reportCursor();
-                };
-                scheduleSnapshot();reportCursor();
-            </script></body></html>"""
-    }
-
-    private fun blockedResponse() = WebResourceResponse(
-        "text/plain",
-        "UTF-8",
-        403,
-        "Blocked",
-        emptyMap(),
-        ByteArrayInputStream(ByteArray(0))
-    )
-
-    private inner class SafeEditorBridge {
-        @JavascriptInterface
-        fun onSnapshot(text: String, cursorPosition: Int) {
-            if (safeEditorDestroyed) return
-            runOnUiThread {
-                if (!safeEditorDestroyed) viewModel.updateSafeDraft(text, cursorPosition)
-            }
-        }
-
-        @JavascriptInterface
-        fun onCursor(cursorPosition: Int) {
-            if (safeEditorDestroyed) return
-            runOnUiThread {
-                if (!safeEditorDestroyed) viewModel.updateSafeCursor(cursorPosition)
-            }
-        }
-    }
-
-    private data class SafeEditorState(val text: String, val cursor: Int)
-
-    private fun readSafeEditorState(onSuccess: (SafeEditorState?) -> Unit) {
-        val webView = safeWebView
-        if (webView == null || !safePageReady) {
-            onSuccess(viewModel.safeDraft?.let { SafeEditorState(it, viewModel.safeCursorPosition) })
-            return
-        }
-        val settled = AtomicBoolean(false)
-        val timeout = Runnable {
-            if (settled.compareAndSet(false, true)) onSuccess(null)
-        }
-        safeStateHandler.postDelayed(timeout, SAFE_STATE_TIMEOUT_MS)
-        webView.evaluateJavascript("window.readEditorState()") { result ->
-            if (!settled.compareAndSet(false, true)) return@evaluateJavascript
-            safeStateHandler.removeCallbacks(timeout)
-            if (safeEditorDestroyed || isFinishing || isDestroyed) return@evaluateJavascript
-            try {
-                val json = JSONTokener(result).nextValue() as? String
-                val value = json?.let(::JSONObject)
-                val text = value?.getString("text")
-                val cursor = value?.getInt("cursor")
-                if (text != null && cursor != null) {
-                    viewModel.updateSafeDraft(text, cursor)
-                    onSuccess(SafeEditorState(text, cursor))
-                } else {
-                    onSuccess(null)
-                }
-            } catch (_: Exception) {
-                onSuccess(null)
-            }
-        }
-    }
-
     private fun snapshotSafeEditor() {
-        val webView = safeWebView ?: return
-        if (!safePageReady) return
-        webView.evaluateJavascript("window.readEditorState()") { result ->
-            val state = parseSafeEditorState(result) ?: return@evaluateJavascript
-            viewModel.updateSafeDraft(state.text, state.cursor)
-        }
-    }
-
-    private fun parseSafeEditorState(result: String): SafeEditorState? {
-        return try {
-            val json = JSONTokener(result).nextValue() as? String ?: return null
-            val value = JSONObject(json)
-            SafeEditorState(value.getString("text"), value.getInt("cursor"))
-        } catch (_: Exception) {
-            null
-        }
+        val editor = safeEditText ?: return
+        val text = editor.editableText.toString()
+        val cursor = editor.selectionStart.takeIf { it >= 0 } ?: text.length
+        viewModel.updateSafeDraft(text, cursor)
     }
 
     private fun initView() {
@@ -350,23 +198,7 @@ class CodeEditActivity :
 
     override fun onDestroy() {
         viewModel.removeInitCallback(initDataCallback, initRestoreFailureCallback)
-        safeEditorDestroyed = true
-        safePageReady = false
-        safeStateHandler.removeCallbacksAndMessages(null)
-        safeWebView?.let { webView ->
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.apply {
-                removeJavascriptInterface(SAFE_BRIDGE_NAME)
-                stopLoading()
-                loadUrl("about:blank")
-                clearHistory()
-                webChromeClient = null
-                webViewClient = WebViewClient()
-                removeAllViews()
-                destroy()
-            }
-        }
-        safeWebView = null
+        safeEditText = null
         optionsMenu = null
         super.onDestroy()
         editorSearcher.stopSearch()
@@ -445,34 +277,28 @@ class CodeEditActivity :
     }
 
     private fun saveSafe(check: Boolean) {
+        snapshotSafeEditor()
         if (!viewModel.writable) return super.finish()
-        readSafeEditorState { state ->
-            if (safeEditorDestroyed || isFinishing || isDestroyed) return@readSafeEditorState
-            if (state == null) {
-                toastOnUi(R.string.error_read_file)
-                return@readSafeEditorState
-            }
-            when {
-                state.text == viewModel.initialText -> {
-                    if (state.cursor > 0) {
-                        setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, state.cursor))
-                    }
-                    super.finish()
+        val text = viewModel.safeDraft ?: viewModel.initialText
+        val cursor = viewModel.safeCursorPosition
+        when {
+            text == viewModel.initialText -> {
+                if (cursor > 0) {
+                    setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, cursor))
                 }
-                check -> {
-                    alert(R.string.exit) {
-                        setMessage(R.string.exit_no_save)
-                        positiveButton(R.string.yes)
-                        negativeButton(R.string.no) {
-                            setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, state.cursor))
-                            super.finish()
-                        }
+                super.finish()
+            }
+            check -> {
+                alert(R.string.exit) {
+                    setMessage(R.string.exit_no_save)
+                    positiveButton(R.string.yes)
+                    negativeButton(R.string.no) {
+                        setResult(RESULT_OK, CodeTextTransfer.createResult(this@CodeEditActivity, null, cursor))
+                        super.finish()
                     }
                 }
-                else -> {
-                    finishWithTextResult(state.text, state.cursor)
-                }
             }
+            else -> finishWithTextResult(text, cursor)
         }
     }
 
@@ -714,11 +540,17 @@ class CodeEditActivity :
 
     override fun sendText(text: String) {
         if (viewModel.useSafeEditor) {
-            if (text.isNotEmpty() && safePageReady) {
-                val encoded = Base64.encodeToString(text.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-                val js = "window.insertEditorText(decodeURIComponent(Array.prototype.map.call(atob('$encoded'),c=>'%'+('0'+c.charCodeAt(0).toString(16)).slice(-2)).join('')))"
-                safeWebView?.evaluateJavascript(js, null)
-            }
+            val target = safeEditText ?: return
+            if (!viewModel.writable || text.isEmpty()) return
+            val editable = target.editableText
+            val length = editable.length
+            val selectionStart = target.selectionStart.takeIf { it >= 0 } ?: length
+            val selectionEnd = target.selectionEnd.takeIf { it >= 0 } ?: selectionStart
+            val start = minOf(selectionStart, selectionEnd).coerceIn(0, length)
+            val end = maxOf(selectionStart, selectionEnd).coerceIn(start, length)
+            editable.replace(start, end, text)
+            target.setSelection(start + text.length)
+            snapshotSafeEditor()
             return
         }
         val view = window.decorView.findFocus()
@@ -746,14 +578,20 @@ class CodeEditActivity :
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onUndoClicked() {
-        if (!viewModel.useSafeEditor) editor.undo()
+        if (viewModel.useSafeEditor) {
+            if (viewModel.writable) safeEditText?.onTextContextMenuItem(android.R.id.undo)
+        } else {
+            editor.undo()
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onRedoClicked() {
-        if (!viewModel.useSafeEditor) editor.redo()
+        if (viewModel.useSafeEditor) {
+            if (viewModel.writable) safeEditText?.onTextContextMenuItem(android.R.id.redo)
+        } else {
+            editor.redo()
+        }
     }
 
 }
-
-internal fun safeEditorFontSizeCssPx(fontSize: Int, fontScale: Float): Float = fontSize * fontScale

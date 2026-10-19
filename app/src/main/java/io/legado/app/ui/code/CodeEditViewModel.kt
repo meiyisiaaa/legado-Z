@@ -18,6 +18,7 @@ import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.CancellationException
 import org.eclipse.tm4e.core.registry.IThemeSource
 import org.jsoup.Jsoup
 import splitties.init.appCtx
@@ -56,6 +57,7 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
         private set
     private var ownedInputToken: String? = null
     private val ownedOutputTokens = mutableSetOf<String>()
+    private var outputOwnerCleared = false
     private var processDraftToken: String? = null
     private var pendingProcessDraft: ProcessDraft? = null
     private var processDraftUnavailable = false
@@ -93,11 +95,11 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
         restoreFailureCallback = onRestoreFailure
         if (initStarted) return
         initStarted = true
+        val cacheKey = intent.getStringExtra("cacheKey")
+        if (cacheKey == null && intent.getBooleanExtra(CodeTextTransfer.EXTRA_USE_TEXT_FILE, false)) {
+            ownedInputToken = intent.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)
+        }
         execute {
-            val cacheKey = intent.getStringExtra("cacheKey")
-            if (cacheKey == null && intent.getBooleanExtra(CodeTextTransfer.EXTRA_USE_TEXT_FILE, false)) {
-                ownedInputToken = intent.getStringExtra(CodeTextTransfer.EXTRA_TEXT_FILE_TOKEN)
-            }
             if (processDraftUnavailable) {
                 throw IllegalStateException("Unable to restore the editor draft")
             }
@@ -240,7 +242,12 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
 
     fun createResult(text: String?, cursorPosition: Int): Intent =
         CodeTextTransfer.createResult(context, text, cursorPosition) { token ->
-            synchronized(ownedOutputTokens) { ownedOutputTokens += token }
+            synchronized(ownedOutputTokens) {
+                if (outputOwnerCleared) {
+                    throw CancellationException("Code editor ViewModel has been cleared")
+                }
+                ownedOutputTokens += token
+            }
         }
 
     fun releaseOutput(result: Intent) {
@@ -250,13 +257,14 @@ class CodeEditViewModel(application: Application) : BaseViewModel(application) {
     }
 
     override fun onCleared() {
-        ownedInputToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
-        ownedInputToken = null
-        releaseProcessState()
         synchronized(ownedOutputTokens) {
+            outputOwnerCleared = true
             ownedOutputTokens.forEach { runCatching { CodeTextTransfer.delete(context, it) } }
             ownedOutputTokens.clear()
         }
+        ownedInputToken?.let { runCatching { CodeTextTransfer.delete(context, it) } }
+        ownedInputToken = null
+        releaseProcessState()
         super.onCleared()
     }
 
