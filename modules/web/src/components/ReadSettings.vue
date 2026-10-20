@@ -76,79 +76,85 @@
         <li class="font-size">
           <i>字体大小</i>
           <div class="resize">
-            <span class="less" @click="lessFontSize"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ fontSize }}</span
-            ><b></b>
-            <span class="more" @click="moreFontSize"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <button class="less" type="button" aria-label="减小字体" @click="lessFontSize">
+              <em class="iconfont" aria-hidden="true">&#58966;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ fontSize }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="增大字体" @click="moreFontSize">
+              <em class="iconfont" aria-hidden="true">&#58976;</em>
+            </button>
           </div>
         </li>
         <li class="letter-spacing">
           <i>字距</i>
           <div class="resize">
-            <span class="less" @click="lessLetterSpacing"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ spacing.letter.toFixed(2) }}</span
-            ><b></b>
-            <span class="more" @click="moreLetterSpacing"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <button class="less" type="button" aria-label="缩小字距" @click="lessLetterSpacing">
+              <em class="iconfont" aria-hidden="true">&#58966;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ spacing.letter.toFixed(2) }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="增大字距" @click="moreLetterSpacing">
+              <em class="iconfont" aria-hidden="true">&#58976;</em>
+            </button>
           </div>
         </li>
         <li class="line-spacing">
           <i>行距</i>
           <div class="resize">
-            <span class="less" @click="lessLineSpacing"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ spacing.line.toFixed(1) }}</span
-            ><b></b>
-            <span class="more" @click="moreLineSpacing"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <button class="less" type="button" aria-label="缩小行距" @click="lessLineSpacing">
+              <em class="iconfont" aria-hidden="true">&#58966;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ spacing.line.toFixed(1) }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="增大行距" @click="moreLineSpacing">
+              <em class="iconfont" aria-hidden="true">&#58976;</em>
+            </button>
           </div>
         </li>
         <li class="paragraph-spacing">
           <i>段距</i>
           <div class="resize">
-            <div class="resize">
-              <span class="less" @click="lessParagraphSpacing"
-                ><em class="iconfont">&#58966;</em></span
-              ><b></b>
-              <span class="lang">{{ spacing.paragraph.toFixed(1) }}</span
-              ><b></b>
-              <span class="more" @click="moreParagraphSpacing"
-                ><em class="iconfont">&#58976;</em></span
-              >
-            </div>
+            <button class="less" type="button" aria-label="缩小段距" @click="lessParagraphSpacing">
+              <em class="iconfont" aria-hidden="true">&#58966;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ spacing.paragraph.toFixed(1) }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="增大段距" @click="moreParagraphSpacing">
+              <em class="iconfont" aria-hidden="true">&#58976;</em>
+            </button>
           </div>
         </li>
         <li class="read-width" v-if="!store.miniInterface">
           <i>页面宽度</i>
           <div class="resize">
-            <span class="less" @click="lessReadWidth"
-              ><em class="iconfont">&#58965;</em></span
-            ><b></b> <span class="lang">{{ readWidth }}</span
-            ><b></b>
-            <span class="more" @click="moreReadWidth"
-              ><em class="iconfont">&#58975;</em></span
-            >
+            <button class="less" type="button" aria-label="缩小页面宽度" @click="lessReadWidth">
+              <em class="iconfont" aria-hidden="true">&#58965;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ readWidth }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="增大页面宽度" @click="moreReadWidth">
+              <em class="iconfont" aria-hidden="true">&#58975;</em>
+            </button>
           </div>
         </li>
         <li class="paragraph-spacing">
           <i>翻页速度</i>
           <div class="resize">
-            <div class="resize">
-              <span class="less" @click="lessJumpDuration">
-                <em class="iconfont">&#xe625;</em>
-              </span>
-              <b></b> <span class="lang">{{ jumpDuration }}</span
-              ><b></b>
-              <span class="more" @click="moreJumpDuration"
-                ><em class="iconfont">&#xe626;</em></span
-              >
-            </div>
+            <button class="less" type="button" aria-label="缩短翻页时间" @click="lessJumpDuration">
+              <em class="iconfont" aria-hidden="true">&#xe625;</em>
+            </button>
+            <b aria-hidden="true"></b>
+            <span class="lang">{{ jumpDuration }}</span>
+            <b aria-hidden="true"></b>
+            <button class="more" type="button" aria-label="延长翻页时间" @click="moreJumpDuration">
+              <em class="iconfont" aria-hidden="true">&#xe626;</em>
+            </button>
           </div>
         </li>
         <li class="infinite-loading">
@@ -226,7 +232,31 @@ const themeColors = [
 const popupTheme = computed(() => {
   return {
     background: settings.themes[theme.value].popup,
+    '--settings-visible-height': `${visibleViewportHeight.value}px`,
   }
+})
+const visibleViewportHeight = ref(
+  window.visualViewport?.height ?? window.innerHeight,
+)
+const updateVisibleViewportHeight = () => {
+  visibleViewportHeight.value =
+    window.visualViewport?.height ?? window.innerHeight
+}
+onMounted(() => {
+  updateVisibleViewportHeight()
+  window.addEventListener('resize', updateVisibleViewportHeight, {
+    passive: true,
+  })
+  window.visualViewport?.addEventListener('resize', updateVisibleViewportHeight, {
+    passive: true,
+  })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateVisibleViewportHeight)
+  window.visualViewport?.removeEventListener(
+    'resize',
+    updateVisibleViewportHeight,
+  )
 })
 const setTheme = (theme: number) => {
   store.config.theme = theme
@@ -367,6 +397,7 @@ const setInfiniteLoading = (loading: boolean) => {
 .settings-wrapper {
   user-select: none;
   margin: -13px;
+  font-family: Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
   /*   width: 478px;
   height: 350px; */
   text-align: left;
@@ -377,7 +408,6 @@ const setInfiniteLoading = (loading: boolean) => {
     font-size: 18px;
     line-height: 22px;
     margin-bottom: 28px;
-    font-family: FZZCYSK;
     font-weight: 400;
   }
 
@@ -395,14 +425,16 @@ const setInfiniteLoading = (loading: boolean) => {
 
         i {
           font:
-            12px / 16px PingFangSC-Regular,
-            '-apple-system',
-            Simsun;
+            12px / 16px Inter,
+            'Noto Sans SC',
+            'Microsoft YaHei',
+            system-ui,
+            sans-serif;
           display: inline-block;
           min-width: 48px;
           margin-right: 16px;
           vertical-align: middle;
-          color: #666;
+          color: var(--app-ink-muted);
         }
 
         .theme-item {
@@ -453,16 +485,13 @@ const setInfiniteLoading = (loading: boolean) => {
           text-align: center;
           vertical-align: middle;
           display: inline-block;
-          font:
-            14px / 34px PingFangSC-Regular,
-            HelveticaNeue-Light,
-            'Helvetica Neue Light',
-            'Microsoft YaHei',
-            sans-serif;
+          font-size: 14px;
+          font-family: inherit;
+          line-height: 34px;
         }
         .font-item-input {
           width: 168px;
-          color: #000000;
+          color: var(--app-ink);
         }
         .selected {
           color: #ed4259;
@@ -484,24 +513,44 @@ const setInfiniteLoading = (loading: boolean) => {
         margin-top: 28px;
 
         .resize {
-          display: inline-block;
+          display: grid;
+          grid-template-columns: minmax(44px, 1fr) 1px minmax(56px, 1.1fr) 1px minmax(44px, 1fr);
           width: 274px;
-          height: 34px;
+          height: 44px;
           vertical-align: middle;
           border-radius: 2px;
 
-          span {
-            width: 89px;
-            height: 34px;
-            line-height: 34px;
-            display: inline-block;
-            cursor: pointer;
-            text-align: center;
-            vertical-align: middle;
+          > button,
+          > .lang {
+            box-sizing: border-box;
+            min-width: 44px;
+            min-height: 44px;
+            margin: 0;
+            border: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
 
-            em {
-              font-style: normal;
-            }
+          > button {
+            color: inherit;
+            background: transparent;
+            font: inherit;
+            cursor: pointer;
+            appearance: none;
+          }
+
+          > button em {
+            font-style: normal;
+          }
+
+          > .lang {
+            color: var(--app-ink-soft);
+            font-weight: 400;
+            font-family: inherit;
+            text-align: center;
+            white-space: nowrap;
           }
 
           .less:hover,
@@ -510,15 +559,15 @@ const setInfiniteLoading = (loading: boolean) => {
           }
 
           .lang {
-            color: #a6a6a6;
+            color: var(--app-ink-soft);
             font-weight: 400;
-            font-family: FZZCYSK;
           }
 
           b {
-            display: inline-block;
+            display: block;
+            width: 1px;
             height: 20px;
-            vertical-align: middle;
+            background: var(--app-line);
           }
         }
       }
@@ -592,12 +641,31 @@ const setInfiniteLoading = (loading: boolean) => {
   .settings-wrapper {
     padding-left: 16px;
 
-    :deep(.resize) {
-      width: min(274px, calc(100vw - 64px)) !important;
+    :deep(.setting-list) {
+      max-height: calc(78vh - 50px);
+      max-height: min(
+        calc(78vh - 50px),
+        calc(var(--settings-visible-height, 100vh) - 220px)
+      );
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
     }
 
-    :deep(.resize > span) {
-      width: calc((100% - 2px) / 3) !important;
+    :deep(.resize) {
+      width: min(274px, calc(100vw - 64px)) !important;
+      display: grid !important;
+      grid-template-columns: minmax(44px, 1fr) 1px minmax(56px, 1.1fr) 1px minmax(44px, 1fr);
+      height: 44px;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    :deep(.resize > button),
+    :deep(.resize > .lang) {
+      width: auto !important;
+      min-width: 44px;
+      min-height: 44px;
     }
   }
 }

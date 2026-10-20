@@ -78,24 +78,6 @@
     </nav>
     <main class="chapter" ref="content" :style="chapterTheme">
       <div class="content">
-        <header class="reader-context">
-          <router-link class="reader-shelf-link" to="/" @click.stop>
-            <el-icon><Collection /></el-icon><span>书架</span>
-          </router-link>
-          <div class="reader-book-meta">
-            <strong>{{ store.readingBook.name }}</strong>
-            <span>{{ chapterIndex + 1 }} / {{ catalog.length || 1 }} 章</span>
-          </div>
-          <span class="reader-progress-value">{{ chapterProgress }}%</span>
-        </header>
-        <div
-          class="reading-progress"
-          role="progressbar"
-          aria-label="阅读进度"
-          :aria-valuenow="chapterProgress"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        ><span :style="{ transform: `scaleX(${chapterProgress / 100})` }"></span></div>
         <div class="top-bar" ref="top"></div>
         <div
           v-for="data in chapterData"
@@ -162,12 +144,6 @@ const chapterPos = computed({
 const chapterIndex = computed({
   get: () => store.readingBook.chapterIndex,
   set: value => (store.readingBook.chapterIndex = value),
-})
-const chapterProgress = computed(() => {
-  const total = catalog.value.length
-  return total > 0
-    ? Math.round((Math.min(chapterIndex.value + 1, total) / total) * 100)
-    : 0
 })
 const isSeachBook = computed({
   get: () => store.readingBook.isSeachBook,
@@ -599,106 +575,105 @@ onBeforeRouteLeave(async (to, from, next) => {
   top: 0;
 }
 
+@media screen and (max-width: 500px) {
+  :global(.el-popover.el-popper.pop-setting) {
+    position: fixed !important;
+    top: 52px !important;
+    left: 12px !important;
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+}
+
 :deep(.pop-cata) {
   margin-left: 10px;
 }
 
 .chapter-wrapper {
-  min-height: 100vh;
-  min-height: 100dvh;
-  position: relative;
-  overflow-x: hidden;
-  color: var(--app-ink);
+  padding: 0 4%;
 
-  .tool-bar,
-  .read-bar {
+  overflow-x: hidden;
+
+  :deep(.no-point) {
+    pointer-events: none;
+  }
+
+  .tool-bar {
     position: fixed;
+    top: 0;
     left: 50%;
     z-index: 100;
-    width: 54px;
-    border: 1px solid var(--app-line);
-    border-radius: 14px;
-    padding: 7px;
-    background: var(--app-panel-raised);
-    box-shadow: var(--app-shadow-soft);
 
     .tools {
       display: flex;
       flex-direction: column;
-      gap: 4px;
 
       .tool-icon {
-        width: 40px;
-        min-height: 44px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        border: 1px solid transparent;
-        border-radius: 9px;
-        padding: 4px 2px;
-        color: var(--app-ink-soft);
-        background: transparent;
-        font: inherit;
-        font-size: 10px;
+        font-size: 18px;
+        width: 58px;
+        height: 48px;
+        text-align: center;
+        padding-top: 12px;
         cursor: pointer;
-        transition:
-          color var(--app-duration-state) ease-out,
-          background-color var(--app-duration-state) ease-out,
-          border-color var(--app-duration-state) ease-out;
+        outline: none;
 
-        .el-icon {
-          font-size: 17px;
+        .iconfont {
+          font-family: iconfont;
+          width: 16px;
+          height: 16px;
+          font-size: 16px;
+          margin: 0 auto 6px;
         }
 
         .icon-text {
-          font-size: 10px;
+          font-size: 12px;
         }
-      }
-
-      .tool-icon:hover:not(:disabled) {
-        border-color: var(--app-line);
-        color: var(--app-accent-strong);
-        background: var(--app-accent-soft);
-      }
-
-      .tool-icon:disabled {
-        cursor: not-allowed;
-        opacity: 0.48;
       }
     }
   }
 
-  .tool-bar {
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
   .read-bar {
-    top: 50%;
+    position: fixed;
+    bottom: 0;
     right: 50%;
-    left: auto;
-    width: 54px;
-    transform: translateY(-50%);
+    z-index: 100;
 
-    .tool-icon {
-      min-height: 50px;
+    .tools {
+      display: flex;
+      flex-direction: column;
+
+      .tool-icon {
+        font-size: 18px;
+        width: 42px;
+        height: 31px;
+        padding-top: 12px;
+        text-align: center;
+        align-items: center;
+        cursor: pointer;
+        outline: none;
+        margin-top: -1px;
+
+        .iconfont {
+          font-family: iconfont;
+          width: 16px;
+          height: 16px;
+          font-size: 16px;
+          margin: 0 auto 6px;
+        }
+      }
     }
   }
 
   .chapter {
-    width: 670px;
-    min-height: calc(100vh - 48px);
-    min-height: calc(100dvh - 48px);
-    box-sizing: content-box;
-    margin: 24px auto;
-    border: 1px solid var(--app-line);
-    border-radius: 17px;
-    padding: 0 65px;
-    color: var(--app-ink);
-    box-shadow: var(--app-shadow);
+    font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light,
+      'Helvetica Neue Light', sans-serif;
     text-align: left;
+    padding: 0 65px;
+    min-height: 100vh;
+    width: 670px;
+    margin: 0 auto;
 
     .content {
       font-size: 18px;
@@ -706,70 +681,9 @@ onBeforeRouteLeave(async (to, from, next) => {
       font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light,
         'Helvetica Neue Light', sans-serif;
 
-      .reader-context {
-        min-height: 66px;
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 14px;
-        border-bottom: 1px solid var(--app-line);
-        color: var(--app-ink-muted);
-        font-size: 11px;
-      }
-
-      .reader-shelf-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--app-ink-muted);
-        font-size: 11px;
-        text-decoration: none;
-      }
-
-      .reader-shelf-link:hover {
-        color: var(--app-accent-strong);
-      }
-
-      .reader-book-meta {
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .reader-book-meta strong {
-        overflow: hidden;
-        color: var(--app-ink-soft);
-        font-size: 12px;
-        font-weight: 680;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .reader-book-meta span,
-      .reader-progress-value {
-        flex: none;
-        color: var(--app-ink-muted);
-        font-size: 10px;
-      }
-
-      .reading-progress {
-        height: 2px;
-        overflow: hidden;
-        background: var(--app-progress-track);
-      }
-
-      .reading-progress span {
-        height: 100%;
-        display: block;
-        background: var(--app-accent);
-        transform-origin: left center;
-        transition: transform var(--app-duration-state) ease-out;
-      }
-
       .bottom-bar,
       .top-bar {
-        height: 48px;
+        height: 64px;
       }
     }
   }
@@ -777,113 +691,112 @@ onBeforeRouteLeave(async (to, from, next) => {
 
 .day {
   :deep(.popup) {
-    box-shadow: var(--app-shadow);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.12),
+      0 0 6px rgba(0, 0, 0, 0.04);
+  }
+
+  :deep(.tool-icon) {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    margin-top: -1px;
+    color: #000;
+
+    .icon-text {
+      color: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  :deep(.chapter) {
+    border: 1px solid #d8d8d8;
+    color: #262626;
   }
 }
 
 .night {
   :deep(.popup) {
-    box-shadow: var(--app-shadow);
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.48),
+      0 0 6px rgba(0, 0, 0, 0.16);
+  }
+
+  :deep(.tool-icon) {
+    border: 1px solid #444;
+    margin-top: -1px;
+    color: #666;
+
+    .icon-text {
+      color: #666;
+    }
+  }
+
+  :deep(.chapter) {
+    border: 1px solid #444;
+    color: #666;
+  }
+
+  :deep(.popper__arrow) {
+    background: #666;
   }
 }
 
-@media (max-width: 776px) {
-  :global(.pop-setting) {
-    position: fixed !important;
-    top: 64px !important;
-    right: auto !important;
-    bottom: auto !important;
-    left: 50% !important;
-    width: calc(100vw - 24px) !important;
-    max-width: 480px;
-    box-sizing: border-box;
-    margin: 0 !important;
-    transform: translateX(-50%) !important;
-  }
-
+@media screen and (max-width: 776px) {
   .chapter-wrapper {
     padding: 0;
 
     .tool-bar {
-      top: 8px;
-      left: 50%;
-      width: calc(100vw - 16px);
-      transform: translateX(-50%);
+      left: 0;
+      width: 100vw;
       margin-left: 0 !important;
 
       .tools {
         flex-direction: row;
-        justify-content: space-around;
+        justify-content: space-between;
 
         .tool-icon {
-          width: min(18vw, 54px);
-          min-height: 40px;
-          border: 0;
+          border: none;
         }
       }
     }
 
     .read-bar {
-      top: auto;
-      right: 50%;
-      bottom: 8px;
-      left: auto;
-      width: calc(100vw - 16px);
-      transform: translateX(50%);
+      right: 0;
+      width: 100vw;
       margin-right: 0 !important;
 
       .tools {
         flex-direction: row;
-        justify-content: space-around;
+        justify-content: space-between;
+        padding: 0 15px;
 
         .tool-icon {
-          width: 48%;
-          min-height: 42px;
-          flex-direction: row;
-          gap: 8px;
-          border: 0;
-          font-size: 12px;
+          border: none;
+          width: auto;
+
+          .iconfont {
+            display: inline-block;
+          }
         }
       }
     }
 
     .chapter {
       width: 100vw !important;
-      min-height: 100dvh;
+      padding: 0 20px;
       box-sizing: border-box;
-      margin: 0 auto;
-      border: 0;
-      border-radius: 0;
-      padding: 0 20px 70px;
-
-      .content {
-        .reader-context {
-          min-height: 58px;
-          gap: 8px;
-        }
-
-        .reader-shelf-link span {
-          display: none;
-        }
-
-        .reader-book-meta {
-          gap: 6px;
-        }
-
-        .reader-book-meta strong {
-          font-size: 11px;
-        }
-
-        .reader-book-meta span,
-        .reader-progress-value {
-          font-size: 9px;
-        }
-
-        .top-bar {
-          height: 26px;
-        }
-      }
     }
   }
 }
+
+.chapter-wrapper{min-height:100vh;min-height:100dvh;position:relative;overflow-x:hidden;color:var(--app-ink)}
+.chapter-wrapper .tool-icon{border-radius:6px;background:var(--app-panel-raised);color:var(--app-ink-soft);font:inherit}
+.chapter-wrapper .tool-icon .el-icon{font-size:16px}
+.chapter-wrapper .tool-icon:hover:not(:disabled){border-color:var(--app-accent-line);color:var(--app-accent-strong);background:var(--app-accent-soft)}
+.chapter-wrapper .tool-icon:disabled{cursor:not-allowed;opacity:.48}
+.chapter-wrapper .chapter{color:var(--app-ink);font-family:'Microsoft YaHei',PingFangSC-Regular,HelveticaNeue-Light,'Helvetica Neue Light',sans-serif}
+.chapter-wrapper .chapter .content{color:inherit;font-size:18px;line-height:1.8}
+.day :deep(.tool-icon),.night :deep(.tool-icon){border-color:var(--app-line);color:var(--app-ink-soft)}
+.day :deep(.tool-icon .icon-text),.night :deep(.tool-icon .icon-text){color:var(--app-ink-muted)}
+.day :deep(.chapter),.night :deep(.chapter){border-color:var(--app-line);color:var(--app-ink)}
+.day :deep(.popup),.night :deep(.popup){box-shadow:var(--app-shadow-soft)}
+@media(max-width:776px){.chapter-wrapper .tool-icon{background:transparent}.chapter-wrapper .chapter{padding-bottom:70px}.chapter-wrapper .chapter .content .top-bar{height:24px}.chapter-wrapper .chapter .content .bottom-bar{height:70px}}
 </style>

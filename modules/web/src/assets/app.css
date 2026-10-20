@@ -6,7 +6,7 @@
   --app-panel-muted: #eef4f3;
   --app-ink: #172729;
   --app-ink-soft: #42585a;
-  --app-ink-muted: #667b7c;
+  --app-ink-muted: #526a6b;
   --app-line: rgba(23, 63, 66, 0.14);
   --app-accent: #007f82;
   --app-accent-strong: #006b70;
@@ -39,6 +39,7 @@
   --el-text-color-primary: var(--app-ink);
   --el-text-color-regular: var(--app-ink-soft);
   --el-text-color-secondary: var(--app-ink-muted);
+  --el-text-color-placeholder: var(--app-ink-muted);
   --el-border-color: var(--app-line);
   --el-border-color-light: var(--app-line);
   --el-border-color-lighter: var(--app-line);
@@ -87,6 +88,7 @@ html.dark {
   --el-text-color-primary: var(--app-ink);
   --el-text-color-regular: var(--app-ink-soft);
   --el-text-color-secondary: var(--app-ink-muted);
+  --el-text-color-placeholder: var(--app-ink-muted);
   --el-border-color: var(--app-line);
   --el-border-color-light: var(--app-line);
   --el-border-color-lighter: var(--app-line);
@@ -145,6 +147,14 @@ a:focus-visible,
 .el-input__wrapper,
 .el-select__wrapper {
   border-radius: 12px;
+}
+
+input::placeholder,
+textarea::placeholder,
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--app-ink-muted);
+  opacity: 1;
 }
 
 .el-dialog {

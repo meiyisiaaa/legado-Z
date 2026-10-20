@@ -157,12 +157,6 @@ img{border: 0;vertical-align: middle}
     text-align: left;
     padding-left: 15px;
 }
-.pc .last_row{
-    color: #999;
-    border-bottom: 0;
-    column-span: 4;
-    padding: 12px;
-}
 .pc .op_right{
     height: 16px;
     width: 16px;
@@ -522,10 +516,6 @@ body{
     color:var(--transfer-text);
 }
 
-.pc .last_row{
-    color:var(--transfer-muted);
-}
-
 .pc .s_table.is-empty{
     display:grid;
     min-height:220px;
@@ -698,13 +688,19 @@ body{
         scroll-behavior:auto!important;
     }
 }
-
-
-
-
-
-
-
-
-
-
+/* Keep the original transfer table as the main work area. */
+.pc .main_wrap{width:min(900px,calc(100vw - 32px));margin:12px auto 30px;overflow:visible;border:0;border-radius:0;background:transparent;box-shadow:none}
+.pc .top_cont{border:1px solid var(--transfer-line);border-bottom:0;border-radius:6px 6px 0 0;padding:18px 18px 16px;background:var(--transfer-surface)}
+.pc .top_cont .select_btn{width:150px;height:44px;border-radius:6px;box-shadow:none}
+.pc .select_btn input{height:44px}
+.pc .top_cont .select_btn:hover{transform:none;box-shadow:none}
+.pc .s_table{margin:0;border-radius:0 0 6px 6px;box-shadow:none}
+.pc .s_table.is-empty{min-height:190px;border-radius:0 0 6px 6px}
+.pc .empty-queue{width:calc(100% - 32px);min-height:150px;margin:16px;border-radius:5px}
+.pc .s_table table{border-radius:0}
+.pc .s_table tbody tr[data-js=item]{background:var(--transfer-surface)}
+.pc .s_table tbody tr[data-js=item]:hover{background:var(--transfer-surface-alt)}
+.h5 .s_title{box-shadow:none}
+.h5 .bottom_btn_wrap{border-radius:5px;box-shadow:none}
+@media(max-width:720px){.pc .main_wrap{width:calc(100vw - 24px);margin:10px auto 24px}.pc .top_cont{border-radius:6px 6px 0 0;padding:16px}.pc .top_cont .select_btn{height:44px}.pc .select_btn input{height:44px}.pc .s_table{border-radius:0 0 6px 6px}.pc .s_table.is-empty{min-height:170px}}
+@media(prefers-reduced-motion:reduce){.pc .top_cont .select_btn,.pc .s_table tbody tr{transition:none}}

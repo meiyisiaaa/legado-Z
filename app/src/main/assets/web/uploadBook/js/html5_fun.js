@@ -18,13 +18,13 @@
 	
 	//不支持拖拽上传，或者 不支持FormData ，显示WiFi表示
 	if(!isSupportFileUpload){
-		$("#drag tbody tr:last-child td span").html('您的浏览器不支持拖拽上传');
+		var emptyMessage = document.querySelector("#emptyQueue span");
+		if(emptyMessage) emptyMessage.textContent = "此浏览器不支持拖拽上传，请使用选择文件";
 		return;
-	//更换样式
 	}else{
-		$("#drag tbody tr:last-child td span").html('请将图书或字体拖拽至此即可上传');
+		var emptyMessage = document.querySelector("#emptyQueue span");
+		if(emptyMessage) emptyMessage.textContent = "拖放图书或字体到此处，或点上方“选择文件”开始上传";
 	}
-
 	addEvent();
 	
 	/**

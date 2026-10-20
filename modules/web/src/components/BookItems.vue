@@ -304,4 +304,17 @@ const handleCoverError = (evt: Event) => {
     font-size: 10px;
   }
 }
+.books-wrapper{width:100%;min-width:0;overflow:visible}
+.book-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,350px),1fr));justify-content:start;gap:4px}
+.book-card{min-height:142px;gap:14px;border-color:transparent;border-radius:6px;padding:12px 10px;background:transparent;box-shadow:none}
+.book-card:hover,.book-card:focus-visible{border-color:var(--app-line);background:var(--app-panel);box-shadow:none}
+.cover-frame{width:84px;height:112px;border-radius:3px}
+.cover-placeholder{padding:0 2px;color:var(--app-ink-muted);font-size:10px;line-height:1.2;white-space:nowrap}
+.book-info{min-height:112px;gap:5px}
+.book-name{font-size:15px;font-weight:680;line-height:1.42}
+.book-byline{font-size:11px}
+.intro,.dur-chapter,.last-chapter{font-size:11px;line-height:1.45}
+.card-arrow{display:none}
+@media(max-width:750px){.book-grid{grid-template-columns:minmax(0,1fr);gap:0}.book-card{min-height:132px;border-radius:0;border-bottom-color:var(--app-line);padding:10px 4px}.book-card:first-child{border-top:1px solid var(--app-line)}.cover-frame{width:72px;height:104px}.book-info{min-height:104px}.book-name{font-size:14px}}
+@media(max-width:360px){.book-card{gap:9px}.cover-frame{width:64px;height:96px}.book-info{min-height:96px}.book-byline,.update-info{gap:3px;font-size:10px}}
 </style>

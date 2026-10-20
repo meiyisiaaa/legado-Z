@@ -83,41 +83,22 @@ function checkFile(file) {
  */
 function fileQueuedPC(file, type)
 {
-	var size=0 ,fid=file.id, name="";
+	if (file == undefined) return;
 	type = type || 0;
-
-	if(file != undefined )
-	{
-		//计算文件大小 单位MB
-		size = countFileSize(file.size);
-		name = substr_string(file.name);
-
-		//如果没有找到这个节点，先创建
-		if ($('#drag tbody tr:last-child').prev().attr('data-status') != 'init' ){
-			var HTML =  '<tr data-js="item" data-status="init">' +
-				'<td><span></span></td>' +
-				'<td><span></span></td>' +
-				'<td><span></span></td>' +
-				'<td><span><i></i></span></td>' +
-				'</tr>';
-
-			$("#drag tbody tr:last-child").before(HTML);
-		}
-
-		var i = $('#drag [data-status=init]').eq(0).index('#drag [data-js=item]');
-
-		$('#drag [data-js=item]').eq(i).children().eq(0).find('span').html(i+1);
-		$('#drag [data-js=item]').eq(i).children().eq(1).find('span').html(name);
-		$('#drag [data-js=item]').eq(i).children().eq(2).find('span').html(size);
-		$('#drag [data-js=item]').eq(i).children().eq(3).find('span i').addClass('red').html('0%');
-		$('#drag [data-js=item]').eq(i).attr('data-status', 'ed');
-		syncQueueState();
-
-		fileMap[file.name] = $('#drag [data-js=item]').eq(i).children().eq(3).find('span i');
-
-	}
+	var size = countFileSize(file.size);
+	var name = substr_string(file.name);
+	var row = $('<tr data-js="item" data-status="ed">' +
+		'<td><span></span></td><td><span></span></td>' +
+		'<td><span></span></td><td><span><i></i></span></td></tr>');
+	row.appendTo('#drag tbody');
+	var index = $('#drag [data-js=item]').length - 1;
+	row.children().eq(0).find('span').text(index + 1);
+	row.children().eq(1).find('span').text(name);
+	row.children().eq(2).find('span').text(size);
+	row.children().eq(3).find('span i').addClass('red').text('0%');
+	fileMap[file.name] = row.children().eq(3).find('span i');
+	syncQueueState();
 }
-
 //上传时返回的状态
 function uploadProgress(file, bytesLoaded, bytesTotal)
 {

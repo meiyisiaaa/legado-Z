@@ -1,5 +1,5 @@
 <template>
-  <el-tabs v-model="current_tab">
+  <el-tabs id="source-tools" v-model="current_tab">
     <el-tab-pane
       v-for="(tab, index) in tabData"
       :key="tab.name"
@@ -28,10 +28,10 @@ const current_tab = computed({
 })
 
 const tabData = ref([
-  { name: 'editTab', label: '源编辑', icon: EditPen },
-  { name: 'editDebug', label: '调试', icon: VideoPlay },
+  { name: 'editTab', label: '编辑源', icon: EditPen },
+  { name: 'editDebug', label: '调试源', icon: VideoPlay },
   { name: 'editList', label: '源列表', icon: List },
-  { name: 'editHelp', label: '帮助', icon: QuestionFilled },
+  { name: 'editHelp', label: '帮助信息', icon: QuestionFilled },
 ])
 </script>
 
