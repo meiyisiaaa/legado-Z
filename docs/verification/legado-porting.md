@@ -4,7 +4,7 @@
 
 用户已明确将真实模型和语音 Provider 验收改为“先预留接口”。本轮未调用真实 Provider；选区 AI 问答使用本地合成响应验证应用侧请求、取消和结果归属，不代表真实模型服务验收。角色 TTS 的代码、合成测试和面板已交付，但实际语音 Provider、音质和播放验收仍暂缓。
 
-设备测试使用本任务创建的 API 26 x86_64 和 API 36 模拟器。
+设备测试使用本任务创建的 API 26 x86_64 和 API 36 模拟器。本轮 Web 与混淆运行补验使用 API 36；API 26 复用前轮仍适用的回归证据，没有将其计为本轮混淆运行验收。
 
 ## 阶段交付状态
 
@@ -13,8 +13,8 @@
 | 0 | 最低 API 与安装兼容 | API 26 模拟器覆盖升级及本地 TXT 阅读通过；89→90 迁移夹具验证旧书源、阅读进度与配置保留。已提交 `4230b03f7`。 |
 | 1 | Cronet 认证隔离、阅读页所有权、WebView 借用隔离、大文本编辑与筛选排序 | 开发及 API 26/36 两设备定向回归完成；基础修复已提交 `7b1db9168`，原生大文本生命周期与所有权修复已提交 `c9eaffdd3`。安全大文本路径采用 `AppCompatEditText`，Sora 小文本编辑路径保持不变；池租约隔离保留。API 26 新 APK 22/22 通过，API 36 原生交互与所有权补验通过。 |
 | 2 | 调试运行所有权、草稿试跑、预览与 AI 诊断、选区多轮问答 | 调试隔离及 API 26 会话回归通过，包括 20 KB 合成回答；已提交 `a2f7ae275`。 |
-| 3 | JS 协议、89→90 迁移、Android/Web/API/备份往返、受限配置预览 | API 26 传统规则、JS 书源完整 WebBook 搜索/详情/目录/正文链路，以及 `java.md5Encode` 两项回归通过；已提交 `d86b2c742`。 |
-| 4 | 六类 MCP 工具、鉴权、调试会话、前台服务与令牌备份排除 | API 26 官方 Kotlin MCP 客户端通过真实本机 HTTP 验收；API 36 系统 `dataSync` 超时已有实测证据，最终生产规则 R8 APK 的官方 Node MCP SDK 1.32.1 检查 19/19 通过，通知 Stop 通过；已提交 `6785cf547`。 |
+| 3 | JS 协议、89→90 迁移、Android/Web/API/备份往返、受限配置预览 | API 26 传统规则、JS 书源完整 WebBook 搜索/详情/目录/正文链路，以及 `java.md5Encode` 两项回归通过；已提交 `d86b2c742`。本轮 API 36 生产 R8 包完成 Web 实际联动与原生备份恢复补验，JS 安全/协议/导入仪器回归 12/12 通过，详见下文。 |
+| 4 | 六类 MCP 工具、鉴权、调试会话、前台服务与令牌备份排除 | API 26 官方 Kotlin MCP 客户端通过真实本机 HTTP 验收；API 36 系统 `dataSync` 超时已有实测证据，前轮生产规则 R8 APK 的官方 Node MCP SDK 1.32.1 检查 19/19 通过，通知 Stop 通过；已提交 `6785cf547`。 |
 | 5 | 手选章节分镜、角色与音色配置、系统/HTTP TTS 路由、可重建缓存 | 角色 TTS 代码、合成测试、9 项角色单测与 API 26 阅读器面板烟测通过，阶段已提交 `d55415c6c`。用户已指定真实模型/语音 Provider 先预留接口，本阶段未调用真实 Provider；实际语音、音质与跨引擎播放验收暂缓。 |
 
 ## 关键验收边界
@@ -22,16 +22,32 @@
 - 阶段 3 的书源测试使用本地合成 HTTP 服务，不访问外部书源；阶段 4 通过实际 Android MCP 服务和官方客户端走本机 HTTP，不以工具注册假对象代替服务链路。
 - API 26 面板截图保存在 `build/porting-validation/panels-api26/`；截图用于辅助定位，交互通过仪器断言验收。API 26 传统规则与 JS 管线记录见 `build/porting-validation/instrument-api26-final.log`，面板及拖动批次记录见 `build/porting-validation/instrument-api26-panels-drag.log`。
 - API 36 实际前台服务超时验收证据：将 `data_sync_fgs_timeout_duration` 临时设为 3 秒，按 HOME 后 5.25 秒由系统超时回调结束服务；服务状态停止、监听器与系统 `ServiceRecord` 均消失，未重启，测试后恢复 `device_config`。MCP 代码未在后续编辑器提交中变化，因此该旧系统超时证据仍适用，但未在最终 APK 上重跑。最终 APK 的通知栏 Stop 已点击（action 0）；1.22 秒后端口关闭、Service 消失且未重启，见 `build/porting-validation/mcp-notification-final-api36.json`。旧超时记录为 `build/porting-validation/mcp-system-api36.json`。
-- 之前生产原样 R8 APK 的 SHA-256 为 `d063c4b15edab0da739bcd4c83004d13a96c9cf62a1c826183416cf1a1543822`，官方 Node MCP SDK 对该旧 APK 的 19 项外部检查通过，见 `build/porting-validation/mcp-external-api36-before-editor-fix.log`。最终生产规则 R8 APK 对应代码提交 `c9eaffdd3`，SHA-256 为 `6b7f3b4abf2a759f87ac66e169b53fa7787591c3bff65be361c97e3b5c8d7fd4`，APK 路径为 `app/build/outputs/apk/app/release/legado_app_3.26.101919.apk`，最终产物元数据见 `build/porting-validation/final-artifact.json`。临时初始化只固定验证 `versionName` 为 `3.26.101919` 并用 debug 证书签名，没有修改生产混淆规则或正式签名配置。官方 `@modelcontextprotocol/sdk` 1.32.1 对最终 APK 的 19/19 项检查通过，见 `build/porting-validation/mcp-external-api36.log`，覆盖六工具、Host/Origin 鉴权、JSON 保存冲突与覆盖保留状态、JS 原文保存/导出、check、草稿 JS 调试与 `java.md5Encode`、草稿不落库、BUSY 释放和按自身 URL 删除清理。R8 仪器 runner 因共享 Kotlin 类被裁剪无法启动；轮次 18 仅为测试 APK 显式打包已有 Trace 依赖，生产 APK 哈希不变，runner 仍无法启动，因此完整回归使用 debug runner。
+- 之前生产原样 R8 APK 的 SHA-256 为 `d063c4b15edab0da739bcd4c83004d13a96c9cf62a1c826183416cf1a1543822`，官方 Node MCP SDK 对该旧 APK 的 19 项外部检查通过，见 `build/porting-validation/mcp-external-api36-before-editor-fix.log`。上一轮阶段验收使用的生产规则 R8 APK 对应代码提交 `c9eaffdd3`，SHA-256 为 `6b7f3b4abf2a759f87ac66e169b53fa7787591c3bff65be361c97e3b5c8d7fd4`，APK 路径为 `app/build/outputs/apk/app/release/legado_app_3.26.101919.apk`，该轮产物元数据见 `build/porting-validation/final-artifact.json`。临时初始化只固定验证 `versionName` 为 `3.26.101919` 并用 debug 证书签名，没有修改生产混淆规则或正式签名配置。官方 `@modelcontextprotocol/sdk` 1.32.1 对该轮 APK 的 19/19 项检查通过，见 `build/porting-validation/mcp-external-api36.log`，覆盖六工具、Host/Origin 鉴权、JSON 保存冲突与覆盖保留状态、JS 原文保存/导出、check、草稿 JS 调试与 `java.md5Encode`、草稿不落库、BUSY 释放和按自身 URL 删除清理。R8 仪器 runner 因共享 Kotlin 类被裁剪无法启动；轮次 18 仅为测试 APK 显式打包已有 Trace 依赖，生产 APK 哈希不变，runner 仍无法启动，因此完整回归使用 debug runner。
 - 迁移前数据库副本保存在 `build/porting-validation/baseline89/legado.db`；它来自空数据测试安装，不是用户真实数据备份。旧记录保留由带书源、阅读进度与配置的迁移夹具验证。Gradle 轮次仅保留有界问题/结果摘要于 `build/porting-validation/`，不在报告中复制原始构建日志。
-- 清理于 2026-10-20 完成：终止已核实属于本任务的旧 QEMU 实例后，原先被占用的目录已删除；另外两份模拟器 `pstore.bin` 的只读属性已清除，随后普通 `Remove-Item` 完成删除，未使用 `-Force` 或更改 ACL。已确认项目 `tmp/`、两份测试 AVD 注册和该 QEMU 进程均不存在，ADB 转发为空；构建 APK 与验收证据保留。Gradle wrapper 此前已 standalone finish 并清除其管理日志。最终状态见 [cleanup-final.json](../../build/porting-validation/cleanup-final.json)。上轮 `rejected: blocked by policy` 与旧文件占用错误属于历史记录，分别保存在 [cleanup-command.txt](../../build/porting-validation/cleanup-command.txt) 和 [cleanup.json](../../build/porting-validation/cleanup.json)，不再构成当前阻塞。本次只做清理和文档更新，未重新执行构建、设备或 Provider 验收。
+- 上轮清理于 2026-10-20 完成：终止已核实属于本任务的旧 QEMU 实例后，原先被占用的目录已删除；另外两份模拟器 `pstore.bin` 的只读属性已清除，随后普通 `Remove-Item` 完成删除，未使用 `-Force` 或更改 ACL。当时已确认项目 `tmp/`、两份测试 AVD 注册和该 QEMU 进程均不存在，ADB 转发为空；构建 APK 与验收证据保留。Gradle wrapper 已 standalone finish 并清除其管理日志。该轮状态见 [cleanup-final.json](../../build/porting-validation/cleanup-final.json)。旧 `rejected: blocked by policy` 与文件占用错误属于历史记录，分别保存在 [cleanup-command.txt](../../build/porting-validation/cleanup-command.txt) 和 [cleanup.json](../../build/porting-validation/cleanup.json)，不再构成当前阻塞。该轮仅做清理和文档更新；后续 Web 与混淆补验见下文。
 - API 36 首轮仪器测试 45 项中 41 项通过、4 项失败，涉及迁移夹具未注册迁移列表、NativePanel Espresso root 焦点，以及 `CodeEditSafeEditor` 两项本地 HTML 请求 403。后续复测确认迁移、NativePanel 和 adapter 通过；这些结果不代表安全大文本通过。
 - 安全大文本正式验收：API 26 新 APK 仪器回归 22/22 通过，用时 21.36 秒，日志见 `build/porting-validation/instrument-api26-native-final.log`；API 36 补跑 2/2 通过，用时 38.052 秒，见 `build/porting-validation/instrument-api36-native-final-rerun.log`。API 26 覆盖 Migration 2、adapter 1、SafeEditor 3、CodeTransfer 12、Backstage 3、NativePanel 1 项；同步输入登记和迟到输出锁保护的 4 个所有权用例也通过。SafeEditor 用例覆盖 380034 UTF-8 混合 CJK/emoji 长单行、真实键盘输入 `x`、`sendText` 替换、立即重建、`RESULT_OK` 保存与文件交接、只读及返回后继续/丢弃。API 36 首轮原生 17 项中 16 项通过；唯一失败是测试用 `typeText` 在输入前再次点击而改变预设光标，改为 `typeTextIntoFocusedView` 后补测通过。API 36 补跑覆盖真实键盘输入、立即重建与保存文件交接，以及取消 scope 后 `initData`/`Store.clear` 的输入清理；只读、返回丢弃、11 个 CodeTransfer、3 个 Backstage 也已通过。由此，原生三项交互和四个新增所有权用例在 API 26/36 均有实际通过证据。两设备的 `safe-editor.png` 已实际查看确认正常显示，分别位于 `build/porting-validation/panels-api26/safe-editor.png` 和 `build/porting-validation/panels-api36/safe-editor.png`。旧 WebView/JavaScript 大文本路径曾出现长时间约 70% 加载、renderer CPU 100% 及首次 JavaScript evaluation 超时；关闭软折行的探索还触发过 `ThreadPoolForeg` native 栈溢出（512 frames），CSS 试验已回退。该线程栈和旧路径现象未确认精确根因；最终大文本输入改走原生 `AppCompatEditText`，没有 JS 桥、HTML 脚本或临时诊断探针残留。
 - 阶段 5 的 TTS 日志已避免记录原文，动态主题对比色和旁白改名保留音色绑定均已修正，角色单测通过。实际语音 Provider、音质与跨引擎播放未验收，按用户要求暂缓。
 - API 26 保留仪器日志是多轮定向回归且相互重叠，不将不同轮次的测试数累加为全量通过数；最终报告按阶段和实际通过的用例描述。
-- Web 编辑器在 390px 窄屏下仍有三栏布局裁切限制，本轮未重做布局。浏览器静态检查没有 App 后端，未把 Web 导入接口往返计为端到端通过。
+- Web 编辑器窄屏裁切已修复。首轮 Vite/Playwright 检查覆盖书源、订阅源 JSON 单对象/数组及无规则命名空间的书源；320 / 390 / 768 / 1280px 无页面横向溢出，320 / 390px 快捷键对话框完整可用。这组静态检查没有 App 后端，记录为 `build/porting-validation/web-followup/frontend-checks.json`；真实联动证据单独记录。
 - TTS 的真实音色、语音质量及跨引擎播放进度需要 Provider 配置后验收。合成响应、单测和面板烟测不构成这些验收的替代证据。
 - 未 push、创建 PR、正式签名发布或部署。
+
+## Web 与混淆运行补验（2026-10-20）
+
+补验使用本地合成书源服务、实际 Android HTTP/WebSocket 与 Room，不调用真实模型或语音 Provider。release 验证包仅临时改用 debug 证书签名，保持生产 R8 规则及非 debuggable 配置，未为仪器 runner 增加生产保留规则。
+
+- 首个补验 R8 APK SHA-256 为 `596b83e9b91476ad4cd2787e7af001205a8c3010d894c8ce1a500c515d78be87`，元数据见 `build/porting-validation/web-followup/release-artifact-before-timeout-fix.json`。内嵌的 15 份 Web 文件与该次 dist 逐字节一致。实际 Web 页面完成 JS 安全预览不落库、390px 编辑保存、JSON/原始 JS 精确导出与重新导入、传统规则及 JS 四函数调试、搜索入书架与正文读取，9 项通过，见 `web-live-before-timeout-fix.json`、`legacy-debug.txt` 和 `js-debug.txt`。
+- 该包的原生运行补验包括：486,899 UTF-8 字节脚本经安全编辑器键入、回传、保存后逐字节一致；阅读器翻页并重开保持 chapter 0 / position 478；角色改名保留稳定 ID、别名及 HTTP 绑定枚举。绑定使用不存在的本地测试 ID，仅验证序列化与配置界面，未启动声音或模型请求。证据为同目录 `r8-native-large-result.json`、`r8-native-progress-reopened.json`、`r8-role-renamed.json` 及对应截图。
+- 原生 UI 创建备份 ZIP，核对书源脚本、分组、书架角色 JSON 与进度后，实际删除测试 JS 源并重置角色和进度，再由原生 UI 恢复 ZIP；HTTP 读回与备份前一致。见同目录 `r8-backup-archive-check.json`、`r8-backup-roundtrip.json` 和 `r8-backup.zip`。
+- 首轮联动发现两项缺陷：导入另一份 JSON 后旧选择/筛选残留，导出得到空数组；无限循环脚本虽于约 10.1 秒终止，HTTP 却返回纯文本超时，Web 无法显示具体错误。修复分别清除导入成功后的选择/筛选，并只把解析器自身超时转换为标准解析错误；外部取消继续传播。原始复现见同目录 `stale-selection-before.json` 和 `timeout-probe-before.json`。
+- 最终 R8 验证 APK 为 `app/build/outputs/apk/app/release/legado_app_3.26.102009.apk`，SHA-256 为 `d3d48469f21b145396d39642f48d0f7589cdebb51d442d4ec98ed778a0e08401`。最低 API 26、目标 API 36、非 debuggable，内嵌 15 份 Web 资源与最终 dist 逐字节一致，见同目录 `release-artifact.json`。未改 AGP、Kotlin、Java、Rhino、正式签名配置或 R8 保留规则。
+- 最终包的 Web 实际联动 11/11 通过，未捕获页面运行错误，见同目录 `web-live-final.json`。覆盖 320 / 390 / 768 / 1280px、390px 明暗主题与减少动态效果设置、JS 预览不落库、缺省规则对象的表单、编辑入库、原始 JS/JSON 精确导出及重新导入推送、传统规则与 JS 四阶段 WebSocket 调试、错误 JSON 保留当前列表、书籍搜索入库与正文。旧选择/筛选清理及超时错误显示均在该包重跑通过；无限循环约 10 秒终止后正常脚本仍可解析。最终日志为 `js-final-debug.txt`、`legacy-final-debug.txt`，页面截图为 `final-*.png`。
+- 同一 API 36 模拟器的 Android Chrome 133.0.6943.137 实际加载最终 APK 网页，CSS 宽度与文档宽度均为 360px。真实点按软键盘 `k`、硬件返回关闭键盘、点击保存后，Room 分组读回一致；原生可访问性边界确认输入框 `[0,432][710,496]` 位于键盘上方的 Web 视口 `[0,244][720,682]`。见同目录 `android-chrome-keyboard.json` 和已查看的 `android-chrome-keyboard.png`。该结果限于本机模拟器 Chrome，不代表所有实体设备或浏览器。
+- 最新 debug APK 的定向仪器回归 12/12 通过，用时 12.715 秒：`JsSourceConfigSecurityTest` 5 项、`JsSourceConfigProtocolTest` 6 项、`BookSourceControllerImportTest` 1 项。新增用例验证解析器自身超时后父任务仍有效、下一次解析成功，以及较短外层超时仍为 `CancellationException`。记录见同目录 `instrument-js-api36-final.log`；这些仪器结果来自 debug runner，不能当成 release runner 通过。
+- 原生大文本编辑和备份恢复代码在两次补验构建间未改。最终 R8 包又实际打开阅读器，显示 `3/17 8.8%`，进度仍为 478，并打开角色面板确认改名后的角色、别名和 HTTP 绑定仍在，见同目录 `r8-final-native-smoke.json` 和 `r8-final-native-roles.png`。正文 fixture 故意返回包含 HTML 标记的字符串，以上检查不主张原生 HTML 语义渲染验收。
+- 供本地安装测试的 debug 包保存在 `build/apk/Legado-Z-3.26.102009debug-Web-fix.apk`，46,243,828 字节，SHA-256 为 `4ab96ee69c4300455d08e2963f75583dfe1cec9f5e18c2ebbc7434dc3f091100`。包名 `io.legado.app.debug`，证书与上一份 debug 包一致；release 验证包同样使用 debug 证书，均不是正式签名发布。
+- 补验结束后已停止本轮合成服务、Chrome 测试连接及 `Legado_Z_Web_API36` 模拟器，删除任务 `tmp/` 和该 AVD 注册，ADB 转发为空。普通删除曾被本轮 AVD 的只读 `pstore.bin` 阻止；核对绝对路径及无重解析点后，仅清除该文件只读属性再普通删除，未用 `-Force` 或改 ACL。Gradle workflow 已 standalone finish，其管理日志目录已不存在。APK、截图、断言、测试 fixture 和有界摘要保留；状态见同目录 `cleanup-final.json`。
 
 ## Gradle 验证轮次
 
@@ -71,3 +87,5 @@
 | 30 | 原生大文本安全路径、同步重建和迟到输出所有权修复后，App 与完整定向仪器 APK 能否构建？ | 通过；242.547 秒，App 与完整定向仪器 APK 构建成功。当轮 API 26/36 运行验收尚待进行；输入 token 在 IO 前取消的清理和真实键盘光标夹具后续见轮次 31。 |
 | 31 | 输入 token 在 IO 前取消的清理修复及真实键盘光标夹具修正后，定向验收 APK 能否构建？ | 通过；168.953 秒，定向验收 APK 构建成功。后续 API 26 新 APK 回归 22/22 通过，API 36 原生交互及所有权补验通过，详情见关键验收边界。 |
 | 32 | API26/36 大文本与所有权回归通过后，最终生产代码的 R8 验证 APK 能否构建？ | 通过；564.562 秒，123 项任务中 23 项执行、100 项复用，无警告。最终产物与 SHA-256 见关键验收边界；官方 Node MCP SDK 1.32.1 对最终 APK 19/19 通过，通知 Stop 通过。逐轮摘要见 `build/porting-validation/gradle-summary.json`。 |
+| 33 | 同步后的 Web 修复能否生成 debug APK 与保持生产混淆规则的 release 验证 APK？ | 通过；888.515 秒，201 项任务中 36 项执行、165 项复用，无警告或失败。首个补验包的实际运行结果见上文。 |
+| 34 | 最新 Web 导入修复与 JS 超时修复能否生成 debug、定向测试及保持生产混淆规则的 release APK？ | 通过；905.86 秒，234 项任务中 43 项执行、191 项复用，无警告或失败。随后 debug 仪器 12/12、最终 R8 Web 联动 11/11 及 Android Chrome 实际软键盘检查通过，摘要见 `build/porting-validation/web-followup/gradle-summary.json`。 |

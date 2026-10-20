@@ -13,6 +13,7 @@
     >
   </div>
   <el-dialog
+    class="hotkeys-dialog"
     v-model="hotkeysDialogVisible"
     :show-close="false"
     :before-close="stopRecordKeyDown"
@@ -328,6 +329,25 @@ onMounted(() => {
   width: 6em;
 }
 
+@media (max-width: 1023px) {
+  .menu {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
+    gap: 4px;
+    padding: 8px;
+  }
+
+  .menu > .el-button {
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    padding: 6px 2px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
 .hotkeys-item {
   .title {
     width: 5em;
@@ -344,6 +364,44 @@ onMounted(() => {
     }
     span {
       margin: 0.5em;
+    }
+  }
+}
+
+@media (max-width: 479px) {
+  :global(.hotkeys-dialog) {
+    width: calc(100vw - 24px) !important;
+    max-width: 560px;
+  }
+
+  :global(.hotkeys-dialog .el-dialog__body) {
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+  }
+
+  .hotkeys-header {
+    gap: 8px;
+  }
+
+  .hotkeys-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+    gap: 8px;
+    align-items: center;
+
+    .title {
+      width: auto;
+      justify-content: flex-start;
+      margin-right: 0;
+    }
+
+    .hotkeys-item__content {
+      min-width: 0;
+      justify-content: flex-start;
+
+      div {
+        margin-bottom: 0;
+      }
     }
   }
 }

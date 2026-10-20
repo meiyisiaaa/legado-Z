@@ -9,7 +9,12 @@
     }"
   >
     {{ getSourceName(source) }}
-    <el-button text :icon="Edit" @click="handleSourceClick(source)" />
+    <el-button
+      text
+      :icon="Edit"
+      :aria-label="`编辑${getSourceName(source)}`"
+      @click="handleSourceClick(source)"
+    />
   </el-checkbox>
 </template>
 

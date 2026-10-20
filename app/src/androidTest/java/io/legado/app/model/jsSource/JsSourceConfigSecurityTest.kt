@@ -2,7 +2,9 @@ package io.legado.app.model.jsSource
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.legado.app.exception.NoStackTraceException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
@@ -12,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -80,4 +83,56 @@ class JsSourceConfigSecurityTest {
         assertTrue(completed)
         assertFalse(work.isActive)
     }
+
+    @Test(timeout = 20_000)
+    fun parserTimeoutIsExplicitAndLeavesCallerAvailableForNextParse() = runBlocking {
+        val callerJob: Job = currentCoroutineContext()[Job]
+            ?: throw AssertionError("test must run in a cancellable caller job")
+        val script = infiniteMetadataScript()
+
+        val timeoutError = try {
+            JsSourceConfig.extract(script, currentCoroutineContext())
+            null
+        } catch (error: NoStackTraceException) {
+            error
+        }
+
+        assertNotNull(timeoutError)
+        assertEquals("JS源配置解析超时（10秒），已终止执行", timeoutError?.message)
+        assertTrue("parser-owned timeout must not cancel its caller", callerJob.isActive)
+
+        val parsed = JsSourceConfig.extract(validMetadataScript(), currentCoroutineContext())
+        assertEquals("after-timeout", parsed.bookSourceName)
+        assertTrue("caller job must remain active after the follow-up parse", callerJob.isActive)
+    }
+
+    @Test(timeout = 8_000)
+    fun shorterCallerTimeoutRemainsCancellationException() = runBlocking {
+        val callerJob: Job = currentCoroutineContext()[Job]
+            ?: throw AssertionError("test must run in a cancellable caller job")
+        val error = runCatching {
+            withTimeout(1_000) {
+                JsSourceConfig.extract(infiniteMetadataScript(), currentCoroutineContext())
+            }
+        }.exceptionOrNull()
+
+        assertTrue("external timeout should propagate as cancellation", error is CancellationException)
+        assertFalse("external timeout must not become a parser error", error is NoStackTraceException)
+        assertTrue("a caught child timeout must leave the caller job active", callerJob.isActive)
+    }
+
+    private fun infiniteMetadataScript() = """
+        while (true) { }
+        var config = { bookSourceUrl: 'https://example.org', bookSourceName: 'loop' };
+        function search(key, page) { return []; }
+        function getChapters(book) { return []; }
+        function getContent(chapter, book, nextChapterUrl) { return ''; }
+    """.trimIndent()
+
+    private fun validMetadataScript() = """
+        var config = { bookSourceUrl: 'https://example.org', bookSourceName: 'after-timeout' };
+        function search(key, page) { return []; }
+        function getChapters(book) { return []; }
+        function getContent(chapter, book, nextChapterUrl) { return ''; }
+    """.trimIndent()
 }

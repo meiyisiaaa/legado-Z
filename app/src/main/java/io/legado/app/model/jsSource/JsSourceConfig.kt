@@ -11,7 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.mozilla.javascript.NativeArray
 import org.mozilla.javascript.Scriptable
 import kotlin.coroutines.CoroutineContext
@@ -36,7 +36,7 @@ object JsSourceConfig {
             throw NoStackTraceException("JS源解析需要有效的协程 Job")
         }
         coroutineContext.ensureActive()
-        return withTimeout(CONFIG_TIMEOUT_MILLIS) {
+        return withTimeoutOrNull(CONFIG_TIMEOUT_MILLIS) {
             val executionContext = currentCoroutineContext() + coroutineContext.minusKey(Job)
             val scope = RhinoScriptEngine.getSafeRuntimeScope()
             try {
@@ -106,7 +106,7 @@ object JsSourceConfig {
             }
             source.mainJs = text
             source
-        }
+        } ?: throw NoStackTraceException("JS源配置解析超时（10秒），已终止执行")
     }
 
     private fun requireFunction(

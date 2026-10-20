@@ -1,7 +1,9 @@
 <template>
   <div class="editor">
     <source-tab-form class="left" :config="config" />
-    <tool-bar />
+    <div class="toolbar">
+      <tool-bar />
+    </div>
     <source-tab-tools class="right" />
   </div>
 </template>
@@ -27,17 +29,61 @@ if (isBookSource.value) {
 </script>
 <style lang="scss" scoped>
 .editor {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(360px, min(45vw, 560px));
+  gap: 16px;
+  box-sizing: border-box;
   height: 100vh;
+  height: 100dvh;
+  padding: 0 20px;
   overflow: hidden;
-  .left {
-    flex: 1;
-    margin-left: 20px;
-  }
+
+  .left,
   .right {
-    flex: 1;
-    width: 360px;
-    margin-right: 20px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .right {
+    width: auto;
+  }
+}
+
+@media (max-width: 1023px) {
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    overflow: visible;
+
+    .toolbar {
+      order: -1;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--el-bg-color);
+      border-bottom: 1px solid var(--el-border-color-light);
+    }
+
+    .left,
+    .right {
+      flex: none;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    :deep(.el-tabs__header) {
+      position: static;
+      top: auto;
+    }
   }
 }
 </style>

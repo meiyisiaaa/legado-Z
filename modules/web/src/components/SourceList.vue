@@ -65,6 +65,26 @@ const store = useSourceStore()
 const sourceUrlSelect = ref<string[]>([])
 const searchKey = ref('')
 const sources = computed(() => store.sources)
+const isBookSource = /bookSource/i.test(window.location.href)
+
+const isImportedSource = (value: unknown): value is Source => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const source = value as Record<string, unknown>
+  if (isBookSource) {
+    return (
+      typeof source.bookSourceUrl === 'string' &&
+      source.bookSourceUrl.trim().length > 0 &&
+      typeof source.bookSourceName === 'string' &&
+      source.bookSourceName.trim().length > 0
+    )
+  }
+  return (
+    typeof source.sourceUrl === 'string' &&
+    source.sourceUrl.trim().length > 0 &&
+    typeof source.sourceName === 'string' &&
+    source.sourceName.trim().length > 0
+  )
+}
 
 /* 筛选源 */
 const sourcesFiltered = computed<Source[]>(() => {
@@ -151,8 +171,16 @@ const importSourceFile = () => {
         return
       }
       try {
-        const jsonData = JSON.parse(content)
-        store.saveSources(jsonData)
+        const jsonData: unknown = JSON.parse(content)
+        const importedSources = Array.isArray(jsonData) ? jsonData : [jsonData]
+        if (!importedSources.every(isImportedSource)) {
+          return ElMessage.error(
+            `上传的源格式错误：请提供有效的${isBookSource ? '书源' : '订阅源'}对象或数组`,
+          )
+        }
+        store.saveSources(importedSources)
+        searchKey.value = ''
+        sourceUrlSelect.value = []
       } catch (e: unknown) {
         ElMessage.error('上传的源格式错误: ' + (e as Error).message)
       }
@@ -161,7 +189,6 @@ const importSourceFile = () => {
   input.click()
 }
 
-const isBookSource = /bookSource/i.test(window.location.href)
 const selectedJsSource = computed(() => {
   if (sourceUrlSelect.value.length !== 1) return undefined
   const source = sourceSelect.value[0]
@@ -207,6 +234,8 @@ const outExportJs = () => {
   display: flex;
   margin: 4px 0;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 #source-list {
@@ -215,6 +244,30 @@ const outExportJs = () => {
   :deep(.el-checkbox) {
     margin-bottom: 4px;
     width: 100%;
+  }
+}
+
+@media (max-width: 1023px) {
+  .tool {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .tool :deep(.el-button) {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    margin: 0;
+    padding: 8px 4px;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  #source-list {
+    height: calc(100vh - 164px);
+    height: calc(100dvh - 164px);
+    min-height: 150px;
   }
 }
 </style>
