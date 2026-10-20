@@ -25,6 +25,8 @@ Streamable HTTP 地址为 `http://手机局域网IP:1236/mcp`。客户端须发�
 
 您需要先在设置中启用"Web 服务"。
 
+默认 HTTP 端口为 `1122`，WebSocket 端口为 HTTP 端口加 `1`（默认 `1123`）；端口可在 App 中配置。下文原有 `1234` / `1235` 地址是自定义端口示例，使用时应替换为当前服务端口。Web 客户端 HTTP 响应采用 `{ isSuccess, errorMsg, data }` 结构。
+
 `POST /parseBookSource` 接受 `{"text":"JSON 或单文件 JS 内容"}`，仅在受限作用域中解析并返回书源预览，不保存书源。Web 编辑器的 `.js` 导入使用此入口；检查后仍需手动保存。JSON 导出包含用户设置和 `mainJs`，原始 JS 导出仅包含脚本。
 
 ## 使用
@@ -34,6 +36,16 @@ Streamable HTTP 地址为 `http://手机局域网IP:1236/mcp`。客户端须发�
 以下说明假设您的操作在本机进行，且开放端口为1234。  
 如果您要从远程计算机访问[阅读]()，请将`127.0.0.1`替换成手机IP。
 
+#### 阅读设置
+
+Web 客户端启动时读取服务端保存的阅读配置；用户在阅读设置中更改后会同步保存。
+
+```
+GET  /getReadConfig
+POST /saveReadConfig
+Body = webReadConfig JSON
+```
+
 #### 插入单个书源
 
 请求BODY内容为`JSON`字符串，  
@@ -41,6 +53,7 @@ Streamable HTTP 地址为 `http://手机局域网IP:1236/mcp`。客户端须发�
 
 ```
 URL = http://127.0.0.1:1234/saveBookSource
+URL = http://127.0.0.1:1234/saveRssSource
 Method = POST
 ```
 
@@ -89,7 +102,7 @@ key为书源搜索关键词，tag为源链接
 ```
 URL = ws://127.0.0.1:1235/bookSourceDebug
 URL = ws://127.0.0.1:1235/rssSourceDebug
-Message = { key: [String], tag: [String] }
+Message = {"key":"关键词","tag":"源链接"}
 ```
 
 #### 获取替换规则
@@ -135,7 +148,7 @@ Body = { rule: [ReplaceRule], text: [String] }
 
 ```
 URL = ws://127.0.0.1:1235/searchBook
-Message = { key: [String] }
+Message = {"key":"书名或作者"}
 ```
 
 #### 插入书籍

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<html lang="zh-CN"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     
-    <meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>WiFi 传输</title>
     <link rel="stylesheet" href="./css/wifi_send.css">
     <script src="./js/jquery-1.4.2.min.js"></script>
@@ -218,7 +218,11 @@
             </div>
         </div>
 
-        <div class="s_table" id="drag">
+        <div class="s_table is-empty" id="drag">
+            <div class="empty-queue" id="emptyQueue" role="status" aria-live="polite">
+                <strong>上传队列为空</strong>
+                <span>拖放图书或字体到此处，或点上方“选择文件”开始上传</span>
+            </div>
             <table>
                 <thead>
                 <tr>
@@ -228,7 +232,7 @@
                     <td><span>操作</span></td>
                 </tr>
                 </thead>
-                <tbody><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr><tr data-js="item" data-status="init"><td><span></span></td><td><span></span></td><td><span></span></td><td><span><i></i></span></td></tr>
+                <tbody>
                 <tr>
                     <td colspan="4"><span class="last_row">请将图书或字体拖拽至此即可上传</span></td>
                 </tr>

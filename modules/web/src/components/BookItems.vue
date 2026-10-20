@@ -1,57 +1,60 @@
 <template>
   <div class="books-wrapper">
-    <div class="wrapper">
-      <div
-        class="book"
+    <div class="book-grid">
+      <button
+        class="book-card"
         v-for="book in books"
         :key="book.bookUrl"
+        type="button"
+        :aria-label="`打开《${book.name}》${book.author ? `，作者${book.author}` : ''}`"
         @click="handleClick(book)"
       >
-        <div class="cover-img">
+        <span class="cover-frame">
           <img
             class="cover"
             :src="getCover(book)"
             :key="book.coverUrl"
-            @error.once="proxyImage"
-            alt=""
+            @error="handleCoverError"
+            :alt="`${book.name} 封面`"
             loading="lazy"
           />
-        </div>
-        <div class="info">
-          <div class="name">{{ book.name }}</div>
-          <div class="sub">
-            <div class="author">
-              {{ book.author }}
-            </div>
-            <div class="tags" v-if="isSearch">
+          <span class="cover-placeholder">封面暂不可用</span>
+        </span>
+        <span class="book-info">
+          <span class="book-name">{{ book.name }}</span>
+          <span class="book-byline">
+            <span class="author">{{ book.author || '作者未知' }}</span>
+            <span class="tags" v-if="isSearch && book.kind">
               <el-tag
                 v-for="tag in book.kind?.split(',').slice(0, 2)"
                 :key="tag"
+                effect="plain"
+                size="small"
               >
                 {{ tag }}
               </el-tag>
-            </div>
-            <div class="update-info" v-if="!isSearch">
-              <div class="dot">•</div>
-              <div class="size">共{{ (book as Book).totalChapterNum }}章</div>
-              <div class="dot">•</div>
-              <div class="date">
-                {{ dateFormat((book as Book).lastCheckTime) }}
-              </div>
-            </div>
-          </div>
-          <div class="intro" v-if="isSearch">{{ book.intro }}</div>
-
-          <div class="dur-chapter" v-if="!isSearch">
-            已读：{{ (book as Book).durChapterTitle }}
-          </div>
-          <div class="last-chapter">最新：{{ book.latestChapterTitle }}</div>
-        </div>
-      </div>
+            </span>
+            <span class="update-info" v-if="!isSearch">
+              <span>共{{ (book as Book).totalChapterNum || 0 }}章</span>
+              <span class="metadata-separator" aria-hidden="true"></span>
+              <span>{{ dateFormat((book as Book).lastCheckTime) }}</span>
+            </span>
+          </span>
+          <span class="intro" v-if="isSearch">{{ book.intro || '暂无简介' }}</span>
+          <span class="dur-chapter" v-if="!isSearch">
+            <span class="meta-label">读到</span>{{ (book as Book).durChapterTitle || '尚未开始' }}
+          </span>
+          <span class="last-chapter">
+            <span class="meta-label">最新</span>{{ book.latestChapterTitle || '暂无最新章节' }}
+          </span>
+        </span>
+        <span class="card-arrow" aria-hidden="true"><el-icon><ArrowRight /></el-icon></span>
+      </button>
     </div>
   </div>
 </template>
 <script setup lang="ts">
+import { ArrowRight } from '@element-plus/icons-vue'
 import type { Book, SeachBook } from '@/book'
 import { dateFormat, isLegadoUrl } from '../utils/utils'
 import API from '@api'
@@ -66,131 +69,239 @@ const getCover = ({ bookUrl, coverUrl }: Book | SeachBook) => {
   if (coverUrl === undefined) return API.getProxyCoverUrl(bookUrl)
   return isLegadoUrl(coverUrl) ? API.getProxyCoverUrl(coverUrl) : coverUrl
 }
-const proxyImage = (evt: Event) => {
+const handleCoverError = (evt: Event) => {
   const target = evt.target as HTMLImageElement
-  target.src = API.getProxyCoverUrl(target.src)
+  if (target.dataset.proxyAttempted === 'true') {
+    target.closest('.cover-frame')?.classList.add('is-missing')
+    return
+  }
+  target.dataset.proxyAttempted = 'true'
+  target.src = API.getProxyCoverUrl(target.getAttribute('src') || target.src)
 }
-
-const subJustify = computed(() =>
-  props.isSearch ? 'space-between' : 'flex-start',
-)
 </script>
 
 <style lang="scss" scoped>
 .books-wrapper {
-  overflow: auto;
-
-  .wrapper {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, 380px);
-    justify-content: space-around;
-    grid-gap: 10px;
-
-    .book {
-      user-select: none;
-      display: flex;
-      cursor: pointer;
-      margin-bottom: 18px;
-      padding: 24px 24px;
-      width: 360px;
-      flex-direction: row;
-      justify-content: space-around;
-
-      .cover-img {
-        width: 84px;
-        height: 112px;
-
-        .cover {
-          width: 84px;
-          height: 112px;
-        }
-      }
-
-      .info {
-        display: flex;
-        flex-direction: column;
-        justify-content: space-around;
-        align-items: left;
-        height: 112px;
-        margin-left: 20px;
-        flex: 1;
-        overflow: hidden;
-
-        .name {
-          width: fit-content;
-          font-size: 16px;
-          font-weight: 700;
-          color: #33373d;
-        }
-
-        .sub {
-          display: flex;
-          flex-direction: row;
-          align-items: baseline;
-          justify-content: v-bind('subJustify');
-          font-size: 12px;
-          font-weight: 600;
-          color: #6b6b6b;
-          .tags {
-            :deep(.el-tag) {
-              margin-right: 0.5em;
-            }
-          }
-          .update-info {
-            display: flex;
-            .dot {
-              margin: 0 7px;
-            }
-          }
-        }
-
-        .intro,
-        .dur-chapter,
-        .last-chapter {
-          color: #969ba3;
-          font-size: 13px;
-          margin-top: 3px;
-          font-weight: 500;
-          word-wrap: break-word;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          display: -webkit-box;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 1;
-          line-clamp: 1;
-          text-align: left;
-        }
-      }
-    }
-
-    .book:hover {
-      background: rgba(0, 0, 0, 0.1);
-      transition-duration: 0.5s;
-    }
-  }
-
-  .wrapper:last-child {
-    margin-right: auto;
-  }
+  width: 100%;
 }
 
-.books-wrapper::-webkit-scrollbar {
-  width: 0 !important;
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 12px;
 }
 
-@media screen and (max-width: 750px) {
-  .books-wrapper {
-    .wrapper {
-      display: flex;
-      flex-direction: column;
+.book-card {
+  min-width: 0;
+  min-height: 158px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  border: 1px solid var(--app-line);
+  border-radius: 15px;
+  padding: 15px 34px 15px 15px;
+  color: var(--app-ink);
+  background: var(--app-panel);
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 
-      .book {
-        box-sizing: border-box;
-        width: 100%;
-        margin-bottom: 0;
-        padding: 10px 20px;
-      }
-    }
+.book-card:hover {
+  z-index: 1;
+  border-color: var(--app-accent-line);
+  background: var(--app-panel-raised);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.book-card:active {
+  background: var(--app-panel-muted);
+}
+
+.cover-frame {
+  width: 82px;
+  height: 118px;
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  background: var(--app-panel-muted);
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  display: none;
+  padding: 8px;
+  color: var(--app-ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cover-frame.is-missing .cover {
+  display: none;
+}
+
+.cover-frame.is-missing .cover-placeholder {
+  display: block;
+}
+
+.book-info {
+  min-width: 0;
+  min-height: 118px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.book-name,
+.author,
+.intro,
+.dur-chapter,
+.last-chapter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--app-ink);
+  font-size: 15px;
+  font-weight: 730;
+  line-height: 1.4;
+}
+
+.book-byline {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--app-ink-muted);
+  font-size: 11px;
+}
+
+.author {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.update-info {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.metadata-separator {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--app-ink-muted);
+}
+
+.tags {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+
+.tags :deep(.el-tag) {
+  border-radius: 6px;
+  padding-inline: 5px;
+  color: var(--app-accent-strong);
+  background: var(--app-accent-soft);
+  line-height: 18px;
+}
+
+.intro,
+.dur-chapter,
+.last-chapter {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  color: var(--app-ink-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.intro {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.meta-label {
+  margin-right: 5px;
+  color: var(--app-ink-soft);
+  font-weight: 650;
+}
+
+.card-arrow {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  color: var(--app-ink-muted);
+  opacity: 0;
+  transform: translate(-3px, -50%);
+  transition:
+    opacity var(--app-duration-state) ease-out,
+    transform var(--app-duration-state) ease-out;
+}
+
+.book-card:hover .card-arrow,
+.book-card:focus-visible .card-arrow {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+@media (max-width: 540px) {
+  .book-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .book-card {
+    min-height: 132px;
+    gap: 12px;
+    border-radius: 12px;
+    padding: 12px 30px 12px 12px;
+  }
+
+  .cover-frame {
+    width: 70px;
+    height: 102px;
+  }
+
+  .book-info {
+    min-height: 102px;
+    gap: 5px;
+  }
+
+  .book-name {
+    font-size: 14px;
+  }
+
+  .update-info {
+    gap: 4px;
+    font-size: 10px;
   }
 }
 </style>

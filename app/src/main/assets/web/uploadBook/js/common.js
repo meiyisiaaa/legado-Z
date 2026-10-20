@@ -19,26 +19,16 @@ var fileMap = {};
  */
 var filesUpload	= []; //
 
-//初始化表格
-init();
-
-function init(){
-	//判断浏览器的高度预留空表格
-	var tr_num = parseInt(Math.round(((window.innerHeight || document.documentElement.clientHeight) *.5)/43));
-	var item =  '<tr data-js="item" data-status="init">' +
-		'<td><span></span></td>' +
-		'<td><span></span></td>' +
-		'<td><span></span></td>' +
-		'<td><span><i></i></span></td>' +
-		'</tr>';
-	var i = 0;
-	var HTML = '';
-	while(i < tr_num){
-		HTML = HTML + item;
-		i ++;
-	}
-	$('#drag table tbody').prepend(HTML);
+// Keep the empty-state copy and file table in sync with real queued files.
+function syncQueueState(){
+	var hasQueuedFiles = $('#drag [data-js=item][data-status=ed]').length > 0;
+	if(hasQueuedFiles) $('#drag').removeClass('is-empty');
+	else $('#drag').addClass('is-empty');
+	var emptyQueue = document.getElementById('emptyQueue');
+	if(emptyQueue) emptyQueue.hidden = hasQueuedFiles;
 }
+
+syncQueueState();
 
 //统计文件大小
 function countFileSize(fileSize)
@@ -121,6 +111,7 @@ function fileQueuedPC(file, type)
 		$('#drag [data-js=item]').eq(i).children().eq(2).find('span').html(size);
 		$('#drag [data-js=item]').eq(i).children().eq(3).find('span i').addClass('red').html('0%');
 		$('#drag [data-js=item]').eq(i).attr('data-status', 'ed');
+		syncQueueState();
 
 		fileMap[file.name] = $('#drag [data-js=item]').eq(i).children().eq(3).find('span i');
 

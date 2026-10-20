@@ -5,7 +5,7 @@
     :class="{ night: isNight, day: !isNight }"
     @click="showToolBar = !showToolBar"
   >
-    <div class="tool-bar" :style="leftBarTheme">
+    <nav class="tool-bar" :style="leftBarTheme" aria-label="阅读工具" @click.stop>
       <div class="tools">
         <el-popover
           placement="right"
@@ -17,10 +17,9 @@
         >
           <PopCatalog @getContent="getContent" class="popup" />
           <template #reference>
-            <div class="tool-icon" :class="{ 'no-point': false }">
-              <div class="iconfont">&#58905;</div>
-              <div class="icon-text">目录</div>
-            </div>
+            <button class="tool-icon" type="button" aria-label="打开章节目录">
+              <el-icon><List /></el-icon><span class="icon-text">目录</span>
+            </button>
           </template>
         </el-popover>
         <el-popover
@@ -33,53 +32,70 @@
         >
           <read-settings class="popup" />
           <template #reference>
-            <div class="tool-icon" :class="{ 'no-point': noPoint }">
-              <div class="iconfont">&#58971;</div>
-              <div class="icon-text">设置</div>
-            </div>
+            <button class="tool-icon" type="button" :disabled="noPoint" aria-label="阅读设置">
+              <el-icon><Setting /></el-icon><span class="icon-text">设置</span>
+            </button>
           </template>
         </el-popover>
-        <div class="tool-icon" @click="toShelf">
-          <div class="iconfont">&#58892;</div>
-          <div class="icon-text">书架</div>
-        </div>
-        <div class="tool-icon" :class="{ 'no-point': noPoint }" @click="toTop">
-          <div class="iconfont">&#58914;</div>
-          <div class="icon-text">顶部</div>
-        </div>
-        <div
+        <button class="tool-icon" type="button" aria-label="返回书架" @click="toShelf">
+          <el-icon><Collection /></el-icon><span class="icon-text">书架</span>
+        </button>
+        <button class="tool-icon" type="button" :disabled="noPoint" aria-label="回到页面顶部" @click="toTop">
+          <el-icon><Top /></el-icon><span class="icon-text">顶部</span>
+        </button>
+        <button
           class="tool-icon"
-          :class="{ 'no-point': noPoint }"
+          type="button"
+          :disabled="noPoint"
+          aria-label="跳到页面底部"
           @click="toBottom"
         >
-          <div class="iconfont">&#58915;</div>
-          <div class="icon-text">底部</div>
-        </div>
+          <el-icon><Bottom /></el-icon><span class="icon-text">底部</span>
+        </button>
       </div>
-    </div>
-    <div class="read-bar" :style="rightBarTheme">
+    </nav>
+    <nav class="read-bar" :style="rightBarTheme" aria-label="章节切换" @click.stop>
       <div class="tools">
-        <div
+        <button
           class="tool-icon"
-          :class="{ 'no-point': noPoint }"
+          type="button"
+          :disabled="noPoint"
+          aria-label="上一章"
           @click="toPreChapter"
         >
-          <div class="iconfont">&#58920;</div>
-          <span v-if="miniInterface">上一章</span>
-        </div>
-        <div
+          <el-icon><ArrowLeft /></el-icon><span>上一章</span>
+        </button>
+        <button
           class="tool-icon"
-          :class="{ 'no-point': noPoint }"
+          type="button"
+          :disabled="noPoint"
+          aria-label="下一章"
           @click="toNextChapter"
         >
-          <span v-if="miniInterface">下一章</span>
-          <div class="iconfont">&#58913;</div>
-        </div>
+          <span>下一章</span><el-icon><ArrowRight /></el-icon>
+        </button>
       </div>
-    </div>
-    <div class="chapter-bar"></div>
-    <div class="chapter" ref="content" :style="chapterTheme">
+    </nav>
+    <main class="chapter" ref="content" :style="chapterTheme">
       <div class="content">
+        <header class="reader-context">
+          <router-link class="reader-shelf-link" to="/" @click.stop>
+            <el-icon><Collection /></el-icon><span>书架</span>
+          </router-link>
+          <div class="reader-book-meta">
+            <strong>{{ store.readingBook.name }}</strong>
+            <span>{{ chapterIndex + 1 }} / {{ catalog.length || 1 }} 章</span>
+          </div>
+          <span class="reader-progress-value">{{ chapterProgress }}%</span>
+        </header>
+        <div
+          class="reading-progress"
+          role="progressbar"
+          aria-label="阅读进度"
+          :aria-valuenow="chapterProgress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ><span :style="{ transform: `scaleX(${chapterProgress / 100})` }"></span></div>
         <div class="top-bar" ref="top"></div>
         <div
           v-for="data in chapterData"
@@ -102,7 +118,7 @@
         <div class="loading" ref="loading"></div>
         <div class="bottom-bar" ref="bottom"></div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
@@ -113,6 +129,15 @@ import API from '@api'
 import { useLoading } from '@/hooks/loading'
 import { useThrottleFn } from '@vueuse/shared'
 import { isNullOrBlank } from '@/utils/utils'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bottom,
+  Collection,
+  List,
+  Setting,
+  Top,
+} from '@element-plus/icons-vue'
 
 const content = ref()
 // loading spinner
@@ -137,6 +162,12 @@ const chapterPos = computed({
 const chapterIndex = computed({
   get: () => store.readingBook.chapterIndex,
   set: value => (store.readingBook.chapterIndex = value),
+})
+const chapterProgress = computed(() => {
+  const total = catalog.value.length
+  return total > 0
+    ? Math.round((Math.min(chapterIndex.value + 1, total) / total) * 100)
+    : 0
 })
 const isSeachBook = computed({
   get: () => store.readingBook.isSeachBook,
@@ -573,88 +604,101 @@ onBeforeRouteLeave(async (to, from, next) => {
 }
 
 .chapter-wrapper {
-  padding: 0 4%;
-
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
   overflow-x: hidden;
+  color: var(--app-ink);
 
-  :deep(.no-point) {
-    pointer-events: none;
-  }
-
-  .tool-bar {
+  .tool-bar,
+  .read-bar {
     position: fixed;
-    top: 0;
     left: 50%;
     z-index: 100;
+    width: 54px;
+    border: 1px solid var(--app-line);
+    border-radius: 14px;
+    padding: 7px;
+    background: var(--app-panel-raised);
+    box-shadow: var(--app-shadow-soft);
 
     .tools {
       display: flex;
       flex-direction: column;
+      gap: 4px;
 
       .tool-icon {
-        font-size: 18px;
-        width: 58px;
-        height: 48px;
-        text-align: center;
-        padding-top: 12px;
+        width: 40px;
+        min-height: 44px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        padding: 4px 2px;
+        color: var(--app-ink-soft);
+        background: transparent;
+        font: inherit;
+        font-size: 10px;
         cursor: pointer;
-        outline: none;
+        transition:
+          color var(--app-duration-state) ease-out,
+          background-color var(--app-duration-state) ease-out,
+          border-color var(--app-duration-state) ease-out;
 
-        .iconfont {
-          font-family: iconfont;
-          width: 16px;
-          height: 16px;
-          font-size: 16px;
-          margin: 0 auto 6px;
+        .el-icon {
+          font-size: 17px;
         }
 
         .icon-text {
-          font-size: 12px;
+          font-size: 10px;
         }
+      }
+
+      .tool-icon:hover:not(:disabled) {
+        border-color: var(--app-line);
+        color: var(--app-accent-strong);
+        background: var(--app-accent-soft);
+      }
+
+      .tool-icon:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
       }
     }
   }
 
+  .tool-bar {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
   .read-bar {
-    position: fixed;
-    bottom: 0;
+    top: 50%;
     right: 50%;
-    z-index: 100;
+    left: auto;
+    width: 54px;
+    transform: translateY(-50%);
 
-    .tools {
-      display: flex;
-      flex-direction: column;
-
-      .tool-icon {
-        font-size: 18px;
-        width: 42px;
-        height: 31px;
-        padding-top: 12px;
-        text-align: center;
-        align-items: center;
-        cursor: pointer;
-        outline: none;
-        margin-top: -1px;
-
-        .iconfont {
-          font-family: iconfont;
-          width: 16px;
-          height: 16px;
-          font-size: 16px;
-          margin: 0 auto 6px;
-        }
-      }
+    .tool-icon {
+      min-height: 50px;
     }
   }
 
   .chapter {
-    font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light,
-      'Helvetica Neue Light', sans-serif;
-    text-align: left;
-    padding: 0 65px;
-    min-height: 100vh;
     width: 670px;
-    margin: 0 auto;
+    min-height: calc(100vh - 48px);
+    min-height: calc(100dvh - 48px);
+    box-sizing: content-box;
+    margin: 24px auto;
+    border: 1px solid var(--app-line);
+    border-radius: 17px;
+    padding: 0 65px;
+    color: var(--app-ink);
+    box-shadow: var(--app-shadow);
+    text-align: left;
 
     .content {
       font-size: 18px;
@@ -662,9 +706,70 @@ onBeforeRouteLeave(async (to, from, next) => {
       font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light,
         'Helvetica Neue Light', sans-serif;
 
+      .reader-context {
+        min-height: 66px;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 14px;
+        border-bottom: 1px solid var(--app-line);
+        color: var(--app-ink-muted);
+        font-size: 11px;
+      }
+
+      .reader-shelf-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--app-ink-muted);
+        font-size: 11px;
+        text-decoration: none;
+      }
+
+      .reader-shelf-link:hover {
+        color: var(--app-accent-strong);
+      }
+
+      .reader-book-meta {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .reader-book-meta strong {
+        overflow: hidden;
+        color: var(--app-ink-soft);
+        font-size: 12px;
+        font-weight: 680;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .reader-book-meta span,
+      .reader-progress-value {
+        flex: none;
+        color: var(--app-ink-muted);
+        font-size: 10px;
+      }
+
+      .reading-progress {
+        height: 2px;
+        overflow: hidden;
+        background: var(--app-progress-track);
+      }
+
+      .reading-progress span {
+        height: 100%;
+        display: block;
+        background: var(--app-accent);
+        transform-origin: left center;
+        transition: transform var(--app-duration-state) ease-out;
+      }
+
       .bottom-bar,
       .top-bar {
-        height: 64px;
+        height: 48px;
       }
     }
   }
@@ -672,98 +777,112 @@ onBeforeRouteLeave(async (to, from, next) => {
 
 .day {
   :deep(.popup) {
-    box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.12),
-      0 0 6px rgba(0, 0, 0, 0.04);
-  }
-
-  :deep(.tool-icon) {
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    margin-top: -1px;
-    color: #000;
-
-    .icon-text {
-      color: rgba(0, 0, 0, 0.4);
-    }
-  }
-
-  :deep(.chapter) {
-    border: 1px solid #d8d8d8;
-    color: #262626;
+    box-shadow: var(--app-shadow);
   }
 }
 
 .night {
   :deep(.popup) {
-    box-shadow:
-      0 2px 4px rgba(0, 0, 0, 0.48),
-      0 0 6px rgba(0, 0, 0, 0.16);
-  }
-
-  :deep(.tool-icon) {
-    border: 1px solid #444;
-    margin-top: -1px;
-    color: #666;
-
-    .icon-text {
-      color: #666;
-    }
-  }
-
-  :deep(.chapter) {
-    border: 1px solid #444;
-    color: #666;
-  }
-
-  :deep(.popper__arrow) {
-    background: #666;
+    box-shadow: var(--app-shadow);
   }
 }
 
-@media screen and (max-width: 776px) {
+@media (max-width: 776px) {
+  :global(.pop-setting) {
+    position: fixed !important;
+    top: 64px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 50% !important;
+    width: calc(100vw - 24px) !important;
+    max-width: 480px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    transform: translateX(-50%) !important;
+  }
+
   .chapter-wrapper {
     padding: 0;
 
     .tool-bar {
-      left: 0;
-      width: 100vw;
+      top: 8px;
+      left: 50%;
+      width: calc(100vw - 16px);
+      transform: translateX(-50%);
       margin-left: 0 !important;
 
       .tools {
         flex-direction: row;
-        justify-content: space-between;
+        justify-content: space-around;
 
         .tool-icon {
-          border: none;
+          width: min(18vw, 54px);
+          min-height: 40px;
+          border: 0;
         }
       }
     }
 
     .read-bar {
-      right: 0;
-      width: 100vw;
+      top: auto;
+      right: 50%;
+      bottom: 8px;
+      left: auto;
+      width: calc(100vw - 16px);
+      transform: translateX(50%);
       margin-right: 0 !important;
 
       .tools {
         flex-direction: row;
-        justify-content: space-between;
-        padding: 0 15px;
+        justify-content: space-around;
 
         .tool-icon {
-          border: none;
-          width: auto;
-
-          .iconfont {
-            display: inline-block;
-          }
+          width: 48%;
+          min-height: 42px;
+          flex-direction: row;
+          gap: 8px;
+          border: 0;
+          font-size: 12px;
         }
       }
     }
 
     .chapter {
       width: 100vw !important;
-      padding: 0 20px;
+      min-height: 100dvh;
       box-sizing: border-box;
+      margin: 0 auto;
+      border: 0;
+      border-radius: 0;
+      padding: 0 20px 70px;
+
+      .content {
+        .reader-context {
+          min-height: 58px;
+          gap: 8px;
+        }
+
+        .reader-shelf-link span {
+          display: none;
+        }
+
+        .reader-book-meta {
+          gap: 6px;
+        }
+
+        .reader-book-meta strong {
+          font-size: 11px;
+        }
+
+        .reader-book-meta span,
+        .reader-progress-value {
+          font-size: 9px;
+        }
+
+        .top-bar {
+          height: 26px;
+        }
+      }
     }
   }
 }

@@ -1,51 +1,58 @@
 <template>
-  <el-input
-    v-model="searchKey"
-    class="search"
-    :prefix-icon="Search"
-    placeholder="筛选源"
-  />
-  <div class="tool">
-    <el-button @click="importSourceFile" :icon="Folder">打开</el-button>
-    <el-button
-      :disabled="sourcesFiltered.length === 0"
-      @click="outExport"
-      :icon="Download"
-    >
-      导出</el-button
-    >
-    <el-button
-      v-if="isBookSource"
-      :disabled="!selectedJsSource"
-      @click="outExportJs"
-      :icon="Download"
-    >
-      导出 JS</el-button
-    >
-    <el-button
-      type="danger"
-      :icon="Delete"
-      @click="deleteSelectSources"
-      :disabled="sourceSelect.length === 0"
-      >删除</el-button
-    >
-    <el-button
-      type="danger"
-      :icon="Delete"
-      @click="clearAllSources"
-      :disabled="sources.length === 0"
-      >清空</el-button
-    >
-  </div>
-  <el-checkbox-group id="source-list" v-model="sourceUrlSelect">
-    <virtual-list
-      style="height: 100%; overflow-y: auto; overflow-x: hidden"
-      :data-key="(source: Source) => getSourceName(source)"
-      :data-sources="sourcesFiltered"
-      :data-component="SourceItem"
-      :estimate-size="45"
-    />
-  </el-checkbox-group>
+  <section class="source-library">
+    <div class="source-search-row">
+      <el-input
+        v-model="searchKey"
+        class="search"
+        :prefix-icon="Search"
+        :placeholder="isBookSource ? '按名称、地址或分组筛选' : '按名称或地址筛选'"
+        aria-label="筛选源列表"
+        clearable
+      />
+      <span class="source-count">{{ sourcesFiltered.length }} / {{ sources.length }}</span>
+    </div>
+    <div class="tool">
+      <el-button @click="importSourceFile" :icon="Folder">导入</el-button>
+      <el-button
+        :disabled="sourcesFiltered.length === 0"
+        @click="outExport"
+        :icon="Download"
+      >导出 JSON</el-button>
+      <el-button
+        v-if="isBookSource"
+        :disabled="!selectedJsSource"
+        @click="outExportJs"
+        :icon="Download"
+      >导出 JS</el-button>
+      <el-button
+        type="danger"
+        :icon="Delete"
+        @click="deleteSelectSources"
+        :disabled="sourceSelect.length === 0"
+      >删除所选 {{ sourceSelect.length ? `(${sourceSelect.length})` : '' }}</el-button>
+      <el-button
+        type="danger"
+        plain
+        :icon="Delete"
+        @click="clearAllSources"
+        :disabled="sources.length === 0"
+      >清空暂存</el-button>
+    </div>
+    <div v-if="sourcesFiltered.length === 0" class="list-empty">
+      <el-icon><Search /></el-icon>
+      <span>{{ sources.length ? '没有匹配的源' : '还没有加载源' }}</span>
+      <small>{{ sources.length ? '试试缩短筛选词。' : '使用“拉取源”加载服务中的书源或订阅源。' }}</small>
+    </div>
+    <el-checkbox-group v-else id="source-list" v-model="sourceUrlSelect">
+      <virtual-list
+        style="height: 100%; overflow-y: auto; overflow-x: hidden"
+        :data-key="(source: Source) => getSourceName(source)"
+        :data-sources="sourcesFiltered"
+        :data-component="SourceItem"
+        :estimate-size="45"
+      />
+    </el-checkbox-group>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -230,44 +237,113 @@ const outExportJs = () => {
 </script>
 
 <style lang="scss" scoped>
+.source-library {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search {
+  min-width: 0;
+  flex: 1;
+}
+
+.source-count {
+  color: var(--app-ink-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .tool {
   display: flex;
-  margin: 4px 0;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+}
+
+.tool :deep(.el-button) {
+  margin: 0;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.list-empty {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--app-ink-muted);
+  text-align: center;
+}
+
+.list-empty > .el-icon {
+  color: var(--app-accent);
+  font-size: 24px;
+}
+
+.list-empty span {
+  color: var(--app-ink-soft);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.list-empty small {
+  max-width: 35ch;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 #source-list {
-  margin-top: 6px;
-  height: calc(100vh - 112px - 7px);
+  min-height: 0;
+  height: min(56dvh, 680px);
+  flex: 1;
+  overflow: hidden;
+
+  :deep(.virtual-list) {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
   :deep(.el-checkbox) {
-    margin-bottom: 4px;
+    margin: 0 0 5px;
     width: 100%;
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 620px) {
   .tool {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
   }
 
   .tool :deep(.el-button) {
     width: 100%;
     min-width: 0;
-    min-height: 40px;
+    min-height: 38px;
     margin: 0;
-    padding: 8px 4px;
+    padding: 7px 4px;
     white-space: normal;
     line-height: 1.2;
   }
 
   #source-list {
-    height: calc(100vh - 164px);
-    height: calc(100dvh - 164px);
-    min-height: 150px;
+    height: 360px;
+  }
+
+  .list-empty {
+    min-height: 220px;
   }
 }
 </style>

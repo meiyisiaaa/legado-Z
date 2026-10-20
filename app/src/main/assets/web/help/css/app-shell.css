@@ -1,0 +1,228 @@
+:root {
+	color-scheme: light;
+	--help-page: #edf2f6;
+	--help-surface: #ffffff;
+	--help-text: #1d2b35;
+	--help-muted: #71818b;
+	--help-line: #dce5e9;
+	--help-accent: #07828b;
+	--help-accent-soft: #e3f6f7;
+	--help-code: #f1f5f7;
+	--help-quote: #e8f6f6;
+	--help-shadow: 0 24px 70px rgb(31 50 58 / 10%);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+		--help-page: #11191d;
+		--help-surface: #1a252b;
+		--help-text: #e3ecef;
+		--help-muted: #a4b4bb;
+		--help-line: #34454d;
+		--help-accent: #54d6dc;
+		--help-accent-soft: #203c40;
+		--help-code: #111a1f;
+		--help-quote: #19363a;
+		--help-shadow: 0 24px 70px rgb(0 0 0 / 28%);
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	min-width: 320px;
+	min-height: 100%;
+	background: var(--help-page);
+}
+
+body {
+	min-width: 320px;
+	min-height: 100vh;
+	margin: 0;
+	padding: clamp(16px, 4vw, 48px) clamp(12px, 4vw, 32px);
+	background:
+		radial-gradient(ellipse at 8% 0%, rgb(17 192 199 / 10%), transparent 38%),
+		var(--help-page);
+	color: var(--help-text);
+	font-family: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.help-shell {
+	width: min(980px, 100%);
+	margin-inline: auto;
+}
+
+.help-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin: 0 4px 18px;
+	color: var(--help-muted);
+}
+
+.help-header p {
+	margin: 0;
+	font-size: 12px;
+	letter-spacing: 0.02em;
+}
+
+.help-brand {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	color: var(--help-text);
+}
+
+.help-brand > div {
+	display: grid;
+	gap: 2px;
+}
+
+.help-brand strong {
+	font-size: 15px;
+	letter-spacing: 0.04em;
+}
+
+.help-brand span:not(.help-mark) {
+	color: var(--help-muted);
+	font-size: 11px;
+}
+
+.help-mark {
+	width: 34px;
+	height: 34px;
+	display: grid;
+	place-items: center;
+	border-radius: 10px;
+	color: var(--help-accent);
+	background: var(--help-accent-soft);
+	box-shadow: 0 5px 16px rgb(8 127 136 / 10%);
+}
+
+.help-mark svg {
+	width: 18px;
+	height: 18px;
+	display: block;
+}
+
+.markdown-body {
+	max-width: none;
+	margin: 0;
+	padding: clamp(22px, 5vw, 56px);
+	border: 1px solid var(--help-line);
+	border-radius: 22px;
+	background: var(--help-surface);
+	box-shadow: var(--help-shadow);
+	color: var(--help-text);
+	font-family: inherit;
+	font-size: 15px;
+	line-height: 1.8;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+	color: var(--help-text);
+	line-height: 1.35;
+}
+
+.markdown-body h1 {
+	font-size: clamp(28px, 5vw, 40px);
+	letter-spacing: -0.035em;
+}
+
+.markdown-body h2,
+.markdown-body h3 {
+	margin-top: 1.8em;
+	border-bottom-color: var(--help-line);
+}
+
+.markdown-body p,
+.markdown-body li,
+.markdown-body td,
+.markdown-body th {
+	color: var(--help-text);
+}
+
+.markdown-body a {
+	color: var(--help-accent);
+	text-underline-offset: 3px;
+}
+
+.markdown-body a:focus-visible {
+	outline: 2px solid var(--help-accent);
+	outline-offset: 3px;
+}
+
+.markdown-body code,
+.markdown-body pre {
+	border-color: var(--help-line);
+	background: var(--help-code);
+	color: var(--help-text);
+}
+
+.markdown-body pre {
+	max-width: 100%;
+	border: 1px solid var(--help-line);
+	border-radius: 12px;
+}
+
+.markdown-body pre code {
+	background: transparent;
+}
+
+.markdown-body blockquote {
+	border-left-color: var(--help-accent);
+	background: var(--help-quote);
+	color: var(--help-muted);
+}
+
+.markdown-body table {
+	display: block;
+	width: 100%;
+	overflow-x: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+	border-color: var(--help-line);
+}
+
+.markdown-body img,
+.markdown-body video {
+	max-width: 100%;
+	height: auto;
+}
+
+@media (max-width: 560px) {
+	.help-header {
+		align-items: flex-start;
+		margin-inline: 4px;
+	}
+
+	.help-header p {
+		max-width: 125px;
+		text-align: right;
+	}
+
+	.markdown-body {
+		border-radius: 17px;
+		font-size: 14px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}

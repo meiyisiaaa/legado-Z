@@ -1,5 +1,6 @@
 <template>
   <el-checkbox
+    class="source-choice"
     size="large"
     border
     :value="sourceUrl"
@@ -8,12 +9,14 @@
       edit: sourceUrl == currentSourceUrl,
     }"
   >
-    {{ getSourceName(source) }}
+    <span class="source-indicator" :class="{ 'is-error': isSaveError, 'is-current': sourceUrl == currentSourceUrl }" aria-hidden="true"></span>
+    <span class="source-name">{{ getSourceName(source) }}</span>
+    <el-tag v-if="isSaveError" size="small" type="danger" effect="plain">未推送</el-tag>
     <el-button
       text
       :icon="Edit"
       :aria-label="`编辑${getSourceName(source)}`"
-      @click="handleSourceClick(source)"
+      @click.stop="handleSourceClick(source)"
     />
   </el-checkbox>
 </template>
@@ -45,17 +48,59 @@ const isSaveError = computed(() => {
 :deep(.el-checkbox__label) {
   flex: 1;
   display: flex;
-  justify-content: space-between;
+  min-width: 0;
   align-items: center;
+  gap: 8px;
+  color: var(--app-ink-soft);
+  font-size: 12px;
 }
-.error {
-  border-color: var(--el-color-error) !important;
-  color: var(--el-color-error) !important;
-  --el-checkbox-checked-text-color: var(--el-color-error);
-  --el-checkbox-checked-bg-color: var(--el-color-error);
-  --el-checkbox-checked-input-border-color: var(--el-color-error);
+
+.source-choice {
+  width: 100%;
+  min-height: 42px;
+  border-color: var(--app-line);
+  border-radius: 9px;
+  background: var(--app-panel-raised);
 }
-.edit {
-  border-color: var(--el-color-dark) !important;
+
+.source-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-indicator {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--app-success);
+}
+
+.source-indicator.is-current {
+  background: var(--app-accent);
+  box-shadow: 0 0 0 3px var(--app-accent-glow);
+}
+
+.source-indicator.is-error {
+  background: var(--app-danger);
+  box-shadow: 0 0 0 3px var(--app-danger-glow);
+}
+
+.source-choice :deep(.el-tag) {
+  flex: none;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.source-choice :deep(.el-button) {
+  flex: none;
+  margin-left: auto;
+}
+
+.source-choice:hover {
+  border-color: var(--app-accent-line);
 }
 </style>

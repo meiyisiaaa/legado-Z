@@ -9,16 +9,18 @@
       <ul>
         <li class="theme-list">
           <i>阅读主题</i>
-          <span
+          <button
             class="theme-item"
+            type="button"
             v-for="(themeColor, index) in themeColors"
             :key="index"
             :style="themeColor"
             ref="themes"
             @click="setTheme(index)"
             :class="{ selected: theme == index }"
-            ><em v-if="index < 6" class="iconfont">&#58980;</em
-            ><em v-else class="moon-icon">{{ moonIcon }}</em></span
+            :aria-label="index === 6 ? '夜间阅读主题' : `阅读主题 ${index + 1}`"
+            :aria-pressed="theme === index"
+            ><el-icon><Moon v-if="index === 6" /><Sunny v-else /></el-icon></button
           >
         </li>
         <li class="font-list">
@@ -175,6 +177,7 @@
 import '../assets/fonts/popfont.css'
 import '../assets/fonts/iconfont.css'
 import settings from '../config/themeConfig'
+import { Moon, Sunny } from '@element-plus/icons-vue'
 import API from '@api'
 import { useDebounceFn } from '@vueuse/shared'
 
@@ -197,10 +200,9 @@ watch(
 //主题颜色
 const theme = computed(() => store.theme)
 const isNight = computed(() => store.isNight)
-const moonIcon = computed(() => (theme.value == 6 ? '' : ''))
 const themeColors = [
   {
-    background: 'rgba(250, 245, 235, 0.8)',
+    background: '#e8efee',
   },
   {
     background: 'rgba(245, 234, 204, 0.8)',
@@ -218,7 +220,7 @@ const themeColors = [
     background: 'rgba(224, 224, 224, 0.8)',
   },
   {
-    background: 'rgba(0, 0, 0, 0.5)',
+    background: '#182528',
   },
 ]
 const popupTheme = computed(() => {
@@ -362,11 +364,6 @@ const setInfiniteLoading = (loading: boolean) => {
   font-style: normal;
 }
 
-:deep(.moon-icon) {
-  font-family: iconfont;
-  font-style: normal;
-}
-
 .settings-wrapper {
   user-select: none;
   margin: -13px;
@@ -419,14 +416,22 @@ const setInfiniteLoading = (loading: boolean) => {
           cursor: pointer;
           text-align: center;
           vertical-align: middle;
+          padding: 0;
+          color: var(--app-ink-muted);
+          font: inherit;
 
           .iconfont {
             display: none;
           }
+
+          .el-icon {
+            vertical-align: middle;
+          }
         }
 
         .selected {
-          color: #ed4259;
+          color: var(--app-accent-strong);
+          box-shadow: 0 0 0 2px var(--app-accent-glow);
 
           .iconfont {
             display: inline;
@@ -530,10 +535,6 @@ const setInfiniteLoading = (loading: boolean) => {
     border: 1px solid #666;
   }
 
-  :deep(.moon-icon) {
-    color: #ed4259;
-  }
-
   :deep(.font-list),
   .infinite-loading {
     .font-item,
@@ -562,11 +563,6 @@ const setInfiniteLoading = (loading: boolean) => {
     border: 1px solid #ed4259;
   }
 
-  :deep(.moon-icon) {
-    display: inline;
-    color: rgba(255, 255, 255, 0.2);
-  }
-
   :deep(.font-list),
   .infinite-loading {
     .font-item,
@@ -591,6 +587,18 @@ const setInfiniteLoading = (loading: boolean) => {
     display: flex !important;
     flex-wrap: wrap;
     padding-bottom: 5px !important;
+  }
+
+  .settings-wrapper {
+    padding-left: 16px;
+
+    :deep(.resize) {
+      width: min(274px, calc(100vw - 64px)) !important;
+    }
+
+    :deep(.resize > span) {
+      width: calc((100% - 2px) / 3) !important;
+    }
   }
 }
 </style>

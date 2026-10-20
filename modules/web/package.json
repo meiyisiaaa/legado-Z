@@ -10,9 +10,12 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" -- && node ./scripts/sync.js",
+    "build:android": "pnpm run type-check && pnpm run build-only && node ./scripts/sync.js --android",
+    "sync:android": "node ./scripts/sync.js --android",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
+    "test": "node --test scripts/*.test.js",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write src/"
   },

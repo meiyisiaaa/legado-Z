@@ -1,0 +1,172 @@
+:root {
+  color-scheme: light;
+  --app-bg: #e8efee;
+  --app-panel: #f7fbfa;
+  --app-panel-raised: #ffffff;
+  --app-panel-muted: #eef4f3;
+  --app-ink: #172729;
+  --app-ink-soft: #42585a;
+  --app-ink-muted: #667b7c;
+  --app-line: rgba(23, 63, 66, 0.14);
+  --app-accent: #007f82;
+  --app-accent-strong: #006b70;
+  --app-accent-soft: #d6efec;
+  --app-accent-line: rgba(0, 127, 130, 0.45);
+  --app-accent-glow: rgba(0, 127, 130, 0.16);
+  --app-success: #247c61;
+  --app-success-glow: rgba(36, 124, 97, 0.14);
+  --app-danger: #b54747;
+  --app-danger-line: rgba(181, 71, 71, 0.4);
+  --app-danger-surface: rgba(181, 71, 71, 0.07);
+  --app-danger-glow: rgba(181, 71, 71, 0.14);
+  --app-warning: #9c6b20;
+  --app-warning-glow: rgba(156, 107, 32, 0.14);
+  --app-focus-ring: rgba(0, 127, 130, 0.62);
+  --app-loading-backdrop: rgba(232, 239, 238, 0.52);
+  --app-progress-track: rgba(102, 123, 124, 0.16);
+  --app-shadow: 0 18px 42px rgba(21, 48, 50, 0.08);
+  --app-shadow-soft: 0 8px 22px rgba(21, 48, 50, 0.06);
+  --el-color-primary: var(--app-accent);
+  --el-color-primary-light-3: #55a8a7;
+  --el-color-primary-light-5: #87c3bf;
+  --el-color-primary-light-7: #b5dcd7;
+  --el-color-primary-light-8: #cbe8e4;
+  --el-color-primary-light-9: #e4f4f1;
+  --el-color-primary-dark-2: #00696d;
+  --el-bg-color: var(--app-panel-raised);
+  --el-bg-color-page: var(--app-bg);
+  --el-fill-color-blank: var(--app-panel-raised);
+  --el-text-color-primary: var(--app-ink);
+  --el-text-color-regular: var(--app-ink-soft);
+  --el-text-color-secondary: var(--app-ink-muted);
+  --el-border-color: var(--app-line);
+  --el-border-color-light: var(--app-line);
+  --el-border-color-lighter: var(--app-line);
+  --app-duration-state: 240ms;
+  --app-duration-panel: 360ms;
+}
+
+html.dark {
+  color-scheme: dark;
+  --app-bg: #10191b;
+  --app-panel: #172326;
+  --app-panel-raised: #1d2b2e;
+  --app-panel-muted: #213336;
+  --app-ink: #e5f0ef;
+  --app-ink-soft: #bacdcb;
+  --app-ink-muted: #91aaa8;
+  --app-line: rgba(196, 228, 224, 0.14);
+  --app-accent: #53d4c9;
+  --app-accent-strong: #76e3d9;
+  --app-accent-soft: #183e40;
+  --app-accent-line: rgba(83, 212, 201, 0.48);
+  --app-accent-glow: rgba(83, 212, 201, 0.16);
+  --app-success: #69c79e;
+  --app-success-glow: rgba(105, 199, 158, 0.16);
+  --app-danger: #f08d87;
+  --app-danger-line: rgba(240, 141, 135, 0.48);
+  --app-danger-surface: rgba(240, 141, 135, 0.09);
+  --app-danger-glow: rgba(240, 141, 135, 0.16);
+  --app-warning: #e8bd72;
+  --app-warning-glow: rgba(232, 189, 114, 0.16);
+  --app-focus-ring: rgba(83, 212, 201, 0.68);
+  --app-loading-backdrop: rgba(16, 25, 27, 0.56);
+  --app-progress-track: rgba(196, 228, 224, 0.16);
+  --app-shadow: 0 20px 46px rgba(0, 0, 0, 0.24);
+  --app-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --el-color-primary: var(--app-accent);
+  --el-color-primary-light-3: #3fa8a2;
+  --el-color-primary-light-5: #337f7d;
+  --el-color-primary-light-7: #285c5d;
+  --el-color-primary-light-8: #21494b;
+  --el-color-primary-light-9: #19383a;
+  --el-color-primary-dark-2: #78e4d9;
+  --el-bg-color: var(--app-panel-raised);
+  --el-bg-color-page: var(--app-bg);
+  --el-fill-color-blank: var(--app-panel-raised);
+  --el-text-color-primary: var(--app-ink);
+  --el-text-color-regular: var(--app-ink-soft);
+  --el-text-color-secondary: var(--app-ink-muted);
+  --el-border-color: var(--app-line);
+  --el-border-color-light: var(--app-line);
+  --el-border-color-lighter: var(--app-line);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-ink);
+  font-family:
+    Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color var(--app-duration-state) ease-out,
+    color var(--app-duration-state) ease-out;
+}
+
+button,
+a,
+.el-button,
+.el-input__wrapper,
+.el-select__wrapper,
+.el-tabs__item {
+  transition:
+    color var(--app-duration-state) ease-out,
+    background-color var(--app-duration-state) ease-out,
+    border-color var(--app-duration-state) ease-out,
+    box-shadow var(--app-duration-state) ease-out,
+    opacity var(--app-duration-state) ease-out;
+}
+
+button:focus-visible,
+a:focus-visible,
+.el-button:focus-visible {
+  outline: 3px solid var(--app-focus-ring);
+  outline-offset: 3px;
+}
+
+.el-button {
+  border-radius: 11px;
+  font-weight: 600;
+}
+
+.el-input__wrapper,
+.el-select__wrapper {
+  border-radius: 12px;
+}
+
+.el-dialog {
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-panel-raised);
+  box-shadow: var(--app-shadow);
+}
+
+.el-message-box {
+  border-color: var(--app-line);
+  border-radius: 16px;
+  background: var(--app-panel-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

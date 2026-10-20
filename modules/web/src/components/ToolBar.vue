@@ -1,15 +1,19 @@
 <template>
-  <div class="menu flex-column-center">
+  <div class="menu" role="toolbar" aria-label="源管理操作">
     <el-button
       v-for="button in buttons"
-      size="large"
+      size="default"
       :key="button.name"
+      :type="button.type"
+      :icon="button.icon"
+      :aria-label="button.name"
       @click="button.action"
     >
-      {{ button.name }}
+      <span>{{ button.name }}</span>
+      <kbd v-if="button.hotKeys.length">{{ button.hotKeys.join(' + ') }}</kbd>
     </el-button>
-    <el-button size="large" @click="() => (hotkeysDialogVisible = true)"
-      >快捷键</el-button
+    <el-button size="default" :icon="Setting" @click="() => (hotkeysDialogVisible = true)"
+      >快捷键设置</el-button
     >
   </div>
   <el-dialog
@@ -67,7 +71,19 @@
 
 <script setup lang="ts">
 import API from '@api'
-import { CircleCheckFilled, Edit } from '@element-plus/icons-vue'
+import {
+  CircleCheckFilled,
+  Delete,
+  DocumentAdd,
+  Edit,
+  EditPen,
+  Promotion,
+  Refresh,
+  RefreshLeft,
+  Setting,
+  VideoPlay,
+} from '@element-plus/icons-vue'
+import type { Component } from 'vue'
 import hotkeys from 'hotkeys-js'
 import { getSourceName, isInvaildSource, normalizeSource } from '../utils/souce'
 
@@ -198,19 +214,23 @@ const debug = () => {
   store.startDebug()
 }
 
-const buttons = ref<{ name: string; hotKeys: string[]; action: () => void }[]>(
-  Array.of(
-    { name: '⇈推送源', hotKeys: [], action: push },
-    { name: '⇊拉取源', hotKeys: [], action: pull },
-    { name: '⋙生成源', hotKeys: [], action: conver2Tab },
-    { name: '⋘编辑源', hotKeys: [], action: conver2Source },
-    { name: '✗清空表单', hotKeys: [], action: clearEdit },
-    { name: '↶撤销操作', hotKeys: [], action: undo },
-    { name: '↷重做操作', hotKeys: [], action: redo },
-    { name: '⇏调试源', hotKeys: [], action: debug },
-    { name: '✓保存源', hotKeys: [], action: saveSource },
-  ),
-)
+const buttons = ref<{
+  name: string
+  hotKeys: string[]
+  action: () => void
+  icon: Component
+  type?: 'primary' | 'danger'
+}[]>([
+  { name: '推送源', hotKeys: [], action: push, icon: Promotion, type: 'primary' },
+  { name: '拉取源', hotKeys: [], action: pull, icon: Refresh },
+  { name: '生成源', hotKeys: [], action: conver2Tab, icon: DocumentAdd },
+  { name: '编辑源', hotKeys: [], action: conver2Source, icon: EditPen },
+  { name: '清空表单', hotKeys: [], action: clearEdit, icon: Delete, type: 'danger' },
+  { name: '撤销操作', hotKeys: [], action: undo, icon: RefreshLeft },
+  { name: '清空历史', hotKeys: [], action: redo, icon: Delete },
+  { name: '调试源', hotKeys: [], action: debug, icon: VideoPlay },
+  { name: '保存源', hotKeys: [], action: saveSource, icon: CircleCheckFilled, type: 'primary' },
+])
 const hotkeysDialogVisible = ref(true)
 
 const recordKeyDowning = ref(false)
@@ -323,28 +343,55 @@ onMounted(() => {
   justify-content: center;
 }
 
-.menu > .el-button {
-  margin: 4px;
-  padding: 1em;
-  width: 6em;
+.menu {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu :deep(.el-button) {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  border-radius: 9px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.menu :deep(kbd) {
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  padding: 1px 4px;
+  color: var(--app-ink-muted);
+  background: var(--app-panel);
+  font: 9px ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 @media (max-width: 1023px) {
   .menu {
     display: grid;
-    grid-template-columns: repeat(5, minmax(44px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    padding: 8px;
   }
 
-  .menu > .el-button {
+  .menu :deep(.el-button) {
     width: auto;
     min-width: 0;
-    min-height: 44px;
+    min-height: 40px;
     margin: 0;
-    padding: 6px 2px;
+    padding: 6px 3px;
     white-space: normal;
     line-height: 1.25;
+  }
+
+  .menu :deep(kbd) {
+    display: none;
   }
 }
 

@@ -11,6 +11,8 @@ import type {
   SeachBook,
 } from '@/book'
 import type { Source } from '@/source'
+import { createSocketTask, encodeSearchPayload } from './socketTask'
+import type { SocketTask } from './socketTask'
 
 export type LeagdoApiResponse<T> = {
   isSuccess: boolean
@@ -92,27 +94,35 @@ const search = (
   searchKey: string,
   onReceive: (data: SeachBook[]) => void,
   onFinish: () => void,
-) => {
-  const socket = new WebSocket(
-    new URL('searchBook', legado_webSocket_entry_point),
-  )
-  socket.onerror = wsOnError
-
-  socket.onopen = () => {
-    socket.send(`{"key":"${searchKey}"}`)
-  }
-  socket.onmessage = event => {
-    try {
-      onReceive(JSON.parse(event.data))
-      wsOnMessage?.call(socket, event)
-    } catch {
-      onFinish()
-    }
-  }
-
-  socket.onclose = () => {
+  onError?: (error: unknown) => void,
+): SocketTask => {
+  let socket: WebSocket
+  try {
+    socket = new WebSocket(
+      new URL('searchBook', legado_webSocket_entry_point),
+    )
+  } catch (error) {
+    reportSocketError(undefined, error, onError)
     onFinish()
+    return { cancel: () => {} }
   }
+
+  return createSocketTask(socket, {
+    onOpen: activeSocket => activeSocket.send(encodeSearchPayload(searchKey)),
+    onMessage: data => {
+      if (typeof data !== 'string') {
+        throw new Error('搜索服务返回了非文本消息')
+      }
+      const payload: unknown = JSON.parse(data)
+      if (!Array.isArray(payload)) {
+        throw new Error('搜索服务返回格式错误')
+      }
+      onReceive(payload as SeachBook[])
+      wsOnMessage?.call(socket, { data } as MessageEvent)
+    },
+    onError: error => reportSocketError(socket, error, onError),
+    onFinish,
+  })
 }
 
 const saveBook = (book: BaseBook) =>
@@ -151,24 +161,50 @@ const debug = (
   /** @type {string} */ searchKey: string,
   /** @type {(data: string) => void} */ onReceive: (data: string) => void,
   /** @type {() => void} */ onFinish: () => void,
-) => {
-  const url = new URL(
-    `${isBookSource ? 'bookSource' : 'rssSource'}Debug`,
-    legado_webSocket_entry_point,
-  )
-
-  const socket = new WebSocket(url)
-  socket.onerror = wsOnError
-  socket.onopen = () => {
-    socket.send(JSON.stringify({ tag: sourceUrl, key: searchKey }))
-  }
-  socket.onmessage = event => {
-    onReceive(event.data)
-    wsOnMessage?.call(socket, event)
-  }
-
-  socket.onclose = () => {
+  onError?: (error: unknown) => void,
+): SocketTask => {
+  let socket: WebSocket
+  try {
+    const url = new URL(
+      `${isBookSource ? 'bookSource' : 'rssSource'}Debug`,
+      legado_webSocket_entry_point,
+    )
+    socket = new WebSocket(url)
+  } catch (error) {
+    reportSocketError(undefined, error, onError)
     onFinish()
+    return { cancel: () => {} }
+  }
+
+  return createSocketTask(socket, {
+    onOpen: activeSocket =>
+      activeSocket.send(JSON.stringify({ tag: sourceUrl, key: searchKey })),
+    onMessage: data => {
+      if (typeof data !== 'string') {
+        throw new Error('调试服务返回了非文本消息')
+      }
+      onReceive(data)
+      wsOnMessage?.call(socket, { data } as MessageEvent)
+    },
+    onError: error => reportSocketError(socket, error, onError),
+    onFinish,
+  })
+}
+
+const reportSocketError = (
+  socket: WebSocket | undefined,
+  error: unknown,
+  onError?: (error: unknown) => void,
+) => {
+  try {
+    wsOnError?.call(socket as WebSocket, error as Event)
+  } catch {
+    // The global notifier can throw after reporting the connection failure.
+  }
+  try {
+    onError?.(error)
+  } catch {
+    // A local notifier must not prevent socket cleanup.
   }
 }
 

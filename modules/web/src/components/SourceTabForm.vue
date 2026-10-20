@@ -1,5 +1,5 @@
 <template>
-  <el-tabs id="source-edit">
+<el-tabs id="source-edit">
     <el-tab-pane
       v-for="{ name, children } in Object.values(config)"
       :label="name"
@@ -92,19 +92,46 @@ const { currentSource } = storeToRefs(store);
 </script>
 
 <style lang="scss" scoped>
+:deep(#source-edit) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 :deep(.el-tab-pane) {
-  height: calc(100vh - 55px);
-  height: calc(100dvh - 55px);
-  padding-top: 15px;
-  padding-right: 5px;
+  height: 100%;
+  padding: 16px 18px 22px;
   box-sizing: border-box;
   overflow-y: auto;
 }
+
+:deep(.el-tabs__content) {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
 :deep(.el-tabs__header) {
+  flex: none;
   margin: 0;
 }
 
+@media (max-width: 980px) {
+  :deep(.el-tabs__content) {
+    min-height: 360px;
+  }
+
+  :deep(.el-tab-pane) {
+    height: auto;
+    min-height: 360px;
+  }
+}
+
 @media (max-width: 479px) {
+  :deep(.el-tab-pane) {
+    padding: 12px 12px 18px;
+  }
+
   :deep(.el-form-item) {
     display: flex;
     flex-direction: column;
