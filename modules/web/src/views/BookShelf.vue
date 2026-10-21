@@ -19,7 +19,12 @@
           @keyup.enter="searchBook"
         />
         <div class="search-actions">
-          <el-button v-if="isSearching" text @click="cancelSearch(true)">取消搜索</el-button>
+          <el-button v-if="isSearching && isLoading" text @click="cancelSearch(true)">
+            取消搜索
+          </el-button>
+          <el-button v-else-if="isSearching" text @click="returnToShelf">
+            返回书架
+          </el-button>
           <el-button v-else type="primary" :disabled="!searchWord.trim()" @click="searchBook">在线搜索</el-button>
         </div>
       </div>
@@ -67,7 +72,7 @@
         <span>{{ searchError }}</span><el-button text @click="searchBook">重试</el-button>
       </div>
       <div v-if="!isLoading && books.length === 0 && !searchError" class="shelf-empty">
-        {{ isSearching ? '没有找到匹配书籍，请更换关键词。' : searchWord ? '书架中没有匹配藏书。' : '书架还空着，请搜索一本书开始阅读。' }}
+        {{ isSearching ? '没有可添加的新书。书架已有的匹配书不会重复显示，可返回书架查看。' : searchWord ? '书架中没有匹配藏书。' : '书架还空着，请搜索一本书开始阅读。' }}
       </div>
       <book-items v-else :books="books" @bookClick="handleBookClick" :isSearch="isSearching" />
     </main>
@@ -145,6 +150,11 @@ const cancelSearch = (restoreShelf = false) => {
     searchError.value = ''
     store.clearSearchBooks()
   }
+}
+
+const returnToShelf = () => {
+  cancelSearch(true)
+  searchWord.value = ''
 }
 
 watch(searchWord, () => {
