@@ -3,36 +3,94 @@ package io.legado.app.ui.widget.compose
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import io.legado.app.help.config.AppConfig
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.ColorUtils as CoreColorUtils
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.ThemeStore
+import kotlin.math.abs
+
+private const val MIN_ACCENT_SURFACE_CONTRAST = 4.5
+private const val ACCENT_LIGHTNESS_SEARCH_STEPS = 24
+
+internal fun contrastSafeAccent(accent: Color, surfaces: List<Color>): Color {
+    val surfaceColors = surfaces.map { it.toArgb() }
+    fun hasEnoughContrast(candidate: Color): Boolean {
+        val candidateColor = candidate.toArgb()
+        return surfaceColors.all {
+            CoreColorUtils.calculateContrast(candidateColor, it) >= MIN_ACCENT_SURFACE_CONTRAST
+        }
+    }
+
+    if (hasEnoughContrast(accent)) return accent
+
+    val hsl = FloatArray(3)
+    CoreColorUtils.colorToHSL(accent.toArgb(), hsl)
+    val originalLightness = hsl[2]
+
+    fun colorAt(lightness: Float): Color = Color(
+        CoreColorUtils.HSLToColor(floatArrayOf(hsl[0], hsl[1], lightness))
+    )
+
+    fun candidateToward(lighten: Boolean): Pair<Color, Float>? {
+        var failingLightness = originalLightness
+        var passingLightness = if (lighten) 1f else 0f
+        if (!hasEnoughContrast(colorAt(passingLightness))) return null
+
+        repeat(ACCENT_LIGHTNESS_SEARCH_STEPS) {
+            val middle = (failingLightness + passingLightness) / 2f
+            if (hasEnoughContrast(colorAt(middle))) passingLightness = middle
+            else failingLightness = middle
+        }
+
+        val candidate = colorAt(passingLightness)
+        return if (hasEnoughContrast(candidate)) candidate to passingLightness else null
+    }
+
+    val nearestCandidate = listOfNotNull(
+        candidateToward(lighten = false),
+        candidateToward(lighten = true)
+    ).minByOrNull { abs(it.second - originalLightness) }
+    if (nearestCandidate != null) return nearestCandidate.first
+
+    // Custom foreground/background choices can make one shared 4.5:1 tone impossible.
+    fun minimumContrast(candidate: Color): Double = surfaceColors.minOf {
+        CoreColorUtils.calculateContrast(candidate.toArgb(), it)
+    }
+    return if (minimumContrast(Color.Black) >= minimumContrast(Color.White)) {
+        Color.Black
+    } else {
+        Color.White
+    }
+}
 
 data class LegadoMotion(val enabled: Boolean = true) {
     val press: Int get() = if (enabled) 120 else 0
@@ -84,7 +142,6 @@ fun LegadoTheme(content: @Composable () -> Unit) {
         preview -> Color(if (dark) 0xFFD84315 else 0xFFE53935)
         else -> Color(ThemeStore.accentColor(context))
     }
-    val onAccent = if (accent.luminance() > 0.179f) Color.Black else Color.White
     var hostContext = context
     while (hostContext is ContextWrapper && hostContext !is BaseActivity<*>) {
         val wrapped = hostContext.baseContext
@@ -95,15 +152,40 @@ fun LegadoTheme(content: @Composable () -> Unit) {
     val inActivityWindow = hostActivity != null && LocalView.current.rootView === hostActivity.window.decorView
     val surface = if (!preview && hostActivity?.hasImageBackground == true && inActivityWindow)
         Color.Transparent else background
+    val surfaceVariant = lerp(background, foreground, if (ink) 0f else 0.055f)
+    val surfaceContainerLowest = background
+    val surfaceContainerLow = lerp(background, foreground, if (ink) 0f else 0.025f)
+    val surfaceContainer = lerp(background, foreground, if (ink) 0f else 0.045f)
+    val surfaceContainerHigh = lerp(background, foreground, if (ink) 0f else 0.07f)
+    val surfaceContainerHighest = lerp(background, foreground, if (ink) 0f else 0.1f)
+    val accentSurfaces = listOf(
+        surface,
+        surfaceVariant,
+        surfaceContainerLowest,
+        surfaceContainerLow,
+        surfaceContainer,
+        surfaceContainerHigh,
+        surfaceContainerHighest
+    ).map { it.compositeOver(background) }
+    val accessibleAccent = remember(accent, background, foreground, ink) {
+        contrastSafeAccent(accent, accentSurfaces)
+    }
+    val onAccent = remember(accessibleAccent) {
+        val accentColor = accessibleAccent.toArgb()
+        val blackContrast = CoreColorUtils.calculateContrast(Color.Black.toArgb(), accentColor)
+        val whiteContrast = CoreColorUtils.calculateContrast(Color.White.toArgb(), accentColor)
+        if (blackContrast >= whiteContrast) Color.Black else Color.White
+    }
     val colors = if (dark) darkColorScheme() else lightColorScheme()
     MaterialTheme(
         typography = legadoTypography,
         colorScheme = colors.copy(
-            primary = accent,
+            primary = accessibleAccent,
             onPrimary = onAccent,
             primaryContainer = lerp(background, accent, if (ink) 0f else 0.16f),
             onPrimaryContainer = foreground,
-            secondary = accent,
+            secondary = accessibleAccent,
+            onSecondary = onAccent,
             secondaryContainer = lerp(background, accent, if (ink) 0f else 0.1f),
             onSecondaryContainer = foreground,
             background = surface,
@@ -111,13 +193,13 @@ fun LegadoTheme(content: @Composable () -> Unit) {
             surface = surface,
             surfaceTint = Color.Transparent,
             onSurface = foreground,
-            surfaceVariant = lerp(background, foreground, if (ink) 0f else 0.055f),
+            surfaceVariant = surfaceVariant,
             onSurfaceVariant = secondaryForeground,
-            surfaceContainerLowest = background,
-            surfaceContainerLow = lerp(background, foreground, if (ink) 0f else 0.025f),
-            surfaceContainer = lerp(background, foreground, if (ink) 0f else 0.045f),
-            surfaceContainerHigh = lerp(background, foreground, if (ink) 0f else 0.07f),
-            surfaceContainerHighest = lerp(background, foreground, if (ink) 0f else 0.1f),
+            surfaceContainerLowest = surfaceContainerLowest,
+            surfaceContainerLow = surfaceContainerLow,
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            surfaceContainerHighest = surfaceContainerHighest,
             outline = lerp(background, foreground, if (ink) 1f else 0.48f),
             outlineVariant = lerp(background, foreground, if (ink) 1f else 0.16f)
         ),
