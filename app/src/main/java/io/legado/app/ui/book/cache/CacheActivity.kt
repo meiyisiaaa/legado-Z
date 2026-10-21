@@ -130,8 +130,18 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.book_cache, menu)
         menu.iconItemOnLongClick(R.id.menu_download) {
+            if (!CacheBook.isRun && !isCacheStartAllowed()) {
+                return@iconItemOnLongClick
+            }
             PopupMenu(this, it).apply {
                 inflate(R.menu.book_cache_download)
+                updateCacheActionMenuEnabled(
+                    menu = this.menu,
+                    booksLoaded = booksLoaded,
+                    hasLoadError = groupLoadError != null || booksLoadError != null,
+                    hasBooks = books.isNotEmpty(),
+                    isRunning = CacheBook.isRun
+                )
                 this.menu.applyOpenTint(this@CacheActivity)
                 setOnMenuItemClickListener(this@CacheActivity)
             }.show()
@@ -161,13 +171,38 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     private fun upMenu() {
-        menu?.findItem(R.id.menu_book_group)?.subMenu?.let { subMenu ->
+        val currentMenu = menu ?: return
+        val isRunning = CacheBook.isRun
+        updateCacheActionMenuEnabled(
+            menu = currentMenu,
+            booksLoaded = booksLoaded,
+            hasLoadError = groupLoadError != null || booksLoadError != null,
+            hasBooks = books.isNotEmpty(),
+            isRunning = isRunning
+        )
+        currentMenu.findItem(R.id.menu_download)?.let { item ->
+            if (isRunning) {
+                item.setIconCompat(R.drawable.ic_stop_black_24dp)
+                item.setTitle(R.string.stop)
+            } else {
+                item.setIconCompat(R.drawable.ic_play_24dp)
+                item.setTitle(R.string.download_start)
+            }
+            item.actionView?.contentDescription = item.title
+            item.actionView?.isEnabled = item.isEnabled
+        }
+        currentMenu.findItem(R.id.menu_book_group)?.subMenu?.let { subMenu ->
             subMenu.removeGroup(R.id.menu_group)
             groupList.forEach { bookGroup ->
                 subMenu.add(R.id.menu_group, bookGroup.order, Menu.NONE, bookGroup.groupName)
             }
         }
+        currentMenu.applyTint(this)
     }
+
+    private fun isCacheStartAllowed(): Boolean =
+        !CacheBook.isRun && booksLoaded && groupLoadError == null &&
+            booksLoadError == null && books.isNotEmpty()
 
     /**
      * 菜单按下回调
@@ -176,36 +211,46 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         when (item.itemId) {
             R.id.menu_download,
             R.id.menu_download_after -> {
-                if (!CacheBook.isRun) sureCacheBook {
-                    books.forEach { book ->
-                        CacheBook.start(
-                            this@CacheActivity,
-                            book,
-                            book.durChapterIndex,
-                            book.lastChapterIndex
-                        )
-                    }
-                } else {
+                if (CacheBook.isRun) {
                     CacheBook.stop(this@CacheActivity)
+                } else if (item.isEnabled && isCacheStartAllowed()) {
+                    sureCacheBook {
+                        if (!isCacheStartAllowed()) return@sureCacheBook
+                        books.forEach { book ->
+                            CacheBook.start(
+                                this@CacheActivity,
+                                book,
+                                book.durChapterIndex,
+                                book.lastChapterIndex
+                            )
+                        }
+                    }
                 }
             }
 
             R.id.menu_download_all -> {
-                if (!CacheBook.isRun) sureCacheBook {
-                    books.forEach { book ->
-                        CacheBook.start(
-                            this@CacheActivity,
-                            book,
-                            0,
-                            book.lastChapterIndex
-                        )
-                    }
-                } else {
+                if (CacheBook.isRun) {
                     CacheBook.stop(this@CacheActivity)
+                } else if (item.isEnabled && isCacheStartAllowed()) {
+                    sureCacheBook {
+                        if (!isCacheStartAllowed()) return@sureCacheBook
+                        books.forEach { book ->
+                            CacheBook.start(
+                                this@CacheActivity,
+                                book,
+                                0,
+                                book.lastChapterIndex
+                            )
+                        }
+                    }
                 }
             }
 
-            R.id.menu_export_all -> exportAll()
+            R.id.menu_export_all -> if (
+                item.isEnabled && menu?.findItem(R.id.menu_export_all)?.isEnabled == true
+            ) {
+                exportAll()
+            }
             R.id.menu_enable_replace -> AppConfig.exportUseReplace = !item.isChecked
             // 更改菜单状态[enableCustomExport]
             R.id.menu_enable_custom_export -> AppConfig.enableCustomExport = !item.isChecked
@@ -273,6 +318,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         books = emptyList()
         booksLoaded = false
         booksLoadError = null
+        upMenu()
         booksFlowJob?.cancel()
         booksFlowJob = lifecycleScope.launch {
             appDb.bookDao.flowByGroup(groupId).map { books ->
@@ -300,11 +346,13 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 booksLoadError = error.localizedMessage?.takeIf(String::isNotBlank)
                     ?: getString(R.string.error_get_data)
                 booksLoaded = true
+                upMenu()
             }.collect { books ->
                 this@CacheActivity.books = books
                 booksLoadError = null
                 booksLoaded = true
                 listRevision++
+                upMenu()
                 viewModel.loadCacheFiles(books)
             }
         }
@@ -314,12 +362,14 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private fun initGroupData() {
         groupFlowJob?.cancel()
         groupLoadError = null
+        upMenu()
         groupFlowJob = lifecycleScope.launch {
             appDb.bookGroupDao.flowAll().flowOn(IO).conflate().catch {
                 if (it is CancellationException) throw it
                 AppLog.put("缓存管理界面获取分组数据失败\n${it.localizedMessage}", it)
                 groupLoadError = it.localizedMessage?.takeIf(String::isNotBlank)
                     ?: getString(R.string.error_get_data)
+                upMenu()
             }.collect {
                 groupList.clear()
                 groupList.addAll(it)
@@ -354,19 +404,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         }
         observeEvent<String>(EventBus.UP_DOWNLOAD_STATE) {
             listRevision++
-            if (!CacheBook.isRun) {
-                menu?.findItem(R.id.menu_download)?.let { item ->
-                    item.setIconCompat(R.drawable.ic_play_24dp)
-                    item.setTitle(R.string.download_start)
-                }
-                menu?.applyTint(this)
-            } else {
-                menu?.findItem(R.id.menu_download)?.let { item ->
-                    item.setIconCompat(R.drawable.ic_stop_black_24dp)
-                    item.setTitle(R.string.stop)
-                }
-                menu?.applyTint(this)
-            }
+            upMenu()
         }
         observeEvent<Pair<Book, BookChapter>>(EventBus.SAVE_CONTENT) { (book, chapter) ->
             viewModel.cacheChapters.getOrPut(book.bookUrl) { hashSetOf() }.add(chapter.url)
@@ -626,4 +664,30 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         return ExportBookService.exportMsg[bookUrl]
     }
 
+}
+
+internal fun updateCacheActionMenuEnabled(
+    menu: Menu,
+    booksLoaded: Boolean,
+    hasLoadError: Boolean,
+    hasBooks: Boolean,
+    isRunning: Boolean
+) {
+    val canStart = booksLoaded && !hasLoadError && hasBooks
+    val canStartOrStop = canStart || isRunning
+    menu.findItem(R.id.menu_download)?.let { item ->
+        item.isEnabled = canStartOrStop
+        item.actionView?.isEnabled = canStartOrStop
+    }
+    menu.findItem(R.id.menu_download_after)?.let { item ->
+        item.isEnabled = canStartOrStop
+        item.isVisible = true
+        item.setTitle(if (isRunning) R.string.stop else R.string.menu_download_after)
+    }
+    menu.findItem(R.id.menu_download_all)?.let { item ->
+        item.isEnabled = canStartOrStop && !isRunning
+        item.isVisible = !isRunning
+        item.setTitle(R.string.menu_download_all)
+    }
+    menu.findItem(R.id.menu_export_all)?.isEnabled = canStart
 }
