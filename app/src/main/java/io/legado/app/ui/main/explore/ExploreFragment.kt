@@ -112,7 +112,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun initSearchView() {
         searchView.apply {
             applyTint(primaryTextColor)
-            isSubmitButtonEnabled = true
+            isSubmitButtonEnabled = false
             queryHint = getString(R.string.screen_find)
             clearFocus()
             setOnQueryTextListener(object : SearchView.OnQueryTextListener {

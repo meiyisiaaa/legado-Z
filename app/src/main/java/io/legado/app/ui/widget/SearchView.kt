@@ -13,6 +13,8 @@ import android.text.style.ImageSpan
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import io.legado.app.R
@@ -30,6 +32,11 @@ class SearchView @JvmOverloads constructor(
     init {
         // AppCompat fixes the input at 36dp independently of the outer SearchView.
         findViewById<TextView>(androidx.appcompat.R.id.search_src_text).layoutParams.height = 48.dpToPx()
+        findViewById<View>(androidx.appcompat.R.id.search_close_btn).minimumWidth = 48.dpToPx()
+        val searchFrameMargins = findViewById<View>(androidx.appcompat.R.id.search_edit_frame)
+            .layoutParams as ViewGroup.MarginLayoutParams
+        searchFrameMargins.leftMargin = 6.dpToPx()
+        searchFrameMargins.rightMargin = 6.dpToPx()
     }
 
     @SuppressLint("UseCompatLoadingForDrawables")

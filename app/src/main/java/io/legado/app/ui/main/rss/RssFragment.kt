@@ -124,7 +124,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
 
     private fun initSearchView() {
         searchView.applyTint(primaryTextColor)
-        searchView.isSubmitButtonEnabled = true
+        searchView.isSubmitButtonEnabled = false
         searchView.queryHint = getString(R.string.rss)
         searchView.clearFocus()
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {

@@ -10,6 +10,7 @@ import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -44,6 +45,7 @@ class SearchViewContrastInstrumentedTest {
                 val parent = FrameLayout(themedContext)
                 val searchView = LayoutInflater.from(themedContext)
                     .inflate(R.layout.view_search, parent, false) as SearchView
+                parent.addView(searchView)
                 val input = searchView.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)
                 searchView.queryHint = "hint fixture"
                 input.setTextColor(inputColors)
@@ -52,18 +54,17 @@ class SearchViewContrastInstrumentedTest {
                     48f,
                     searchView.resources.displayMetrics
                 ).roundToInt()
+                val narrowWindowWidth = TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP,
+                    110f,
+                    searchView.resources.displayMetrics
+                ).roundToInt()
                 assertTrue("search touch target should be at least 48dp", searchView.layoutParams.height >= minTouchHeight)
+                val searchParams = searchView.layoutParams as ViewGroup.MarginLayoutParams
+                val parentHeight = searchParams.height + searchParams.topMargin + searchParams.bottomMargin
 
-                searchView.measure(
-                    View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(searchView.layoutParams.height, View.MeasureSpec.EXACTLY)
-                )
-                searchView.layout(0, 0, 600, searchView.measuredHeight)
-                searchView.measure(
-                    View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(searchView.layoutParams.height, View.MeasureSpec.EXACTLY)
-                )
-                searchView.layout(0, 0, 600, searchView.measuredHeight)
+                measureAndLayout(parent, 600, parentHeight)
+                measureAndLayout(parent, 600, parentHeight)
                 assertTrue("search input target should be at least 48dp", input.measuredHeight >= minTouchHeight)
 
                 assertEquals(
@@ -85,6 +86,21 @@ class SearchViewContrastInstrumentedTest {
                 searchView.setQuery("query fixture", false)
                 assertEquals("query fixture", searchView.query.toString())
                 val clearButton = searchView.findViewById<View>(androidx.appcompat.R.id.search_close_btn)
+                forceLayoutTree(parent)
+                measureAndLayout(parent, narrowWindowWidth, parentHeight)
+                assertTrue(
+                    "search input width ${input.measuredWidth}px should be at least ${minTouchHeight}px " +
+                        "inside a 110dp toolbar",
+                    input.measuredWidth >= minTouchHeight
+                )
+                assertTrue(
+                    "clear action width ${clearButton.measuredWidth}px should be at least ${minTouchHeight}px",
+                    clearButton.measuredWidth >= minTouchHeight
+                )
+                assertTrue(
+                    "clear action height ${clearButton.measuredHeight}px should be at least ${minTouchHeight}px",
+                    clearButton.measuredHeight >= minTouchHeight
+                )
                 assertTrue("query should expose the clear action", clearButton.performClick())
                 assertEquals("", searchView.query.toString())
             }
@@ -127,5 +143,22 @@ class SearchViewContrastInstrumentedTest {
             }
         }
         assertTrue("span did not draw with the current paint color", containsExpected)
+    }
+
+    private fun measureAndLayout(parent: FrameLayout, width: Int, height: Int) {
+        parent.measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+        )
+        parent.layout(0, 0, width, height)
+    }
+
+    private fun forceLayoutTree(view: View) {
+        view.forceLayout()
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                forceLayoutTree(view.getChildAt(index))
+            }
+        }
     }
 }
