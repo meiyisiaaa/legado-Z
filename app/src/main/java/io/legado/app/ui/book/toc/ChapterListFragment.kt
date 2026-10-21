@@ -12,6 +12,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -28,9 +29,12 @@ import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.longToastOnUi
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.Callable
 
 class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapter_list),
     TocViewModel.ChapterListCallBack {
@@ -38,7 +42,9 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
     private val binding by viewBinding(FragmentChapterListBinding::bind)
     private var durChapterIndex = 0
     private var chapterList: List<BookChapter>? = null
-    private var uiState by mutableStateOf(ChapterListUiState())
+    private var chapterQueryJob: Job? = null
+    private var chapterQueryGeneration = 0L
+    private var uiState by mutableStateOf(ChapterListUiState(isLoading = true))
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         viewModel.chapterListCallBack = this
@@ -49,7 +55,8 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
                         ChapterListScreen(
                             state = uiState,
                             onChapterClick = ::openChapter,
-                            onChapterLongClick = { requireContext().longToastOnUi(it) }
+                            onChapterLongClick = { requireContext().longToastOnUi(it) },
+                            onRetry = { upChapterList(uiState.searchKey) }
                         )
                     }
                 }
@@ -71,7 +78,7 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
             countWords = AppConfig.tocCountWords
         )
         updateTitleRules(book)
-        upChapterList(null)
+        upChapterList(viewModel.searchKey)
         initCacheFileNames(book)
     }
 
@@ -112,19 +119,68 @@ class ChapterListFragment : VMBaseFragment<TocViewModel>(R.layout.fragment_chapt
 
     override fun upChapterList(searchKey: String?) {
         val currentBook = viewModel.bookData.value ?: return
-        lifecycleScope.launch {
-            val items = withContext(IO) {
-                val end = currentBook.simulatedTotalChapterNum() - 1
-                if (searchKey.isNullOrBlank()) {
-                    appDb.bookChapterDao.getChapterList(viewModel.bookUrl, 0, end).also {
-                        chapterList = it
+        val generation = ++chapterQueryGeneration
+        chapterQueryJob?.cancel()
+        uiState = uiState.copy(
+            chapters = emptyList(),
+            searchKey = searchKey,
+            isLoading = true,
+            loadError = null
+        )
+        chapterQueryJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val (items, fullChapterList) = withContext(IO) {
+                    val end = currentBook.simulatedTotalChapterNum() - 1
+                    val bookUrl = currentBook.bookUrl
+                    val chapterDao = appDb.bookChapterDao
+                    if (searchKey.isNullOrBlank()) {
+                        val chapters = chapterDao.getChapterList(bookUrl, 0, end)
+                        chapters to chapters
+                    } else if (currentBook.isVideo) {
+                        // Filtering and volume indexes must use the same directory snapshot.
+                        appDb.runInTransaction(Callable {
+                            val allVideoChapters = chapterDao.getChapterList(bookUrl, 0, end)
+                            val matchingChapters = chapterDao.search(bookUrl, searchKey, 0, end)
+                            matchingChapters to allVideoChapters
+                        })
+                    } else {
+                        chapterDao.search(bookUrl, searchKey, 0, end) to null
                     }
-                } else {
-                    appDb.bookChapterDao.search(viewModel.bookUrl, searchKey, 0, end)
+                }
+                if (generation != chapterQueryGeneration) return@launch
+                if (fullChapterList != null) chapterList = fullChapterList
+                uiState = uiState.copy(
+                    chapters = items,
+                    isLoading = false,
+                    loadError = null
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == chapterQueryGeneration) {
+                    AppLog.put("目录列表加载失败", error)
+                    uiState = uiState.copy(
+                        chapters = emptyList(),
+                        isLoading = false,
+                        loadError = getString(R.string.error_get_data)
+                    )
+                }
+            } finally {
+                if (generation == chapterQueryGeneration) {
+                    chapterQueryJob = null
                 }
             }
-            uiState = uiState.copy(chapters = items)
         }
+    }
+
+    override fun onDestroyView() {
+        chapterQueryGeneration++
+        chapterQueryJob?.cancel()
+        chapterQueryJob = null
+        if (viewModel.chapterListCallBack === this) {
+            viewModel.chapterListCallBack = null
+        }
+        super.onDestroyView()
     }
 
     override fun clearDisplayTitle() {

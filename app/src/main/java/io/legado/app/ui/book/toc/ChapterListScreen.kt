@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,9 +22,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,7 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +63,9 @@ import kotlinx.coroutines.withContext
 
 internal data class ChapterListUiState(
     val chapters: List<BookChapter> = emptyList(),
+    val searchKey: String? = null,
+    val isLoading: Boolean = false,
+    val loadError: String? = null,
     val cachedFileNames: Set<String> = emptySet(),
     val currentChapterIndex: Int = 0,
     val currentChapterInfo: String = "",
@@ -74,11 +83,14 @@ internal fun ChapterListScreen(
     state: ChapterListUiState,
     onChapterClick: (BookChapter) -> Unit,
     onChapterLongClick: (String) -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val motionEnabled = LocalLegadoMotion.current.enabled
+    val loadingDescription = stringResource(R.string.data_loading)
+    val loadError = state.loadError
 
     fun scrollToItem(index: Int) {
         scope.launch {
@@ -101,11 +113,46 @@ internal fun ChapterListScreen(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
-            if (state.chapters.isEmpty()) {
-                item(key = "empty") {
-                    Text(
-                        stringResource(R.string.empty),
+            when {
+                state.isLoading -> item(key = "loading") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 112.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(30.dp).semantics {
+                                contentDescription = loadingDescription
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+                loadError != null -> item(key = "load-error") {
+                    Column(
                         modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = loadError,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        TextButton(onClick = onRetry) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
+                state.chapters.isEmpty() -> item(key = "empty") {
+                    val emptyMessage = if (state.searchKey.isNullOrBlank()) {
+                        R.string.chapter_list_empty
+                    } else {
+                        R.string.chapter_search_empty
+                    }
+                    Text(
+                        stringResource(emptyMessage),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite },
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -264,7 +311,8 @@ private fun ChapterListScreenPreview() {
         ChapterListScreen(
             state = ChapterListUiState(currentChapterInfo = "第 128 章（128 / 312）"),
             onChapterClick = {},
-            onChapterLongClick = {}
+            onChapterLongClick = {},
+            onRetry = {}
         )
     }
 }
