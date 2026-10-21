@@ -8,9 +8,9 @@ import android.view.MenuItem
 import android.view.SubMenu
 import androidx.activity.addCallback
 import androidx.activity.viewModels
-import androidx.core.view.isGone
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
+import io.legado.app.constant.AppConst
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.help.config.AppConfig
@@ -20,8 +20,12 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.model.remote.RemoteBook
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.import.BaseImportBookActivity
+import io.legado.app.ui.book.import.ImportBrowserContent
+import io.legado.app.ui.book.import.ImportBrowserItem
 import io.legado.app.ui.widget.SelectActionBar
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ArchiveUtils
+import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.find
 import io.legado.app.utils.showDialogFragment
@@ -41,6 +45,8 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
 
     override val viewModel by viewModels<RemoteBookViewModel>()
     private val adapter by lazy { RemoteBookAdapter(this, this) }
+    private val browserItems = mutableStateOf<List<ImportBrowserItem>>(emptyList())
+    private var currentItems: List<RemoteBook> = emptyList()
     private var groupMenu: SubMenu? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -60,8 +66,9 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
             launch {
                 viewModel.dataFlow.conflate().collect { sortedRemoteBooks ->
                     binding.refreshProgressBar.isAutoLoading = false
-                    binding.tvEmptyMsg.isGone = sortedRemoteBooks.isNotEmpty()
                     adapter.setItems(sortedRemoteBooks)
+                    currentItems = sortedRemoteBooks
+                    refreshBrowserItems()
                     delay(500)
                 }
             }
@@ -80,9 +87,17 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
     }
 
     private fun initView() {
+        binding.importCompose.setContent {
+            LegadoTheme {
+                ImportBrowserContent(
+                    items = browserItems.value,
+                    emptyMessage = androidx.compose.ui.res.stringResource(R.string.empty),
+                    onItemClick = ::onBrowserItemClick,
+                    onItemLongClick = ::onBrowserItemLongClick
+                )
+            }
+        }
         binding.layTop.setBackgroundColor(backgroundColor)
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView.adapter = adapter
         binding.selectActionBar.setMainActionText(R.string.add_to_bookshelf)
         binding.selectActionBar.setCallBack(this)
         if (!LocalConfig.webDavBookHelpVersionIsLast) {
@@ -143,10 +158,12 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
 
     override fun revertSelection() {
         adapter.revertSelection()
+        refreshBrowserItems()
     }
 
     override fun selectAll(selectAll: Boolean) {
         adapter.selectAll(selectAll)
+        refreshBrowserItems()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -155,6 +172,7 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
         viewModel.addToBookshelf(adapter.selected) {
             adapter.selected.clear()
             adapter.notifyDataSetChanged()
+            upCountView()
             binding.refreshProgressBar.isAutoLoading = false
         }
     }
@@ -181,6 +199,9 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
         binding.tvPath.text = path
         viewModel.dataCallback?.clear()
         adapter.selected.clear()
+        currentItems = emptyList()
+        refreshBrowserItems()
+        upCountView()
         viewModel.loadRemoteBookList(
             viewModel.dirList.lastOrNull()?.path
         ) {
@@ -194,7 +215,39 @@ class RemoteBookActivity : BaseImportBookActivity<RemoteBookViewModel>(),
     }
 
     override fun upCountView() {
+        refreshBrowserItems()
         binding.selectActionBar.upCountView(adapter.selected.size, adapter.checkableCount)
+    }
+
+    private fun onBrowserItemClick(index: Int) {
+        currentItems.getOrNull(index)?.let { item ->
+            when {
+                item.isDir -> openDir(item)
+                !item.isOnBookShelf -> {
+                    if (!adapter.selected.add(item)) adapter.selected.remove(item)
+                    upCountView()
+                }
+                else -> startRead(item)
+            }
+        }
+    }
+
+    private fun onBrowserItemLongClick(index: Int) {
+        currentItems.getOrNull(index)?.takeIf { it.isOnBookShelf }?.let(::addToBookShelfAgain)
+    }
+
+    private fun refreshBrowserItems() {
+        browserItems.value = currentItems.map { item ->
+            ImportBrowserItem(
+                key = item.path,
+                title = item.filename,
+                badge = item.contentType,
+                summary = "${ConvertUtils.formatFileSize(item.size)} · ${AppConst.dateFormat.format(item.lastModify)}",
+                isDirectory = item.isDir,
+                inBookshelf = item.isOnBookShelf,
+                selected = adapter.selected.contains(item)
+            )
+        }
     }
 
     override fun onDialogDismiss(tag: String) {

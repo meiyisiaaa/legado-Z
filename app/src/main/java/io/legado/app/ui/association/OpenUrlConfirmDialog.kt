@@ -2,26 +2,45 @@ package io.legado.app.ui.association
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
-import androidx.core.net.toUri
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.ComposeView
 import androidx.fragment.app.viewModels
+import androidx.core.net.toUri
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
-import io.legado.app.databinding.DialogOpenUrlConfirmBinding
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.utils.applyTint
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.init.appCtx
 
-class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confirm),
-    Toolbar.OnMenuItemClickListener {
+class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confirm) {
 
     constructor(
         uri: String,
@@ -39,8 +58,8 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
         }
     }
 
-    val binding by viewBinding(DialogOpenUrlConfirmBinding::bind)
-    val viewModel by viewModels<OpenUrlConfirmViewModel>()
+    private val viewModel by viewModels<OpenUrlConfirmViewModel>()
+    private var showDeleteConfirm by mutableStateOf(false)
 
     override fun onStart() {
         super.onStart()
@@ -48,30 +67,27 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        initMenu()
-        val arguments = arguments ?: return
-        viewModel.initData(arguments)
+        val args = arguments ?: return
+        viewModel.initData(args)
         if (viewModel.uri.isBlank()) {
             dismiss()
             return
         }
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.subtitle = viewModel.sourceName
-        initView()
-    }
-
-    private fun initMenu() {
-        binding.toolBar.setOnMenuItemClickListener(this)
-        binding.toolBar.inflateMenu(R.menu.open_url_confirm)
-        binding.toolBar.menu.applyTint(requireContext())
-    }
-
-    private fun initView() {
-        binding.message.text = "正在请求跳转链接/应用，是否跳转？"
-        binding.btnNegative.setOnClickListener { dismiss() }
-        binding.btnPositive.setOnClickListener {
-            openUrl()
-            dismiss()
+        view.findViewById<ComposeView>(R.id.composeView).setContent {
+            LegadoTheme {
+                OpenUrlConfirmContent(
+                    sourceName = viewModel.sourceName,
+                    onCancel = { dismiss() },
+                    onConfirm = {
+                        openUrl()
+                        dismiss()
+                    },
+                    onDisableSource = {
+                        viewModel.disableSource { dismiss() }
+                    },
+                    onDeleteSource = { showDeleteConfirm = true }
+                )
+            }
         }
     }
 
@@ -79,9 +95,7 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
         try {
             val uri = viewModel.uri.toUri()
             val mimeType = viewModel.mimeType
-            // 创建目标 Intent 并设置类型
             val targetIntent = Intent(Intent.ACTION_VIEW).apply {
-                // 同时设置 Data 和 Type
                 if (!mimeType.isNullOrBlank()) {
                     setDataAndType(uri, mimeType)
                 } else {
@@ -89,8 +103,6 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
                 }
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
-            // 验证是否有应用可以处理
             if (targetIntent.resolveActivity(appCtx.packageManager) != null) {
                 startActivity(targetIntent)
             } else {
@@ -101,32 +113,103 @@ class OpenUrlConfirmDialog() : BaseDialogFragment(R.layout.dialog_open_url_confi
         }
     }
 
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_disable_source -> {
-                viewModel.disableSource {
-                    dismiss()
-                }
-            }
-
-            R.id.menu_delete_source -> {
-                alert(R.string.draw) {
-                    setMessage(getString(R.string.sure_del) + "\n" + viewModel.sourceName)
-                    noButton()
-                    yesButton {
-                        viewModel.deleteSource {
-                            dismiss()
-                        }
-                    }
-                }
-            }
-        }
-        return false
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         activity?.finish()
     }
 
+    @Composable
+    private fun OpenUrlConfirmContent(
+        sourceName: String,
+        onCancel: () -> Unit,
+        onConfirm: () -> Unit,
+        onDisableSource: () -> Unit,
+        onDeleteSource: () -> Unit
+    ) {
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text(stringResource(R.string.draw)) },
+                text = { Text(getString(R.string.sure_del) + "\n" + sourceName) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirm = false
+                        viewModel.deleteSource { dismiss() }
+                    }) { Text(stringResource(R.string.delete_source)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(4.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 8.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("跳转确认", style = MaterialTheme.typography.titleLarge)
+                        if (sourceName.isNotBlank()) {
+                            Text(
+                                sourceName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    var menuExpanded by androidx.compose.runtime.remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_more_vert),
+                                contentDescription = stringResource(R.string.more_menu),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.disable_source)) },
+                                onClick = { menuExpanded = false; onDisableSource() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete_source)) },
+                                onClick = { menuExpanded = false; onDeleteSource() }
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = "正在请求跳转链接/应用，是否跳转？",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)
+                ) {
+                    TextButton(onClick = onCancel) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                    TextButton(onClick = onConfirm) {
+                        Text(stringResource(R.string.ok))
+                    }
+                }
+            }
+        }
+    }
 }

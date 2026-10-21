@@ -3,16 +3,15 @@ package io.legado.app.ui.book.bookmark
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Bookmark
-import io.legado.app.databinding.DialogBookmarkBinding
-import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.setLayout
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -26,15 +25,12 @@ class BookmarkDialog() : BaseDialogFragment(R.layout.dialog_bookmark, true) {
         }
     }
 
-    private val binding by viewBinding(DialogBookmarkBinding::bind)
-
     override fun onStart() {
         super.onStart()
         setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
         val arguments = arguments ?: let {
             dismiss()
             return
@@ -47,33 +43,44 @@ class BookmarkDialog() : BaseDialogFragment(R.layout.dialog_bookmark, true) {
             return
         }
         val editPos = arguments.getInt("editPos", -1)
-        binding.tvFooterLeft.visible(editPos >= 0)
-        binding.run {
-            tvChapterName.text = bookmark.chapterName
-            editBookText.setText(bookmark.bookText)
-            editContent.setText(bookmark.content)
-            tvCancel.setOnClickListener {
-                dismiss()
-            }
-            tvOk.setOnClickListener {
-                bookmark.bookText = editBookText.text?.toString() ?: ""
-                bookmark.content = editContent.text?.toString() ?: ""
-                lifecycleScope.launch {
-                    withContext(IO) {
-                        appDb.bookmarkDao.insert(bookmark)
+        val container = view as? FrameLayout ?: return
+        container.addView(
+            LegadoComposeView(requireContext()).apply {
+                setContent {
+                    LegadoTheme {
+                        BookmarkEditScreen(
+                            chapterName = bookmark.chapterName,
+                            initialBookText = bookmark.bookText,
+                            initialNote = bookmark.content,
+                            canDelete = editPos >= 0,
+                            onSave = { bookText, note ->
+                                bookmark.bookText = bookText
+                                bookmark.content = note
+                                lifecycleScope.launch {
+                                    withContext(IO) {
+                                        appDb.bookmarkDao.insert(bookmark)
+                                    }
+                                    dismiss()
+                                }
+                            },
+                            onDelete = {
+                                lifecycleScope.launch {
+                                    withContext(IO) {
+                                        appDb.bookmarkDao.delete(bookmark)
+                                    }
+                                    dismiss()
+                                }
+                            },
+                            onCancel = { dismiss() }
+                        )
                     }
-                    dismiss()
                 }
-            }
-            tvFooterLeft.setOnClickListener {
-                lifecycleScope.launch {
-                    withContext(IO) {
-                        appDb.bookmarkDao.delete(bookmark)
-                    }
-                    dismiss()
-                }
-            }
-        }
+            },
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
     }
 
 }

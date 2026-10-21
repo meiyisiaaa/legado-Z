@@ -42,6 +42,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     val selectStatus = arrayListOf<Boolean>()
     val newSourceStatus = arrayListOf<Boolean>()
     val updateSourceStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -130,6 +131,8 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             val mText = text.trim()
             when {

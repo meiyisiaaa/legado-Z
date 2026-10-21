@@ -39,6 +39,7 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     val allSources = arrayListOf<RssSource>()
     val checkSources = arrayListOf<RssSource?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -105,6 +106,8 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importSourceAwait(text)
         }.onError {

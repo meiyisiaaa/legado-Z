@@ -10,6 +10,11 @@ import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -19,6 +24,7 @@ import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.GSON
 import io.legado.app.utils.imeHeight
 import io.legado.app.utils.sendToClip
@@ -55,6 +61,7 @@ class ReplaceEditActivity :
 
     override val binding by viewBinding(ActivityReplaceEditBinding::inflate)
     override val viewModel by viewModels<ReplaceEditViewModel>()
+    private var draft by mutableStateOf(ReplaceEditDraft())
 
     private val softKeyboardTool by lazy {
         KeyboardToolPop(this, lifecycleScope, binding.root, this)
@@ -62,6 +69,17 @@ class ReplaceEditActivity :
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         softKeyboardTool.attachToWindow(window)
+        binding.composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.composeView.setContent {
+            LegadoTheme {
+                ReplaceEditContent(
+                    draft = draft,
+                    onDraftChange = { draft = it },
+                    onHelp = { showHelp("regexHelp") },
+                    modifier = Modifier
+                )
+            }
+        }
         initView()
         viewModel.initData(intent) {
             upReplaceView(it)
@@ -129,40 +147,39 @@ class ReplaceEditActivity :
     }
 
     private fun initView() {
-        binding.ivHelp.setOnClickListener {
-            showHelp("regexHelp")
-        }
         binding.root.setOnApplyWindowInsetsListenerCompat { _, windowInsets ->
             softKeyboardTool.initialPadding = windowInsets.imeHeight
             windowInsets
         }
     }
 
-    private fun upReplaceView(replaceRule: ReplaceRule) = binding.run {
-        etName.setText(replaceRule.name)
-        etGroup.setText(replaceRule.group)
-        etReplaceRule.setText(replaceRule.pattern)
-        cbUseRegex.isChecked = replaceRule.isRegex
-        etReplaceTo.setText(replaceRule.replacement)
-        cbScopeTitle.isChecked = replaceRule.scopeTitle
-        cbScopeContent.isChecked = replaceRule.scopeContent
-        etScope.setText(replaceRule.scope)
-        etExcludeScope.setText(replaceRule.excludeScope)
-        etTimeout.setText(replaceRule.timeoutMillisecond.toString())
+    private fun upReplaceView(replaceRule: ReplaceRule) {
+        draft = ReplaceEditDraft(
+            name = replaceRule.name,
+            group = replaceRule.group.orEmpty(),
+            pattern = replaceRule.pattern,
+            isRegex = replaceRule.isRegex,
+            replacement = replaceRule.replacement,
+            scopeTitle = replaceRule.scopeTitle,
+            scopeContent = replaceRule.scopeContent,
+            scope = replaceRule.scope.orEmpty(),
+            excludeScope = replaceRule.excludeScope.orEmpty(),
+            timeout = replaceRule.timeoutMillisecond.toString()
+        )
     }
 
-    private fun getReplaceRule(): ReplaceRule = binding.run {
+    private fun getReplaceRule(): ReplaceRule {
         val replaceRule: ReplaceRule = viewModel.replaceRule ?: ReplaceRule()
-        replaceRule.name = etName.text.toString()
-        replaceRule.group = etGroup.text.toString()
-        replaceRule.pattern = etReplaceRule.text.toString()
-        replaceRule.isRegex = cbUseRegex.isChecked
-        replaceRule.replacement = etReplaceTo.text.toString()
-        replaceRule.scopeTitle = cbScopeTitle.isChecked
-        replaceRule.scopeContent = cbScopeContent.isChecked
-        replaceRule.scope = etScope.text.toString()
-        replaceRule.excludeScope = etExcludeScope.text.toString()
-        replaceRule.timeoutMillisecond = etTimeout.text.toString().ifEmpty { "3000" }.toLong()
+        replaceRule.name = draft.name
+        replaceRule.group = draft.group
+        replaceRule.pattern = draft.pattern
+        replaceRule.isRegex = draft.isRegex
+        replaceRule.replacement = draft.replacement
+        replaceRule.scopeTitle = draft.scopeTitle
+        replaceRule.scopeContent = draft.scopeContent
+        replaceRule.scope = draft.scope
+        replaceRule.excludeScope = draft.excludeScope
+        replaceRule.timeoutMillisecond = draft.timeout.toLongOrNull() ?: 3000L
         return replaceRule
     }
 

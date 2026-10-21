@@ -28,6 +28,10 @@ class ColorPreference(context: Context, attrs: AttributeSet) : Preference(contex
     private var mColor = Color.BLACK
     private var showDialog: Boolean = false
 
+    @get:ColorInt
+    val selectedColor: Int
+        get() = mColor
+
     @ColorPickerDialog.DialogType
     private var dialogType: Int = 0
     private var colorShape: Int = 0

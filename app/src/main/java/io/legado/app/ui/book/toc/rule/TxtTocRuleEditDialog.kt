@@ -2,10 +2,12 @@ package io.legado.app.ui.book.toc.rule
 
 import android.app.Application
 import android.os.Bundle
-import android.view.MenuItem
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
@@ -13,127 +15,117 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.TxtTocRule
-import io.legado.app.databinding.DialogTocRegexEditBinding
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.widget.code.addJsPattern
-import io.legado.app.ui.widget.code.addJsonPattern
-import io.legado.app.utils.*
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.getClipText
+import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.sendToClip
+import io.legado.app.utils.setLayout
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
-import kotlin.toString
 
-class TxtTocRuleEditDialog() : BaseDialogFragment(R.layout.dialog_toc_regex_edit, true),
-    Toolbar.OnMenuItemClickListener {
+class TxtTocRuleEditDialog() : BaseDialogFragment(0) {
 
     constructor(id: Long?) : this() {
         id ?: return
-        arguments = Bundle().apply {
-            putLong("id", id)
-        }
+        arguments = Bundle().apply { putLong("id", id) }
     }
 
-    private val binding by viewBinding(DialogTocRegexEditBinding::bind)
     private val viewModel by viewModels<ViewModel>()
     private val callback get() = (parentFragment as? Callback) ?: activity as? Callback
+    private var originalRule: TxtTocRule? = null
+    private var draft by mutableStateOf<TxtTocRule?>(null)
+    private var loaded by mutableStateOf(false)
+    private var validationError by mutableStateOf<String?>(null)
 
     override fun onStart() {
         super.onStart()
         setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View = LegadoComposeView(requireContext()).apply {
+        setContent {
+            LegadoTheme {
+                TxtTocRuleEditorContent(
+                    rule = draft,
+                    loading = !loaded,
+                    error = validationError,
+                    onRuleChange = {
+                        draft = it
+                        validationError = null
+                    },
+                    onSave = ::save,
+                    onCopy = ::copyRule,
+                    onPaste = ::pasteRule,
+                    onClose = { dismiss() }
+                )
+            }
+        }
+    }
+
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
-        initMenu()
-        viewModel.initData(arguments?.getLong("id")) {
-            upRuleView(it)
+        val id = arguments?.takeIf { it.containsKey("id") }?.getLong("id")
+        viewModel.initData(id) { loadedRule ->
+            originalRule = loadedRule?.copy()
+            draft = loadedRule?.copy() ?: TxtTocRule()
+            loaded = true
         }
     }
 
-    private fun initMenu() {
-        binding.toolBar.inflateMenu(R.menu.txt_toc_rule_edit)
-        binding.toolBar.menu.applyTint(requireContext())
-        binding.toolBar.setOnMenuItemClickListener(this)
-    }
-
-    override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
-            R.id.menu_save -> {
-                val tocRule = getRuleFromView()
-                if (checkValid(tocRule)) {
-                    callback?.saveTxtTocRule(tocRule)
-                    dismissAllowingStateLoss()
-                }
-            }
-            R.id.menu_copy_rule -> context?.sendToClip(GSON.toJson(getRuleFromView()))
-            R.id.menu_paste_rule -> viewModel.pasteRule {
-                upRuleView(it)
-            }
+    private fun save() {
+        val rule = draft ?: return
+        if (rule.name.isEmpty()) {
+            validationError = "名称不能为空"
+            requireContext().toastOnUi("名称不能为空")
+            return
         }
-        return true
-    }
-
-    private fun checkValid(tocRule: TxtTocRule): Boolean {
-        if (tocRule.name.isEmpty()) {
-            toastOnUi("名称不能为空")
-            return false
-        }
-
         try {
-            Pattern.compile(tocRule.rule, Pattern.MULTILINE)
+            Pattern.compile(rule.rule, Pattern.MULTILINE)
         } catch (ex: PatternSyntaxException) {
             AppLog.put("正则语法错误或不支持(txt)：${ex.localizedMessage}", ex, true)
-            return false
+            validationError = ex.localizedMessage ?: "正则语法错误"
+            return
         }
-
-        return true
+        callback?.saveTxtTocRule(rule)
+        dismissAllowingStateLoss()
     }
 
-    private fun upRuleView(tocRule: TxtTocRule?) {
-        binding.tvRuleName.setText(tocRule?.name)
-        binding.tvRuleRegex.setText(tocRule?.rule)
-        binding.tvRuleReplacement.apply{
-            addJsonPattern()
-            addJsPattern()
-            setText(tocRule?.replacement)
-        }
-        binding.tvRuleExample.setText(tocRule?.example)
+    private fun copyRule() {
+        draft?.let { requireContext().sendToClip(GSON.toJson(it)) }
     }
 
-    private fun getRuleFromView(): TxtTocRule {
-        val tocRule = viewModel.tocRule ?: TxtTocRule().apply {
-            viewModel.tocRule = this
+    private fun pasteRule() {
+        viewModel.pasteRule { pasted ->
+            draft = pasted.copy()
+            validationError = null
         }
-        binding.run {
-            tocRule.name = tvRuleName.text.toString()
-            tocRule.rule = tvRuleRegex.text.toString()
-            tocRule.replacement = tvRuleReplacement.text.toString()
-            tocRule.example = tvRuleExample.text.toString()
-        }
-        return tocRule
     }
 
-    private fun isSame(): Boolean{
-        val tocRule = viewModel.tocRule ?: return binding.tvRuleName.text.toString().isEmpty()
-        return binding.run {
-            tocRule.name == tvRuleName.text.toString() &&
-            tocRule.rule == tvRuleRegex.text.toString() &&
-            tocRule.replacement == tvRuleReplacement.text.toString() &&
-            tocRule.example == tvRuleExample.text.toString()
-        }
+    private fun isSame(): Boolean {
+        val current = draft ?: return true
+        val original = originalRule ?: return current.name.isEmpty()
+        return original.name == current.name &&
+            original.rule == current.rule &&
+            original.replacement == current.replacement &&
+            original.example == current.example
     }
 
     override fun dismiss() {
         if (!isSame()) {
             alert(R.string.exit) {
                 setMessage(R.string.exit_no_save)
-                positiveButton(R.string.yes)
-                negativeButton(R.string.no) {
-                    super.dismiss()
-                }
+                positiveButton(R.string.yes) { super.dismiss() }
+                negativeButton(R.string.no)
             }
         } else {
             super.dismiss()
@@ -157,9 +149,7 @@ class TxtTocRuleEditDialog() : BaseDialogFragment(R.layout.dialog_toc_regex_edit
         fun pasteRule(success: (TxtTocRule) -> Unit) {
             execute(context = Dispatchers.Main) {
                 val text = context.getClipText()
-                if (text.isNullOrBlank()) {
-                    throw NoStackTraceException("剪贴板为空")
-                }
+                if (text.isNullOrBlank()) throw NoStackTraceException("剪贴板为空")
                 GSON.fromJsonObject<TxtTocRule>(text).getOrNull()
                     ?: throw NoStackTraceException("格式不对")
             }.onSuccess {
@@ -169,13 +159,9 @@ class TxtTocRuleEditDialog() : BaseDialogFragment(R.layout.dialog_toc_regex_edit
                 it.printOnDebug()
             }
         }
-
     }
 
     interface Callback {
-
         fun saveTxtTocRule(txtTocRule: TxtTocRule)
-
     }
-
 }

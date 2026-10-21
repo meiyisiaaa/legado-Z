@@ -55,7 +55,14 @@
     <string name="last_read">最后阅读</string>
     <string name="update_log">更新日志</string>
     <string name="bookshelf_empty">书架还空着，先去搜索书籍或从发现里添加吧！</string>
+    <string name="bookshelf_loading">正在加载书架</string>
+    <string name="bookshelf_load_failed">书架加载失败</string>
+    <string name="bookshelf_fast_scroll_accessibility">快速滚动书架</string>
+    <string name="bookshelf_long_press_action">查看详情或编辑分组</string>
+    <string name="bookshelf_unread_chapters">%1$d 章未读</string>
+    <string name="bookshelf_unread_with_new_chapters">%1$d 章未读 · 新增 %2$d 章</string>
     <string name="action_search">搜索</string>
+    <string name="clear_search_query">清空搜索词</string>
     <string name="action_download">下载</string>
     <string name="layout_list">列表</string>
     <string name="layout_grid2">网格二列</string>
@@ -284,6 +291,9 @@
     <string name="bookshelf_management">书架管理</string>
     <string name="clear_bookshelf_s">这将会删除所有书籍，请谨慎操作。</string>
     <string name="search_book_source">搜索书源</string>
+    <string name="select_book_source">选择书源</string>
+    <string name="server_empty">暂无服务器</string>
+    <string name="server_empty_desc">添加 WebDAV 服务器后可浏览远程书籍</string>
     <string name="search_rss_source">搜索订阅源</string>
     <string name="search_book_source_num">搜索（共 %d 个书源）</string>
     <string name="chapter_list_size">目录（%d）</string>
@@ -479,6 +489,8 @@
     <string name="import_by_qr_code">二维码导入</string>
     <string name="share_selected_source">分享选中源</string>
     <string name="scan_qr_code">扫描二维码</string>
+    <string name="qr_flashlight_turn_on">打开手电筒</string>
+    <string name="qr_flashlight_turn_off">关闭手电筒</string>
     <string name="click_on_selected_show_menu">选中时点击可弹出菜单</string>
     <string name="theme">主题</string>
     <string name="theme_mode">主题模式</string>
@@ -988,6 +1000,11 @@
     <string name="show_icon">显示图标</string>
     <string name="show_default_book_icon">显示默认书籍图标</string>
     <string name="cache_export">缓存/导出</string>
+    <string name="keyboard_tool_help_description">%1$s：%2$s</string>
+    <string name="keyboard_tool_undo">撤销</string>
+    <string name="keyboard_tool_redo">重做</string>
+    <string name="keyboard_tool_expand_assists">展开辅助按键</string>
+    <string name="keyboard_tool_collapse_assists">收起辅助按键</string>
     <string name="assists_key_config">辅助按键配置</string>
     <string name="url_option">URL 参数</string>
     <string name="only_wifi">仅 WiFi</string>

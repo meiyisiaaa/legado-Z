@@ -13,6 +13,7 @@ import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -28,6 +29,15 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.lifecycleScope
@@ -38,7 +48,6 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseSource
-import io.legado.app.databinding.DialogWebViewBinding
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.webView.PooledWebView
@@ -59,10 +68,8 @@ import io.legado.app.utils.openUrl
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import kotlinx.coroutines.launch
-import androidx.core.view.size
 import io.legado.app.constant.AppConst.imagePathKey
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.coroutine.Coroutine
@@ -78,9 +85,12 @@ import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.model.Download
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.gone
 import io.legado.app.utils.get
 import io.legado.app.utils.writeBytes
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +102,7 @@ import java.net.URLDecoder
 import java.util.Date
 import androidx.core.graphics.createBitmap
 
-class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view), WebJsExtensions.Callback {
+class BottomWebViewDialog() : BottomSheetDialogFragment(), WebJsExtensions.Callback {
 
     constructor(
         sourceKey: String,
@@ -112,7 +122,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
     }
 
-    private val binding by viewBinding(DialogWebViewBinding::bind)
+    private lateinit var webViewContainer: FrameLayout
+    private lateinit var customWebView: FrameLayout
+    private lateinit var composeRoot: View
     private val bottomSheet by lazy {
         dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
     }
@@ -136,6 +148,26 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originOrientation: Int? = null
     private var needClearHistory = true
+    private var isCustomViewVisible by mutableStateOf(false)
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        webViewContainer = FrameLayout(requireContext())
+        customWebView = FrameLayout(requireContext()).apply {
+            visibility = View.GONE
+        }
+        return LegadoComposeView(requireContext()).apply {
+            composeRoot = this
+            setContent {
+                LegadoTheme {
+                    BottomWebViewDialogContent(webViewContainer, customWebView, isCustomViewVisible)
+                }
+            }
+        }
+    }
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -221,7 +253,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 }
                             }
                         currentWebView.clipToOutline = true
-                        binding.customWebView.outlineProvider =
+                        customWebView.outlineProvider =
                             object : android.view.ViewOutlineProvider() {
                                 override fun getOutline(
                                     view: View,
@@ -230,7 +262,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                     outline.setRoundRect(0, 0, view.width, view.height, radius)
                                 }
                             }
-                        binding.customWebView.clipToOutline = true
+                        customWebView.clipToOutline = true
                     }
                 } else { //取消圆角
                     sheet.backgroundTintList = null
@@ -239,8 +271,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
                         currentWebView.outlineProvider = null
                         currentWebView.clipToOutline = false
-                        binding.customWebView.outlineProvider = null
-                        binding.customWebView.clipToOutline = false
+                        customWebView.outlineProvider = null
+                        customWebView.clipToOutline = false
                     }
                 }
             }
@@ -400,7 +432,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         view.setBackgroundColor(0)
-        binding.webViewContainer.addView(currentWebView)
+        webViewContainer.addView(currentWebView)
         lifecycleScope.launch(IO) {
             val args = arguments
             if (args == null) {
@@ -491,7 +523,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
         dialog?.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                if (binding.customWebView.size > 0) { //网页全屏
+                if (customWebView.childCount > 0) { //网页全屏
                     customWebViewCallback?.onCustomViewHidden()
                     return@setOnKeyListener true
                 }
@@ -718,8 +750,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
             originOrientation = activity?.requestedOrientation //先记录原始方向，避免被js控制的影响
             isFullScreen = true
-            binding.webViewContainer.invisible()
-            binding.customWebView.addView(view)
+            webViewContainer.invisible()
+            customWebView.addView(view)
+            customWebView.visible()
+            isCustomViewVisible = true
             customWebViewCallback = callback
             dialog?.keepScreenOn(true)
             behavior?.state = BottomSheetBehavior.STATE_EXPANDED
@@ -731,8 +765,10 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 originOrientation = null
             }
             isFullScreen = false
-            binding.webViewContainer.visible()
-            binding.customWebView.removeAllViews()
+            webViewContainer.visible()
+            customWebView.removeAllViews()
+            customWebView.gone()
+            isCustomViewVisible = false
             customWebViewCallback = null
             dialog?.keepScreenOn(false)
         }
@@ -794,7 +830,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 }
 
                 else -> {
-                    binding.root.longSnackbar(R.string.jump_to_another_app, R.string.confirm) {
+                    composeRoot.longSnackbar(R.string.jump_to_another_app, R.string.confirm) {
                         activity?.openUrl(url)
                     }
                     true
@@ -882,4 +918,33 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
     }
 
+}
+
+@Composable
+internal fun BottomWebViewDialogContent(
+    webViewContainer: FrameLayout,
+    customWebView: FrameLayout,
+    isCustomViewVisible: Boolean
+) {
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { webViewContainer }
+        )
+        if (isCustomViewVisible) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { customWebView }
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun BottomWebViewDialogPreview() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LegadoTheme {
+        BottomWebViewDialogContent(FrameLayout(context), FrameLayout(context), false)
+    }
 }

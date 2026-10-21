@@ -1,31 +1,35 @@
 package io.legado.app.ui.book.read
 
 import android.content.Intent
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.SystemClock
-import android.view.View
-import android.view.ViewGroup
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.clearText
-import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
-import androidx.test.espresso.action.ViewActions.scrollTo
-import androidx.test.espresso.action.ViewActions.typeTextIntoFocusedView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
-import androidx.test.espresso.matcher.ViewMatchers.withId
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -44,15 +48,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.hamcrest.Matcher
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class NativePanelUiInstrumentedTest {
+
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
 
     @Test
     fun roleTtsAndMcpPanelsRemainReachableInCompactLandscapeReader() {
@@ -128,6 +135,9 @@ class NativePanelUiInstrumentedTest {
             }
             awaitReader(scenario!!, importedBook!!.bookUrl, marker)
 
+            // The activity applies the user's app language independently of targetContext.
+            lateinit var uiContext: Context
+            scenario!!.onActivity { uiContext = it }
             scenario!!.onActivity { activity ->
                 RoleTtsDialog().show(activity.supportFragmentManager, ROLE_TTS_TAG)
                 activity.supportFragmentManager.executePendingTransactions()
@@ -135,33 +145,50 @@ class NativePanelUiInstrumentedTest {
             awaitDialog<RoleTtsDialog>(scenario!!, ROLE_TTS_TAG)
             setDialogHeight<RoleTtsDialog>(scenario!!, heightDp = 250)
 
-            onDialogView(withId(R.id.role_tts_enabled)).perform(scrollTo()).check(matches(isDisplayed()))
-            var narratorDescription = ""
-            scenario!!.onActivity { activity ->
-                val dialog = activity.findDialogFragment<RoleTtsDialog>()
-                    ?: throw AssertionError("Expected the role TTS dialog to be active")
-                val list = dialog.requireView().findViewById<ViewGroup>(R.id.role_tts_role_list)
-                assertTrue("The narrator role should be rendered", list.childCount > 0)
-                narratorDescription = list.getChildAt(0).contentDescription.toString()
-                assertTrue("The role row should have an accessible action target", list.getChildAt(0).isClickable)
-            }
-            onDialogView(withContentDescription(narratorDescription))
-                .perform(scrollTo(), click())
-            onDialogView(withText(R.string.role_tts_rename)).check(matches(isDisplayed()))
-            onDialogView(withText(R.string.role_tts_add_alias)).check(matches(isDisplayed()))
-            onDialogView(withText(R.string.role_tts_bind_voice)).check(matches(isDisplayed()))
+            composeRule.onNodeWithTag("role_tts_enabled").performScrollTo().assertIsDisplayed()
+            val narratorRow = composeRule.onAllNodesWithTag("role_tts_role")[0].performScrollTo()
+            val narratorDescription = narratorRow.fetchSemanticsNode()
+                .config[SemanticsProperties.ContentDescription].joinToString("\n")
+            assertTrue(
+                "A newly imported book should show the narrator's unbound-provider state",
+                narratorDescription.contains(uiContext.getString(R.string.role_tts_unbound))
+            )
+            narratorRow.performClick()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_rename)).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_add_alias)).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_bind_voice)).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_add_alias)).performClick()
+            composeRule.onNodeWithTag("role_tts_input").performTextInput("native-panel-alias")
+            closeSoftKeyboard()
+            composeRule.onNodeWithText(uiContext.getString(R.string.ok)).performClick()
+            val updatedNarratorDescription = composeRule.onAllNodesWithTag("role_tts_role")[0]
+                .fetchSemanticsNode().config[SemanticsProperties.ContentDescription].joinToString("\n")
+            assertTrue(
+                "Adding an alias should update the role's accessible description",
+                updatedNarratorDescription.contains("native-panel-alias")
+            )
+            composeRule.onAllNodesWithTag("role_tts_role")[0].performScrollTo().performClick()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_rename)).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_add_alias)).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_bind_voice)).assertIsDisplayed()
             pressBack()
 
-            onDialogView(withId(R.id.role_tts_add_role)).perform(scrollTo()).check(matches(isDisplayed())).perform(click())
-            onDialogView(withText(R.string.role_tts_create_role)).check(matches(isDisplayed()))
-            onDialogView(withText(R.string.cancel)).perform(click())
+            composeRule.onNodeWithTag("role_tts_add_role").performScrollTo().assertIsDisplayed().performClick()
+            composeRule.onNode(hasText(uiContext.getString(R.string.role_tts_create_role))
+                .and(hasSetTextAction().not())).assertIsDisplayed()
+            composeRule.onNodeWithText(uiContext.getString(R.string.cancel)).performClick()
 
-            onDialogView(withId(R.id.role_tts_generate)).perform(scrollTo()).check(matches(isDisplayed()))
+            composeRule.onNodeWithTag("role_tts_generate").performScrollTo().assertIsDisplayed()
             captureScreenshot("role-tts-landscape.png")
-            onDialogView(withId(R.id.role_tts_generate)).perform(click())
-            onDialogView(withText(R.string.role_tts_chapter_picker)).check(matches(isDisplayed()))
+            composeRule.onNodeWithTag("role_tts_generate").performClick()
+            composeRule.onNodeWithText(uiContext.getString(R.string.role_tts_chapter_picker)).assertIsDisplayed()
+            composeRule.onNodeWithTag("role_tts_generate_selected").assertIsNotEnabled()
+            composeRule.onNodeWithTag("role_tts_chapter_0").assertIsOff().performClick().assertIsOn()
+            composeRule.onNodeWithTag("role_tts_generate_selected").assertIsEnabled()
+            composeRule.onNodeWithTag("role_tts_chapter_0").performClick().assertIsOff()
+            composeRule.onNodeWithTag("role_tts_generate_selected").assertIsNotEnabled()
             pressBack()
-            onDialogView(withId(R.id.role_tts_root)).check(matches(isDisplayed()))
+            composeRule.onNodeWithTag("role_tts_root").assertIsDisplayed()
             pressBack()
             awaitDialogClosed<RoleTtsDialog>(scenario!!, ROLE_TTS_TAG)
             awaitReader(scenario!!, importedBook!!.bookUrl, marker)
@@ -173,30 +200,19 @@ class NativePanelUiInstrumentedTest {
             awaitDialog<McpSessionDialog>(scenario!!, MCP_TAG)
             setDialogHeight<McpSessionDialog>(scenario!!, heightDp = 280)
 
-            listOf(R.id.start, R.id.stop, R.id.copy_token, R.id.regenerate).forEach { id ->
-                onDialogView(withId(id)).perform(scrollTo()).check(matches(isDisplayed()))
+            listOf("mcp_start", "mcp_stop", "mcp_copy_token", "mcp_regenerate", "mcp_status").forEach { tag ->
+                composeRule.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
             }
 
-            onDialogView(withId(R.id.port)).perform(
-                scrollTo(),
-                click(),
-                clearText(),
-                typeTextIntoFocusedView("80"),
-                closeSoftKeyboard()
-            )
-            onDialogView(withId(R.id.port)).check(matches(isDisplayed())).check(matches(withText("80")))
-            onDialogView(withId(R.id.start)).perform(scrollTo(), click())
+            composeRule.onNodeWithTag("mcp_port").performScrollTo().performClick()
+            composeRule.onNodeWithTag("mcp_port").performTextClearance()
+            composeRule.onNodeWithTag("mcp_port").performTextInput("80")
+            closeSoftKeyboard()
+            composeRule.onNodeWithText("80").assertIsDisplayed()
+            composeRule.onNodeWithTag("mcp_start").performScrollTo().performClick()
 
-            var portError: String? = null
-            scenario!!.onActivity { activity ->
-                val dialog = activity.findDialogFragment<McpSessionDialog>()
-                    ?: throw AssertionError("Expected the MCP session dialog to be active")
-                portError = dialog.requireView()
-                    .findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.port)
-                    .error?.toString()
-            }
-            assertEquals(context.getString(R.string.mcp_port_invalid), portError)
-            onDialogView(withId(R.id.port)).perform(scrollTo()).check(matches(isDisplayed()))
+            composeRule.onNodeWithText(uiContext.getString(R.string.mcp_port_invalid)).assertIsDisplayed()
+            composeRule.onNodeWithTag("mcp_port").performScrollTo().assertIsDisplayed()
             captureScreenshot("mcp-session-invalid-port-landscape.png")
 
             pressBack()
@@ -360,8 +376,6 @@ class NativePanelUiInstrumentedTest {
         supportFragmentManager.fragments
             .filterIsInstance<T>()
             .lastOrNull { it.isAdded && !it.isRemoving }
-
-    private fun onDialogView(matcher: Matcher<View>) = onView(matcher).inRoot(isDialog())
 
     private companion object {
         const val ROLE_TTS_TAG = "nativePanelRoleTts"

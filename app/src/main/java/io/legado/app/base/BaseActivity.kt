@@ -51,6 +51,9 @@ abstract class BaseActivity<VB : ViewBinding>(
 
     protected abstract val binding: VB
 
+    var hasImageBackground = false
+        private set
+
     val isInMultiWindow: Boolean
         @SuppressLint("ObsoleteSdkInt")
         get() {
@@ -161,10 +164,12 @@ abstract class BaseActivity<VB : ViewBinding>(
     }
 
     open fun upBackgroundImage() {
+        hasImageBackground = false
         if (imageBg) {
             try {
                 ThemeConfig.getBgImage(this, windowManager.windowSize)?.let { drawable ->
                    window.decorView.background = drawable
+                   hasImageBackground = true
                 }
             } catch (_: OutOfMemoryError) {
                 toastOnUi("背景图片太大,内存溢出")

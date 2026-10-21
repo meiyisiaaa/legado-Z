@@ -5,23 +5,31 @@ import android.content.ContextWrapper
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.AttributeSet
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceViewHolder
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemIconPreferenceBinding
-import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.dialog.ComposeDialogView
 import io.legado.app.utils.getCompatDrawable
 import io.legado.app.utils.setLayout
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
 
 class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference(context, attrs) {
@@ -126,90 +134,98 @@ class IconListPreference(context: Context, attrs: AttributeSet) : ListPreference
         var dialogEntries: Array<CharSequence>? = null
         var dialogEntryValues: Array<CharSequence>? = null
         var dialogIconNames: Array<CharSequence>? = null
-        private val binding by viewBinding(DialogRecyclerViewBinding::bind)
-
         override fun onStart() {
             super.onStart()
             setLayout(0.8f, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
 
-        override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-            binding.toolBar.setBackgroundColor(primaryColor)
-            binding.toolBar.setTitle(R.string.change_icon)
-            binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-            val adapter = Adapter(requireContext())
-            binding.recyclerView.adapter = adapter
+        override fun onCreateView(
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
+        ): View {
             arguments?.let {
                 dialogValue = it.getString("value")
                 dialogEntries = it.getCharSequenceArray("entries")
                 dialogEntryValues = it.getCharSequenceArray("entryValues")
                 dialogIconNames = it.getCharSequenceArray("iconNames")
-                dialogEntryValues?.let { values ->
-                    adapter.setItems(values.toList())
+            }
+            return ComposeDialogView(requireContext()).apply {
+                setContent {
+                    LegadoTheme {
+                        IconPreferenceDialogContent(
+                            values = dialogEntryValues.orEmpty().map(CharSequence::toString),
+                            labels = dialogEntries.orEmpty().map(CharSequence::toString),
+                            iconNames = dialogIconNames.orEmpty().map(CharSequence::toString),
+                            selectedValue = dialogValue,
+                            resolveIcon = { name ->
+                                resources.getIdentifier(name, "mipmap", requireContext().packageName)
+                            },
+                            onSelect = { selected ->
+                                onChanged?.invoke(selected)
+                                dismissAllowingStateLoss()
+                            },
+                            onClose = { dismissAllowingStateLoss() }
+                        )
+                    }
                 }
             }
         }
 
+        override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+            // The dialog content is entirely composed in onCreateView.
+        }
+    }
+}
 
-        inner class Adapter(context: Context) :
-            RecyclerAdapter<CharSequence, ItemIconPreferenceBinding>(context) {
-
-            override fun getViewBinding(parent: ViewGroup): ItemIconPreferenceBinding {
-                return ItemIconPreferenceBinding.inflate(inflater, parent, false)
-            }
-
-            override fun convert(
-                holder: ItemViewHolder,
-                binding: ItemIconPreferenceBinding,
-                item: CharSequence,
-                payloads: MutableList<Any>
-            ) {
-                binding.run {
-                    val index = findIndexOfValue(item.toString())
-                    dialogEntries?.let {
-                        label.text = it[index]
-                    }
-                    dialogIconNames?.let {
-                        val resId = context.resources
-                            .getIdentifier(it[index].toString(), "mipmap", context.packageName)
-                        val d = try {
-                            context.getCompatDrawable(resId)
-                        } catch (e: Exception) {
-                            null
-                        }
-                        d?.let {
-                            icon.setImageDrawable(d)
-                        }
-                    }
-                    label.isChecked = item.toString() == dialogValue
-                    root.setOnClickListener {
-                        onChanged?.invoke(item.toString())
-                        this@IconDialog.dismissAllowingStateLoss()
-                    }
-                }
-            }
-
-            override fun registerListener(
-                holder: ItemViewHolder,
-                binding: ItemIconPreferenceBinding
-            ) {
-                holder.itemView.setOnClickListener {
-                    getItem(holder.layoutPosition)?.let {
-                        onChanged?.invoke(it.toString())
-                    }
-                }
-            }
-
-            private fun findIndexOfValue(value: String?): Int {
-                dialogEntryValues?.let { values ->
-                    for (i in values.indices.reversed()) {
-                        if (values[i] == value) {
-                            return i
+@Composable
+private fun IconPreferenceDialogContent(
+    values: List<String>,
+    labels: List<String>,
+    iconNames: List<String>,
+    selectedValue: String?,
+    resolveIcon: (String) -> Int,
+    onSelect: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    PreferenceDialogSurface(title = stringResource(R.string.change_icon), onClose = onClose) {
+        LazyColumn(modifier = Modifier.heightIn(max = 520.dp)) {
+            itemsIndexed(values, key = { index, value -> "$index:$value" }) { index, value ->
+                PreferenceSingleChoiceRow(
+                    title = labels.getOrNull(index) ?: value,
+                    selected = value == selectedValue,
+                    onSelect = { onSelect(value) },
+                    leading = {
+                        val iconName = iconNames.getOrNull(index)
+                        val iconRes = iconName?.let(resolveIcon) ?: 0
+                        if (iconRes != 0) {
+                            Image(
+                                painter = painterResource(iconRes),
+                                contentDescription = labels.getOrNull(index) ?: value,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        } else {
+                            Box(Modifier.size(48.dp))
                         }
                     }
-                }
-                return -1
+                )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun IconPreferenceDialogPreview() {
+    LegadoTheme {
+        IconPreferenceDialogContent(
+            values = listOf("default", "alternate"),
+            labels = listOf("Default", "Alternate"),
+            iconNames = emptyList(),
+            selectedValue = "default",
+            resolveIcon = { 0 },
+            onSelect = {},
+            onClose = {}
+        )
     }
 }

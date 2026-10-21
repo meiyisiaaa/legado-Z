@@ -2,16 +2,36 @@ package io.legado.app.ui.book.read.config
 
 import android.content.DialogInterface
 import android.os.Bundle
-import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.ai.AiConfig
@@ -31,11 +51,6 @@ import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.tts.RoleTtsCacheManager
 import io.legado.app.help.tts.RoleTtsConfigStore
 import io.legado.app.help.http.okHttpClient
-import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.lib.theme.getPrimaryTextColor
-import io.legado.app.lib.theme.getSecondaryTextColor
-import io.legado.app.lib.theme.ThemeStore
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.model.CacheBook
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -43,11 +58,8 @@ import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
 import io.legado.app.service.RoleTtsSystemEngine
 import io.legado.app.service.RoleTtsSystemVoiceCatalog
-import io.legado.app.utils.applyTint
-import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.widget.compose.LegadoTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers.IO
@@ -61,14 +73,26 @@ import java.util.UUID
 
 class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
 
-    private val binding by viewBinding(io.legado.app.databinding.DialogRoleTtsBinding::bind)
     private lateinit var book: Book
-    private var rolesConfig = RoleTtsRolesConfig()
+    private var rolesConfig by mutableStateOf(RoleTtsRolesConfig())
+    private var enabled by mutableStateOf(false)
+    private var activeRoleId by mutableStateOf<String?>(null)
+    private var inputTitle by mutableStateOf<Int?>(null)
+    private var inputMessage by mutableStateOf<Int?>(null)
+    private var inputValue by mutableStateOf("")
+    private var inputRoleId by mutableStateOf<String?>(null)
+    private var inputIsAlias by mutableStateOf(false)
+    private var selectionTitle by mutableStateOf<String?>(null)
+    private var selectionItems by mutableStateOf<List<String>>(emptyList())
+    private var selectionAction by mutableStateOf<((Int) -> Unit)?>(null)
+    private var chapters by mutableStateOf<List<BookChapter>>(emptyList())
+    private var selectedChapterIndices by mutableStateOf(setOf<Int>())
+    private var showChapterPicker by mutableStateOf(false)
+    private var showGenerationProgress by mutableStateOf(false)
+    private var progressChapter by mutableStateOf("")
+    private var progressDetail by mutableStateOf("")
+    private var progressValue by mutableFloatStateOf(0f)
     private var generationJob: Job? = null
-    private var progressDialog: AlertDialog? = null
-    private var progressChapter: TextView? = null
-    private var progressDetail: TextView? = null
-    private var progressBar: ProgressBar? = null
 
     override fun onStart() {
         super.onStart()
@@ -93,33 +117,32 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
         book = currentBook
         rolesConfig = RoleTtsConfigStore.load(book)
         ensureNarratorRole()
-        val background = requireContext().bottomBackground
-        val backgroundIsLight = ColorUtils.isColorLight(background)
-        val primaryTextColor = requireContext().getPrimaryTextColor(backgroundIsLight)
-        val secondaryTextColor = requireContext().getSecondaryTextColor(backgroundIsLight)
-        binding.roleTtsRoot.setBackgroundColor(background)
-        binding.roleTtsTitle.setTextColor(primaryTextColor)
-        binding.roleTtsSummary.setTextColor(secondaryTextColor)
-        binding.roleTtsRolesHeading.setTextColor(primaryTextColor)
-        binding.roleTtsEnabled.setTextColor(primaryTextColor)
-        val accent = ThemeStore.accentColor(requireContext())
-        binding.roleTtsEnabled.applyTint(accent, !backgroundIsLight)
-        binding.roleTtsAddRole.setTextColor(accent)
-        binding.roleTtsGenerate.applyTint(accent, !backgroundIsLight)
-        binding.roleTtsEnabled.isChecked = book.config.roleTtsEnabled
-        binding.roleTtsEnabled.setOnCheckedChangeListener { _, enabled ->
-            RoleTtsConfigStore.setEnabled(book, enabled)
-            ReadAloud.upReadAloudClass()
+        enabled = book.config.roleTtsEnabled
+        view.findViewById<ComposeView>(R.id.legado_compose_host).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    RoleTtsContent(
+                        enabled = enabled,
+                        roles = roleItems(),
+                        onEnabledChange = { value ->
+                            enabled = value
+                            RoleTtsConfigStore.setEnabled(book, value)
+                            ReadAloud.upReadAloudClass()
+                        },
+                        onRoleClick = { activeRoleId = it },
+                        onAddRole = { promptRoleName() },
+                        onGenerate = { showChapterPicker() }
+                    )
+                    renderDialogs()
+                }
+            }
         }
-        binding.roleTtsAddRole.setOnClickListener { promptRoleName() }
-        binding.roleTtsGenerate.setOnClickListener { showChapterPicker() }
-        renderRoles()
     }
 
     override fun onDismiss(dialog: DialogInterface) {
         generationJob?.cancel()
-        progressDialog?.dismiss()
-        progressDialog = null
+        showGenerationProgress = false
         super.onDismiss(dialog)
     }
 
@@ -139,134 +162,210 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
         }
     }
 
-    private fun renderRoles() {
-        val container = binding.roleTtsRoleList
-        container.removeAllViews()
-        rolesConfig.roles.forEach { role ->
-            val row = TextView(requireContext()).apply {
-                val aliasText = role.aliases.takeIf { it.isNotEmpty() }?.joinToString("、")
-                val voiceBinding = role.binding
-                val bindingText = when (voiceBinding?.provider) {
-                    RoleTtsVoiceBinding.Provider.SYSTEM -> getString(
-                        R.string.role_tts_system_voice_label,
-                        "${voiceBinding?.engineId.orEmpty()} · ${voiceBinding?.voiceName.orEmpty()}"
-                    )
-                    RoleTtsVoiceBinding.Provider.HTTP -> getString(
-                        R.string.role_tts_http_voice_label,
-                        appDb.httpTTSDao.get(voiceBinding?.httpTtsId ?: -1L)?.name.orEmpty()
-                    )
-                    null -> getString(R.string.role_tts_unbound)
+    private fun roleItems(): List<RoleTtsRoleItem> = rolesConfig.roles.map { role ->
+        val aliasText = role.aliases.takeIf { it.isNotEmpty() }
+            ?.joinToString("、")
+            ?.let { "${getString(R.string.role_tts_add_alias)}：$it" }
+        val voice = role.binding
+        val bindingText = when (voice?.provider) {
+            RoleTtsVoiceBinding.Provider.SYSTEM -> getString(
+                R.string.role_tts_system_voice_label,
+                "${voice?.engineId.orEmpty()} · ${voice?.voiceName.orEmpty()}"
+            )
+            RoleTtsVoiceBinding.Provider.HTTP -> getString(
+                R.string.role_tts_http_voice_label,
+                appDb.httpTTSDao.get(voice?.httpTtsId ?: -1L)?.name.orEmpty()
+            )
+            null -> getString(R.string.role_tts_unbound)
+        }
+        RoleTtsRoleItem(
+            id = role.id,
+            name = role.name,
+            detail = listOfNotNull(aliasText, bindingText).joinToString("\n")
+        )
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun renderDialogs() {
+        val activeRole = rolesConfig.roles.firstOrNull { it.id == activeRoleId }
+        if (activeRole != null) {
+            ReaderConfigChoiceDialog(
+                title = activeRole.name,
+                options = listOf(
+                    getString(R.string.role_tts_rename),
+                    getString(R.string.role_tts_add_alias),
+                    getString(R.string.role_tts_bind_voice)
+                ),
+                onDismiss = { activeRoleId = null },
+                onSelect = { index ->
+                    activeRoleId = null
+                    when (index) {
+                        0 -> promptRoleName(activeRole)
+                        1 -> promptAlias(activeRole)
+                        2 -> chooseBinding(activeRole)
+                    }
                 }
-                text = buildString {
-                    append(role.name)
-                    if (!aliasText.isNullOrBlank()) append("\n").append(getString(R.string.role_tts_add_alias)).append("：").append(aliasText)
-                    append("\n").append(bindingText)
+            )
+        }
+        val title = inputTitle
+        if (title != null) {
+            AlertDialog(
+                onDismissRequest = { inputTitle = null },
+                title = { Text(stringResource(title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        inputMessage?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
+                        OutlinedTextField(
+                            value = inputValue,
+                            onValueChange = { inputValue = it },
+                            modifier = Modifier.fillMaxWidth().testTag("role_tts_input"),
+                            singleLine = true,
+                            label = { Text(stringResource(if (inputIsAlias) R.string.role_tts_alias_prompt else R.string.role_tts_create_role)) }
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = ::submitInput) { Text(stringResource(R.string.ok)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { inputTitle = null }) { Text(stringResource(R.string.cancel)) }
                 }
-                textSize = 14f
-                val backgroundIsLight = ColorUtils.isColorLight(requireContext().bottomBackground)
-                setTextColor(requireContext().getPrimaryTextColor(backgroundIsLight))
-                setPadding(14.dpToPx(), 10.dpToPx(), 12.dpToPx(), 10.dpToPx())
-                minHeight = 52.dpToPx()
-                isClickable = true
-                isFocusable = true
-                setBackgroundResource(android.R.drawable.list_selector_background)
-                contentDescription = text
-                setOnClickListener { showRoleActions(role) }
-            }
-            container.addView(
-                row,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            )
+        }
+        val selection = selectionTitle
+        if (selection != null) {
+            ReaderConfigChoiceDialog(
+                title = selection,
+                options = selectionItems,
+                onDismiss = { clearSelection() },
+                onSelect = { index ->
+                    val action = selectionAction
+                    clearSelection()
+                    action?.invoke(index)
+                }
+            )
+        }
+        if (showChapterPicker) {
+            AlertDialog(
+                onDismissRequest = { showChapterPicker = false },
+                title = { Text(stringResource(R.string.role_tts_chapter_picker)) },
+                text = {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        itemsIndexed(chapters, key = { index, chapter -> "${chapter.index}:$index" }) { index, chapter ->
+                            androidx.compose.foundation.layout.Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .toggleable(
+                                        value = index in selectedChapterIndices,
+                                        role = Role.Checkbox
+                                    ) { checked ->
+                                        selectedChapterIndices = if (checked) {
+                                            selectedChapterIndices + index
+                                        } else selectedChapterIndices - index
+                                    }
+                                    .testTag("role_tts_chapter_${chapter.index}"),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = index in selectedChapterIndices,
+                                    onCheckedChange = null
+                                )
+                                Text("${chapter.index + 1}. ${chapter.title}")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = selectedChapterIndices.isNotEmpty(),
+                        modifier = Modifier.testTag("role_tts_generate_selected"),
+                        onClick = {
+                            val selected = chapters.filterIndexed { index, _ -> index in selectedChapterIndices }
+                            showChapterPicker = false
+                            if (selected.isEmpty()) {
+                                requireContext().toastOnUi(getString(R.string.role_tts_no_chapter_selected))
+                            } else beginGeneration(selected)
+                        }
+                    ) { Text(stringResource(R.string.role_tts_generate_selected)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showChapterPicker = false }) { Text(stringResource(R.string.cancel)) }
+                }
+            )
+        }
+        if (showGenerationProgress) {
+            AlertDialog(
+                onDismissRequest = { generationJob?.cancel() },
+                title = { Text(stringResource(R.string.role_tts_generating)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(progressChapter)
+                        Text(progressDetail, style = MaterialTheme.typography.bodySmall)
+                        LinearProgressIndicator(progress = { progressValue }, modifier = Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { generationJob?.cancel() }) {
+                        Text(stringResource(R.string.role_tts_cancel_generation))
+                    }
+                }
             )
         }
     }
 
-    private fun showRoleActions(role: BookTtsRole) {
-        val actions = arrayOf(
-            getString(R.string.role_tts_rename),
-            getString(R.string.role_tts_add_alias),
-            getString(R.string.role_tts_bind_voice)
-        )
-        AlertDialog.Builder(requireContext())
-            .setTitle(role.name)
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> promptRoleName(role)
-                    1 -> promptAlias(role)
-                    2 -> chooseBinding(role)
-                }
-            }
-            .show()
-            .applyTint()
-    }
-
     private fun promptRoleName(role: BookTtsRole? = null) {
-        val input = EditText(requireContext()).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            setSingleLine(true)
-            setText(role?.name.orEmpty())
-            setSelection(text.length)
-            hint = getString(R.string.role_tts_create_role)
-        }
-        val builder = AlertDialog.Builder(requireContext())
-            .setTitle(if (role == null) R.string.role_tts_create_role else R.string.role_tts_rename)
-            .setView(input)
-        if (role != null) builder.setMessage(R.string.role_tts_rename_prompt)
-        builder
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.ok) { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isBlank()) return@setPositiveButton
-                runCatching {
-                    rolesConfig = if (role == null) {
-                        RoleTtsRoleRegistry.create(name, UUID.randomUUID().toString(), rolesConfig)
-                    } else {
-                        RoleTtsRoleRegistry.renameOrMerge(rolesConfig, role.id, name)
-                    }
-                    persistRoles()
-                }.onFailure { requireContext().toastOnUi(it.localizedMessage ?: getString(R.string.role_tts_role_duplicate)) }
-            }
-            .show()
-            .applyTint()
+        inputTitle = if (role == null) R.string.role_tts_create_role else R.string.role_tts_rename
+        inputMessage = if (role == null) null else R.string.role_tts_rename_prompt
+        inputValue = role?.name.orEmpty()
+        inputRoleId = role?.id
+        inputIsAlias = false
     }
 
     private fun promptAlias(role: BookTtsRole) {
-        val input = EditText(requireContext()).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            setSingleLine(true)
-            hint = getString(R.string.role_tts_alias_prompt)
-        }
-        AlertDialog.Builder(requireContext())
-            .setTitle(R.string.role_tts_add_alias)
-            .setView(input)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.ok) { _, _ ->
-                runCatching {
-                    rolesConfig = RoleTtsRoleRegistry.addAlias(rolesConfig, role.id, input.text.toString())
-                    persistRoles()
-                }.onFailure { requireContext().toastOnUi(it.localizedMessage ?: getString(R.string.role_tts_role_duplicate)) }
+        inputTitle = R.string.role_tts_add_alias
+        inputMessage = null
+        inputValue = ""
+        inputRoleId = role.id
+        inputIsAlias = true
+    }
+
+    private fun submitInput() {
+        val value = inputValue.trim()
+        if (value.isBlank() && !inputIsAlias) return
+        runCatching {
+            rolesConfig = if (inputIsAlias) {
+                RoleTtsRoleRegistry.addAlias(rolesConfig, inputRoleId.orEmpty(), value)
+            } else {
+                val roleId = inputRoleId
+                if (roleId == null) RoleTtsRoleRegistry.create(value, UUID.randomUUID().toString(), rolesConfig)
+                else RoleTtsRoleRegistry.renameOrMerge(rolesConfig, roleId, value)
             }
-            .show()
-            .applyTint()
+            persistRoles()
+            inputTitle = null
+        }.onFailure {
+            requireContext().toastOnUi(it.localizedMessage ?: getString(R.string.role_tts_role_duplicate))
+        }
     }
 
     private fun chooseBinding(role: BookTtsRole) {
-        val options = listOf(
-            getString(R.string.role_tts_follow_narrator),
-            getString(R.string.role_tts_system_voice),
-            getString(R.string.role_tts_http_voice),
-            getString(R.string.role_tts_clear_voice)
-        )
-        AlertDialog.Builder(requireContext())
-            .setTitle(getString(R.string.role_tts_bind_voice) + " · " + role.name)
-            .setItems(options.toTypedArray()) { _, which ->
-                when (which) {
-                    0, 3 -> updateBinding(role.id, null)
-                    1 -> chooseSystemEngine(role)
-                    2 -> chooseHttpProfile(role)
-                }
+        setSelection(
+            getString(R.string.role_tts_bind_voice) + " · " + role.name,
+            listOf(
+                getString(R.string.role_tts_follow_narrator),
+                getString(R.string.role_tts_system_voice),
+                getString(R.string.role_tts_http_voice),
+                getString(R.string.role_tts_clear_voice)
+            )
+        ) { which ->
+            when (which) {
+                0, 3 -> updateBinding(role.id, null)
+                1 -> chooseSystemEngine(role)
+                2 -> chooseHttpProfile(role)
             }
-            .show()
-            .applyTint()
+        }
     }
 
     private fun chooseSystemEngine(role: BookTtsRole) {
@@ -278,10 +377,9 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
                 requireContext().toastOnUi(getString(R.string.role_tts_no_system_voices))
                 return@launch
             }
-            requireContext().selector(
-                getString(R.string.role_tts_system_voice),
-                engines.map { it.label }
-            ) { _, index -> enumerateVoices(role, engines[index]) }
+            setSelection(getString(R.string.role_tts_system_voice), engines.map { it.label }) { index ->
+                enumerateVoices(role, engines[index])
+            }
         }
     }
 
@@ -295,10 +393,7 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
                 requireContext().toastOnUi(getString(R.string.role_tts_no_system_voices))
                 return@launch
             }
-            requireContext().selector(
-                engine.label,
-                voices.map { "${it.voiceName} · ${it.localeTag}" }
-            ) { _, index ->
+            setSelection(engine.label, voices.map { "${it.voiceName} · ${it.localeTag}" }) { index ->
                 val voice = voices[index]
                 updateBinding(
                     role.id,
@@ -318,16 +413,22 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
             requireContext().toastOnUi(getString(R.string.role_tts_no_voice_configs))
             return
         }
-        requireContext().selector(
-            getString(R.string.role_tts_http_voice),
-            profiles.map { it.name }
-        ) { _, index ->
+        setSelection(getString(R.string.role_tts_http_voice), profiles.map { it.name }) { index ->
             val profile = profiles[index]
-            updateBinding(
-                role.id,
-                RoleTtsVoiceBinding(RoleTtsVoiceBinding.Provider.HTTP, httpTtsId = profile.id)
-            )
+            updateBinding(role.id, RoleTtsVoiceBinding(RoleTtsVoiceBinding.Provider.HTTP, httpTtsId = profile.id))
         }
+    }
+
+    private fun setSelection(title: String, items: List<String>, onSelect: (Int) -> Unit) {
+        selectionTitle = title
+        selectionItems = items
+        selectionAction = onSelect
+    }
+
+    private fun clearSelection() {
+        selectionTitle = null
+        selectionItems = emptyList()
+        selectionAction = null
     }
 
     private fun updateBinding(roleId: String, voice: RoleTtsVoiceBinding?) {
@@ -339,38 +440,17 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
 
     private fun persistRoles() {
         RoleTtsConfigStore.save(book, rolesConfig)
-        renderRoles()
     }
 
     private fun showChapterPicker() {
-        val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
-        if (chapters.isEmpty()) {
+        val availableChapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+        if (availableChapters.isEmpty()) {
             requireContext().toastOnUi(getString(R.string.role_tts_no_chapters))
             return
         }
-        val checked = BooleanArray(chapters.size)
-        val labels = chapters.map { "${it.index + 1}. ${it.title}" }.toTypedArray()
-        val picker = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.role_tts_chapter_picker)
-            .setMultiChoiceItems(labels, checked) { dialog, which, isChecked ->
-                checked[which] = isChecked
-                (dialog as? AlertDialog)?.getButton(DialogInterface.BUTTON_POSITIVE)?.isEnabled = checked.any { it }
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.role_tts_generate_selected) { _, _ ->
-                val selected = chapters.filterIndexed { index, _ -> checked[index] }
-                if (selected.isEmpty()) {
-                    requireContext().toastOnUi(getString(R.string.role_tts_no_chapter_selected))
-                } else {
-                    beginGeneration(selected)
-                }
-            }
-            .create()
-        picker.setOnShowListener {
-            picker.getButton(DialogInterface.BUTTON_POSITIVE)?.isEnabled = false
-        }
-        picker.show()
-        picker.applyTint()
+        chapters = availableChapters
+        selectedChapterIndices = emptySet()
+        showChapterPicker = true
     }
 
     private fun beginGeneration(selected: List<BookChapter>) {
@@ -383,10 +463,10 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
         val roles = rolesConfig.roles.toList()
         val engine = StoryboardEngine(OpenAiClient(okHttpClient))
         val cache = RoleTtsCacheManager(book)
-        val dialog = createProgressDialog()
-        progressDialog = dialog
-        dialog.show()
-        dialog.applyTint()
+        progressChapter = ""
+        progressDetail = ""
+        progressValue = 0f
+        showGenerationProgress = true
         generationJob = lifecycleScope.launch {
             var completed = 0
             var failed = 0
@@ -419,70 +499,23 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
                         failed++
                         AppLog.put("本章分镜失败，播放时按普通旁白处理：${chapter.title}\n${error.localizedMessage}", error)
                         withContext(Main) {
-                            progressDetail?.text = getString(R.string.role_tts_failed_chapter, chapter.title)
+                            progressDetail = getString(R.string.role_tts_failed_chapter, chapter.title)
                         }
                     }
                 }
                 withContext(Main) {
-                    progressDialog?.dismiss()
-                    progressDialog = null
+                    showGenerationProgress = false
                     requireContext().toastOnUi(getString(R.string.role_tts_generation_done, completed, failed))
                 }
             } catch (_: CancellationException) {
                 withContext(Main) {
-                    progressDialog?.dismiss()
-                    progressDialog = null
+                    showGenerationProgress = false
                     if (isAdded) requireContext().toastOnUi(getString(R.string.role_tts_cancelled))
                 }
             } finally {
                 generationJob = null
             }
         }
-    }
-
-    private fun createProgressDialog(): AlertDialog {
-        val context = requireContext()
-        val content = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24.dpToPx(), 8.dpToPx(), 24.dpToPx(), 8.dpToPx())
-        }
-        progressChapter = TextView(context).apply {
-            textSize = 15f
-            setTextColor(context.getColor(R.color.primaryText))
-        }
-        progressDetail = TextView(context).apply {
-            textSize = 13f
-            setTextColor(context.getColor(R.color.secondaryText))
-            setPadding(0, 8.dpToPx(), 0, 4.dpToPx())
-        }
-        progressBar = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 1000
-            progress = 0
-            contentDescription = getString(R.string.role_tts_generating)
-        }
-        content.addView(progressChapter)
-        content.addView(progressDetail)
-        content.addView(progressBar)
-        return AlertDialog.Builder(context)
-            .setTitle(R.string.role_tts_generating)
-            .setView(content)
-            .setCancelable(true)
-            .setPositiveButton(R.string.role_tts_cancel_generation, null)
-            .create()
-            .apply {
-                setOnShowListener {
-                    getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                        generationJob?.cancel()
-                        progressDetail?.text = getString(R.string.role_tts_cancelled)
-                        getButton(DialogInterface.BUTTON_POSITIVE).isEnabled = false
-                    }
-                }
-                setOnCancelListener { generationJob?.cancel() }
-                setOnDismissListener {
-                    if (generationJob?.isActive == true) generationJob?.cancel()
-                    if (progressDialog === this) progressDialog = null
-                }
-            }
     }
 
     private fun updateProgressChapter(
@@ -493,17 +526,17 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
         completedChunks: Int,
         totalChunks: Int
     ) {
-        if (!isAdded || progressDialog?.isShowing != true) return
-        progressChapter?.text = getString(R.string.role_tts_progress_chapter, index + 1, count, chapter.title)
-        progressDetail?.text = getString(R.string.role_tts_progress_chunks, completedChunks, totalChunks)
+        if (!isAdded || !showGenerationProgress) return
+        progressChapter = getString(R.string.role_tts_progress_chapter, index + 1, count, chapter.title)
+        progressDetail = getString(R.string.role_tts_progress_chunks, completedChunks, totalChunks)
         val fraction = (index + completedChunks.toFloat() / totalChunks.coerceAtLeast(1)) / count.coerceAtLeast(1)
-        progressBar?.progress = (fraction * progressBar!!.max).toInt().coerceIn(0, progressBar!!.max)
+        progressValue = fraction.coerceIn(0f, 1f)
         val range = if (selected.size > 1) {
             "${selected.first().index + 1}–${selected.last().index + 1}"
         } else {
             "${selected.first().index + 1}"
         }
-        progressDialog?.setMessage(range)
+        progressDetail = "${progressDetail} · $range"
     }
 
     private suspend fun loadChapterText(chapter: BookChapter): String {

@@ -29,6 +29,7 @@ class ImportHttpTtsViewModel(app: Application) : BaseViewModel(app) {
     val allSources = arrayListOf<HttpTTS>()
     val checkSources = arrayListOf<HttpTTS?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -66,6 +67,8 @@ class ImportHttpTtsViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importSourceAwait(text.trim())
         }.onError {

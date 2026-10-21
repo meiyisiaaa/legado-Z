@@ -8,13 +8,15 @@ import android.view.ViewGroup
 import androidx.activity.addCallback
 import androidx.appcompat.widget.SearchView
 import androidx.appcompat.widget.Toolbar
-import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle.State.STARTED
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
@@ -33,7 +35,8 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
-import io.legado.app.ui.widget.recycler.VerticalDivider
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.dpToPx
@@ -53,9 +56,7 @@ import kotlinx.coroutines.launch
 
 
 class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_change_source),
-    Toolbar.OnMenuItemClickListener,
-    ChangeChapterSourceAdapter.CallBack,
-    ChangeChapterTocAdapter.Callback {
+    Toolbar.OnMenuItemClickListener {
 
     constructor(name: String, author: String, chapterIndex: Int, chapterTitle: String) : this() {
         arguments = Bundle().apply {
@@ -74,12 +75,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
             viewModel.startSearch()
         }
-    private val searchBookAdapter by lazy {
-        ChangeChapterSourceAdapter(requireContext(), viewModel, this)
-    }
-    private val tocAdapter by lazy {
-        ChangeChapterTocAdapter(requireContext(), this)
-    }
+    private var searchBooks by mutableStateOf<List<SearchBook>>(emptyList())
+    private var tocChapters by mutableStateOf<List<BookChapter>>(emptyList())
+    private var listRevision by mutableIntStateOf(0)
+    private var tocCurrentIndex by mutableIntStateOf(0)
+    private val listState = LazyListState()
+    private val tocListState = LazyListState()
     private val contentSuccess: (content: String) -> Unit = {
         binding.loadingToc.gone()
         callBack?.replaceContent(it)
@@ -116,7 +117,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         showTitle()
         initMenu()
         initView()
-        initRecyclerView()
+        initComposeContent()
         initSearchView()
         initBottomBar()
         initLiveData()
@@ -160,23 +161,46 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         binding.flHideToc.elevation = requireContext().elevation
     }
 
-    private fun initRecyclerView() {
-        binding.recyclerView.addItemDecoration(VerticalDivider(requireContext()))
-        binding.recyclerView.adapter = searchBookAdapter
-        searchBookAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                if (positionStart == 0) {
-                    binding.recyclerView.scrollToPosition(0)
-                }
+    private fun initComposeContent() {
+        val sourceComposeView = LegadoComposeView(requireContext()).apply { id = View.generateViewId() }
+        binding.composeContainer.addView(
+            sourceComposeView,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        sourceComposeView.setContent {
+            LegadoTheme {
+                ChangeChapterSourceContent(
+                    books = searchBooks,
+                    listState = listState,
+                    oldBookUrl = callBack?.oldBook?.bookUrl,
+                    revision = listRevision,
+                    loadWordCount = AppConfig.changeSourceLoadWordCount,
+                    onOpenToc = ::openToc,
+                    getScore = viewModel::getBookScore,
+                    onSetScore = ::setBookScore,
+                    onTop = ::topSource,
+                    onBottom = ::bottomSource,
+                    onEdit = ::editSource,
+                    onDisable = ::disableSource,
+                    onDelete = ::deleteSource
+                )
             }
-
-            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) {
-                if (toPosition == 0) {
-                    binding.recyclerView.scrollToPosition(0)
-                }
+        }
+        val tocComposeView = LegadoComposeView(requireContext()).apply { id = View.generateViewId() }
+        binding.tocComposeContainer.addView(
+            tocComposeView,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        tocComposeView.setContent {
+            LegadoTheme {
+                ChangeChapterTocContent(
+                    chapters = tocChapters,
+                    listState = tocListState,
+                    currentIndex = tocCurrentIndex,
+                    onSelect = ::clickChapter
+                )
             }
-        })
-        binding.recyclerViewToc.adapter = tocAdapter
+        }
     }
 
     private fun initSearchView() {
@@ -208,10 +232,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
             scrollToDurSource()
         }
         binding.ivTop.setOnClickListener {
-            binding.recyclerView.scrollToPosition(0)
+            lifecycleScope.launch { listState.animateScrollToItem(0) }
         }
         binding.ivBottom.setOnClickListener {
-            binding.recyclerView.scrollToPosition(searchBookAdapter.itemCount - 1)
+            if (searchBooks.isNotEmpty()) {
+                lifecycleScope.launch { listState.animateScrollToItem(searchBooks.lastIndex) }
+            }
         }
     }
 
@@ -234,7 +260,9 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         lifecycleScope.launch {
             lifecycle.currentStateFlow.first { it.isAtLeast(STARTED) }
             viewModel.searchDataFlow.conflate().collect {
-                searchBookAdapter.setItems(it)
+                searchBooks = it.toList()
+                listRevision++
+                if (searchBooks.isNotEmpty()) listState.scrollToItem(0)
                 delay(1000)
             }
         }
@@ -295,56 +323,56 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
     }
 
     private fun scrollToDurSource() {
-        searchBookAdapter.getItems().forEachIndexed { index, searchBook ->
-            if (searchBook.bookUrl == oldBookUrl) {
-                (binding.recyclerView.layoutManager as LinearLayoutManager)
-                    .scrollToPositionWithOffset(index, 60.dpToPx())
-                return
-            }
-        }
+        val index = searchBooks.indexOfFirst { it.bookUrl == oldBookUrl }
+        if (index >= 0) lifecycleScope.launch { listState.animateScrollToItem(index, 60.dpToPx()) }
     }
 
-    override fun openToc(searchBook: SearchBook) {
+    private fun openToc(searchBook: SearchBook) {
         this.searchBook = searchBook
-        tocAdapter.setItems(null)
+        tocChapters = emptyList()
+        tocCurrentIndex = 0
         binding.clToc.visible()
         binding.loadingToc.visible()
         val book = searchBook.toBook()
         viewModel.getToc(book, { toc: List<BookChapter>, _: BookSource ->
-            tocAdapter.durChapterIndex =
-                BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, toc)
+            tocChapters = toc
+            tocCurrentIndex = BookHelp.getDurChapter(viewModel.chapterIndex, viewModel.chapterTitle, toc)
             binding.loadingToc.gone()
-            tocAdapter.setItems(toc)
-            binding.recyclerViewToc.scrollToPosition(tocAdapter.durChapterIndex - 5)
+            if (toc.isNotEmpty()) {
+                lifecycleScope.launch { tocListState.scrollToItem((tocCurrentIndex - 5).coerceAtLeast(0)) }
+            }
         }, {
             binding.clToc.gone()
             AppLog.put("单章换源获取目录出错\n$it", it, true)
         })
     }
 
-    override val oldBookUrl: String?
-        get() = callBack?.oldBook?.bookUrl
+    private val oldBookUrl: String? get() = callBack?.oldBook?.bookUrl
 
-    override fun topSource(searchBook: SearchBook) {
+    private fun topSource(searchBook: SearchBook) {
         viewModel.topSource(searchBook)
+        listRevision++
     }
 
-    override fun bottomSource(searchBook: SearchBook) {
+    private fun bottomSource(searchBook: SearchBook) {
         viewModel.bottomSource(searchBook)
+        listRevision++
     }
 
-    override fun editSource(searchBook: SearchBook) {
+    private fun editSource(searchBook: SearchBook) {
         editSourceResult.launch {
             putExtra("sourceUrl", searchBook.origin)
         }
     }
 
-    override fun disableSource(searchBook: SearchBook) {
+    private fun disableSource(searchBook: SearchBook) {
         viewModel.disableSource(searchBook)
+        listRevision++
     }
 
-    override fun deleteSource(searchBook: SearchBook) {
+    private fun deleteSource(searchBook: SearchBook) {
         viewModel.del(searchBook)
+        listRevision++
         if (oldBookUrl == searchBook.bookUrl) {
             viewModel.autoChangeSource(callBack?.oldBook?.type) { book, toc, source ->
                 callBack?.changeTo(source, book, toc)
@@ -352,15 +380,12 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
         }
     }
 
-    override fun setBookScore(searchBook: SearchBook, score: Int) {
+    private fun setBookScore(searchBook: SearchBook, score: Int) {
         viewModel.setBookScore(searchBook, score)
+        listRevision++
     }
 
-    override fun getBookScore(searchBook: SearchBook): Int {
-        return viewModel.getBookScore(searchBook)
-    }
-
-    override fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
+    private fun clickChapter(bookChapter: BookChapter, nextChapterUrl: String?) {
         searchBook?.let {
             binding.loadingToc.visible()
             viewModel.getContent(it.toBook(), bookChapter, nextChapterUrl, contentSuccess) { msg ->
@@ -397,11 +422,7 @@ class ChangeChapterSourceDialog() : BaseDialogFragment(R.layout.dialog_chapter_c
 
     override fun observeLiveBus() {
         observeEvent<String>(EventBus.SOURCE_CHANGED) {
-            searchBookAdapter.notifyItemRangeChanged(
-                0,
-                searchBookAdapter.itemCount,
-                bundleOf(Pair("upCurSource", oldBookUrl))
-            )
+            listRevision++
         }
     }
 

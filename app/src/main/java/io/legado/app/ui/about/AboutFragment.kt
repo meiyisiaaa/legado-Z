@@ -4,10 +4,21 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
 import io.legado.app.R
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
@@ -15,6 +26,7 @@ import io.legado.app.help.CrashHandler
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.update.AppUpdate
+import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.FileDoc
@@ -36,7 +48,45 @@ import kotlinx.coroutines.delay
 import splitties.init.appCtx
 import java.io.File
 
-class AboutFragment : PreferenceFragmentCompat() {
+class AboutFragment : PreferenceFragment() {
+
+    @Composable
+    override fun PreferenceHeader() {
+        val summary = stringResource(R.string.about_description_sigma)
+        val account = stringResource(R.string.legado_gzh)
+        val accent = MaterialTheme.colorScheme.primary
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(6.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.extraSmall
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name_sigma),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = buildAnnotatedString {
+                        val start = summary.indexOf(account)
+                        if (start < 0) append(summary) else {
+                            append(summary.substring(0, start))
+                            withStyle(SpanStyle(color = accent)) { append(account) }
+                            append(summary.substring(start + account.length))
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
 
     private val waitDialog by lazy {
         WaitDialog(requireContext())

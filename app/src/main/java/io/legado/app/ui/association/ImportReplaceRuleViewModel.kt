@@ -33,6 +33,7 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
     val allRules = arrayListOf<ReplaceRule>()
     val checkRules = arrayListOf<ReplaceRule?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -84,6 +85,8 @@ class ImportReplaceRuleViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun import(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importAwait(text.trim())
         }.onError {

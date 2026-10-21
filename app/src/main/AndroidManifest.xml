@@ -139,6 +139,7 @@
         <!-- 主界面 -->
         <activity
             android:name=".ui.main.MainActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden"
             android:alwaysRetainTaskState="true"
             android:configChanges="locale|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
@@ -231,6 +232,7 @@
         <!-- 搜索界面 -->
         <activity
             android:name=".ui.book.search.SearchActivity"
+            android:windowSoftInputMode="adjustResize"
             android:launchMode="standard" />
         <!-- 关于界面 -->
         <activity
@@ -275,6 +277,7 @@
         <!-- 正文搜索 -->
         <activity
             android:name=".ui.book.searchContent.SearchContentActivity"
+            android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTop"
             android:screenOrientation="behind" />
         <!-- RSS条目 -->

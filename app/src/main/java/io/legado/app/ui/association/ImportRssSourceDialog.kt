@@ -1,26 +1,20 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
-import android.text.TextUtils
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.mutableStateListOf
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.DialogCustomGroupBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
@@ -35,11 +29,8 @@ import io.legado.app.utils.setLayout
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
-import splitties.views.onClick
 
-/**
- * 导入rss源弹出窗口
- */
+/** 导入订阅源。 */
 class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     Toolbar.OnMenuItemClickListener,
     CodeDialog.Callback {
@@ -53,7 +44,7 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModels<ImportRssSourceViewModel>()
-    private val adapter by lazy { SourcesAdapter(requireContext()) }
+    private val rows = mutableStateListOf<AssociationImportRow>()
 
     override fun onStart() {
         super.onStart()
@@ -62,23 +53,27 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        if (arguments?.getBoolean("finishOnDismiss") == true) {
-            activity?.finish()
-        }
+        if (arguments?.getBoolean("finishOnDismiss") == true) activity?.finish()
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.setTitle(R.string.import_rss_source)
         binding.rotateLoading.visible()
         initMenu()
-        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerView.adapter = adapter
+        installAssociationImportContent(
+            requireContext(), binding.recyclerView, rows,
+            onSelectionChange = { index, selected ->
+                if (index in viewModel.selectStatus.indices) {
+                    viewModel.selectStatus[index] = selected
+                    rows[index] = rows[index].copy(selected = selected)
+                    upSelectText()
+                }
+            },
+            onOpen = ::openSource
+        )
         binding.tvCancel.visible()
-        binding.tvCancel.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
+        binding.tvCancel.setOnClickListener { dismissAllowingStateLoss() }
         binding.tvOk.visible()
         binding.tvOk.setOnClickListener {
             val waitDialog = WaitDialog(requireContext())
@@ -91,31 +86,23 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
         binding.tvFooterLeft.visible()
         binding.tvFooterLeft.setOnClickListener {
             val selectAll = viewModel.isSelectAll
-            viewModel.selectStatus.forEachIndexed { index, b ->
-                if (b != !selectAll) {
-                    viewModel.selectStatus[index] = !selectAll
-                }
+            viewModel.selectStatus.indices.forEach { index ->
+                viewModel.selectStatus[index] = !selectAll
+                rows.getOrNull(index)?.let { rows[index] = it.copy(selected = !selectAll) }
             }
-            adapter.notifyDataSetChanged()
             upSelectText()
         }
         viewModel.errorLiveData.observe(this) {
             binding.rotateLoading.gone()
-            binding.tvMsg.apply {
-                text = it
-                visible()
-            }
+            binding.tvMsg.apply { text = it; visible() }
         }
-        viewModel.successLiveData.observe(this) {
+        viewModel.successLiveData.observe(this) { count ->
             binding.rotateLoading.gone()
-            if (it > 0) {
-                adapter.setItems(viewModel.allSources)
+            if (count > 0) {
+                refreshRows()
                 upSelectText()
             } else {
-                binding.tvMsg.apply {
-                    setText(R.string.wrong_format)
-                    visible()
-                }
+                binding.tvMsg.apply { setText(R.string.wrong_format); visible() }
             }
         }
         val source = arguments?.getString("source")
@@ -126,40 +113,20 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
         viewModel.importSource(source)
     }
 
-    private fun upSelectText() {
-        if (viewModel.isSelectAll) {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_cancel_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
-            )
-        } else {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_all_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
-            )
-        }
-    }
-
     private fun initMenu() {
         binding.toolBar.setOnMenuItemClickListener(this)
         binding.toolBar.inflateMenu(R.menu.import_source)
         binding.toolBar.menu.apply {
-            findItem(R.id.menu_keep_original_name)
-                ?.isChecked = AppConfig.importKeepName
-            findItem(R.id.menu_keep_group)
-                ?.isChecked = AppConfig.importKeepGroup
-            findItem(R.id.menu_keep_enable)
-                ?.isChecked = AppConfig.importKeepEnable
-            findItem(R.id.menu_show_comment)
-                ?.isChecked = AppConfig.importShowComment
-            findItem(R.id.menu_select_new_source)?.isVisible = false // 暂不支持
-            findItem(R.id.menu_select_update_source)?.isVisible = false // 暂不支持
+            findItem(R.id.menu_keep_original_name)?.isChecked = AppConfig.importKeepName
+            findItem(R.id.menu_keep_group)?.isChecked = AppConfig.importKeepGroup
+            findItem(R.id.menu_keep_enable)?.isChecked = AppConfig.importKeepEnable
+            findItem(R.id.menu_show_comment)?.isChecked = AppConfig.importShowComment
+            findItem(R.id.menu_select_new_source)?.isVisible = false
+            findItem(R.id.menu_select_update_source)?.isVisible = false
         }
+        binding.toolBar.menu.findItem(R.id.menu_new_group)?.let(::updateGroupMenuTitle)
     }
 
-    @SuppressLint("InflateParams", "NotifyDataSetChanged")
     override fun onMenuItemClick(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_new_group -> alertCustomGroup(item)
@@ -167,21 +134,18 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
                 item.isChecked = !item.isChecked
                 putPrefBoolean(PreferKey.importKeepName, item.isChecked)
             }
-
             R.id.menu_keep_group -> {
                 item.isChecked = !item.isChecked
                 putPrefBoolean(PreferKey.importKeepGroup, item.isChecked)
             }
-
             R.id.menu_keep_enable -> {
                 item.isChecked = !item.isChecked
                 AppConfig.importKeepEnable = item.isChecked
             }
-
             R.id.menu_show_comment -> {
                 item.isChecked = !item.isChecked
                 AppConfig.importShowComment = item.isChecked
-                adapter.notifyDataSetChanged()
+                refreshRows()
             }
         }
         return false
@@ -194,102 +158,67 @@ class ImportRssSourceDialog() : BaseDialogFragment(R.layout.dialog_recycler_view
                 textInputLayout.setHint(R.string.group_name)
                 editView.setFilterValues(groups.toList())
                 editView.dropDownHeight = 180.dpToPx()
+                editView.setText(viewModel.groupName)
+                swAddGroup.isChecked = viewModel.isAddGroup
             }
-            customView {
-                alertBinding.root
-            }
+            customView { alertBinding.root }
             okButton {
                 viewModel.isAddGroup = alertBinding.swAddGroup.isChecked
                 viewModel.groupName = alertBinding.editView.text?.toString()
-                if (viewModel.groupName.isNullOrBlank()) {
-                    item.title = getString(R.string.diy_source_group)
-                } else {
-                    val group = getString(R.string.diy_edit_source_group_title, viewModel.groupName)
-                    if (viewModel.isAddGroup) {
-                        item.title = "+$group"
-                    } else {
-                        item.title = group
-                    }
-                }
+                updateGroupMenuTitle(item)
             }
             cancelButton()
         }
     }
 
+    private fun updateGroupMenuTitle(item: MenuItem) {
+        item.title = viewModel.groupName?.takeIf { it.isNotBlank() }?.let { group ->
+            val title = getString(R.string.diy_edit_source_group_title, group)
+            if (viewModel.isAddGroup) "+$title" else title
+        } ?: getString(R.string.diy_source_group)
+    }
+
+    private fun refreshRows() {
+        rows.clear()
+        viewModel.allSources.forEachIndexed { index, item ->
+            val local = viewModel.checkSources.getOrNull(index)
+            rows.add(
+                AssociationImportRow(
+                    name = item.sourceName,
+                    status = when {
+                        local == null -> "新增"
+                        item.lastUpdateTime > local.lastUpdateTime -> "更新"
+                        else -> "已有"
+                    },
+                    selected = viewModel.selectStatus.getOrNull(index) == true,
+                    detail = item.sourceComment?.takeIf { AppConfig.importShowComment }
+                )
+            )
+        }
+    }
+
+    private fun openSource(index: Int) {
+        viewModel.allSources.getOrNull(index)?.let { item ->
+            showDialogFragment(CodeDialog(GSON.toJson(item), disableEdit = false, requestId = index.toString()))
+        }
+    }
+
+    private fun upSelectText() {
+        binding.tvFooterLeft.text = getString(
+            if (viewModel.isSelectAll) R.string.select_cancel_count else R.string.select_all_count,
+            viewModel.selectCount,
+            viewModel.allSources.size
+        )
+    }
+
     override fun onCodeSave(code: String, requestId: String?) {
-        requestId?.toInt()?.let {
-            GSON.fromJsonObject<RssSource>(code).getOrNull()?.let { source ->
-                viewModel.allSources[it] = source
-                adapter.setItem(it, source)
-            }
-        }
-    }
-
-    inner class SourcesAdapter(context: Context) :
-        RecyclerAdapter<RssSource, ItemSourceImportBinding>(context) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemSourceImportBinding {
-            return ItemSourceImportBinding.inflate(inflater, parent, false)
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemSourceImportBinding,
-            item: RssSource,
-            payloads: MutableList<Any>
-        ) {
-            binding.apply {
-                cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
-                cbSourceName.text = item.sourceName
-                if (AppConfig.importShowComment) {
-                    item.sourceComment?.takeIf{ it.isNotBlank() }?.let {
-                        showComment.text = it
-                        showComment.visible()
-                        showComment.setOnClickListener {
-                            if (showComment.maxLines == 3) {
-                                showComment.maxLines = 39
-                            } else {
-                                showComment.maxLines = 3
-                            }
-                        }
-                    } ?: run {
-                        showComment.gone()
-                    }
-                } else {
-                    showComment.gone()
-                }
-                val localSource = viewModel.checkSources[holder.layoutPosition]
-                tvSourceState.text = when {
-                    localSource == null -> "新增"
-                    item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
-                    else -> "已有"
-                }
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemSourceImportBinding) {
-            binding.apply {
-                cbSourceName.setOnUserCheckedChangeListener { isChecked ->
-                    viewModel.selectStatus[holder.layoutPosition] = isChecked
-                    upSelectText()
-                }
-                root.onClick {
-                    cbSourceName.isChecked = !cbSourceName.isChecked
-                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
-                    upSelectText()
-                }
-                tvOpen.setOnClickListener {
-                    val source = viewModel.allSources[holder.layoutPosition]
-                    showDialogFragment(
-                        CodeDialog(
-                            GSON.toJson(source),
-                            disableEdit = false,
-                            requestId = holder.layoutPosition.toString()
-                        )
-                    )
+        requestId?.toIntOrNull()?.let { index ->
+            GSON.fromJsonObject<RssSource>(code).getOrNull()?.let { item ->
+                if (index in viewModel.allSources.indices) {
+                    viewModel.allSources[index] = item
+                    refreshRows()
                 }
             }
         }
     }
-
 }

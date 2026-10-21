@@ -8,9 +8,12 @@ import android.os.SystemClock
 import android.text.InputType
 import android.util.TypedValue
 import android.view.View
+import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.EditorInfo
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.AppCompatEditText
+import androidx.core.view.AccessibilityDelegateCompat
+import androidx.core.view.ViewCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
@@ -184,7 +187,10 @@ class CodeEditSafeEditorTest {
     private fun assertNativeEditorSettings(scenario: ActivityScenario<CodeEditActivity>) {
         scenario.onActivity { activity ->
             val editor = nativeEditor(activity)
-            assertEquals(AppCompatEditText::class.java, editor.javaClass)
+            assertTrue(AppCompatEditText::class.java.isAssignableFrom(editor.javaClass))
+            assertEquals(View.AUTOFILL_TYPE_NONE, editor.autofillType)
+            assertNull("large code must never be exported through Autofill Binder values", editor.autofillValue)
+            assertAccessibilityHistoryBoundary(editor)
             assertEquals(Typeface.MONOSPACE, editor.typeface)
             assertFalse("large text must not enter view-state Bundle", editor.isSaveEnabled)
             assertEquals(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS, editor.importantForAutofill)
@@ -217,6 +223,34 @@ class CodeEditSafeEditorTest {
     }
 
     private fun nativeEditorMatcher() = withTagValue(`is`(CodeEditActivity.SAFE_EDITOR_TAG))
+
+    private fun assertAccessibilityHistoryBoundary(editor: AppCompatEditText) {
+        val previousDelegate = ViewCompat.getAccessibilityDelegate(editor)
+        val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED).apply {
+            beforeText = "a".repeat(99_999) + "😀" + "b".repeat(50_000)
+            fromIndex = 120_000
+            removedCount = 1
+            addedCount = 2
+        }
+        var intercepted = false
+        try {
+            ViewCompat.setAccessibilityDelegate(editor, object : AccessibilityDelegateCompat() {
+                override fun sendAccessibilityEventUnchecked(host: View, received: AccessibilityEvent) {
+                    intercepted = true
+                    assertEquals(AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED, received.eventType)
+                    assertEquals("a".repeat(99_999), received.beforeText.toString())
+                    assertEquals(120_000, received.fromIndex)
+                    assertEquals(1, received.removedCount)
+                    assertEquals(2, received.addedCount)
+                }
+            })
+            editor.sendAccessibilityEventUnchecked(event)
+            assertTrue("the event must still reach the accessibility delegate", intercepted)
+        } finally {
+            ViewCompat.setAccessibilityDelegate(editor, previousDelegate)
+            event.recycle()
+        }
+    }
 
     private fun nativeEditor(activity: CodeEditActivity): AppCompatEditText =
         activity.window.decorView.findViewWithTag<AppCompatEditText>(CodeEditActivity.SAFE_EDITOR_TAG)

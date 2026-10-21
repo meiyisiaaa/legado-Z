@@ -56,7 +56,14 @@
     <string name="last_read">Last reading</string>
     <string name="update_log">What\'s new</string>
     <string name="bookshelf_empty">The bookshelf is still empty. Search for books or add them from discovery!</string>
+    <string name="bookshelf_loading">Loading bookshelf</string>
+    <string name="bookshelf_load_failed">Failed to load bookshelf</string>
+    <string name="bookshelf_fast_scroll_accessibility">Quickly scroll the bookshelf</string>
+    <string name="bookshelf_long_press_action">View details or edit group</string>
+    <string name="bookshelf_unread_chapters">Unread chapters: %1$d</string>
+    <string name="bookshelf_unread_with_new_chapters">Unread chapters: %1$d · New chapters: %2$d</string>
     <string name="action_search">Search</string>
+    <string name="clear_search_query">Clear search query</string>
     <string name="action_download">Download</string>
     <string name="layout_list">List</string>
     <string name="layout_grid2">Grid-2</string>
@@ -287,6 +294,9 @@
     <string name="bookshelf_management">Bookshelf management</string>
     <string name="clear_bookshelf_s">It will delete all books. Be careful,please.</string>
     <string name="search_book_source">Search book sources</string>
+    <string name="select_book_source">Select a book source</string>
+    <string name="server_empty">No servers configured</string>
+    <string name="server_empty_desc">Add a WebDAV server to browse remote books</string>
     <string name="search_rss_source">Search RSS sources</string>
     <string name="search_book_source_num">Search( %d sources in total)</string>
     <string name="chapter_list_size">Chapters(%d)</string>
@@ -481,6 +491,8 @@
     <string name="import_by_qr_code">Import from QR code</string>
     <string name="share_selected_source">Share selected sources</string>
     <string name="scan_qr_code">Scan QR code</string>
+    <string name="qr_flashlight_turn_on">Turn on flashlight</string>
+    <string name="qr_flashlight_turn_off">Turn off flashlight</string>
     <string name="click_on_selected_show_menu">Tap to display Menu when selected </string>
     <string name="theme">Theme</string>
     <string name="theme_mode">Theme mode</string>
@@ -860,6 +872,8 @@
     <string name="use_zh_layout">Custom Chinese line feed</string>
     <string name="image_style">Style of Images</string>
     <string name="system_tts">System tts</string>
+    <string name="system_tts_default">System default</string>
+    <string name="http_tts">HTTP TTS</string>
     <string name="export_type">Exported file format</string>
     <string name="checkAuthor">Check by author</string>
     <string name="url_already">This URL has subscribed</string>
@@ -993,6 +1007,11 @@
     <string name="show_icon">Show icon</string>
     <string name="show_default_book_icon">Show default book icon</string>
     <string name="cache_export">Cache / Export</string>
+    <string name="keyboard_tool_help_description">%1$s: %2$s</string>
+    <string name="keyboard_tool_undo">Undo</string>
+    <string name="keyboard_tool_redo">Redo</string>
+    <string name="keyboard_tool_expand_assists">Expand assist keys</string>
+    <string name="keyboard_tool_collapse_assists">Collapse assist keys</string>
     <string name="assists_key_config">Secondary button configuration</string>
     <string name="url_option">Url parameter</string>
     <string name="only_wifi">WIFI only</string>

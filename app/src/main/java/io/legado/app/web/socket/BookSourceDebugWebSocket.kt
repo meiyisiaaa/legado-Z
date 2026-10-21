@@ -13,9 +13,8 @@ import io.legado.app.utils.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import splitties.init.appCtx
-import java.util.UUID
-
 import java.io.IOException
+import java.util.UUID
 
 /**
  * web端书源调试
@@ -29,11 +28,16 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
 
     override fun onOpen() {
         launch(IO) {
-            kotlin.runCatching {
+            try {
                 while (isOpen) {
                     ping("ping".toByteArray())
                     delay(30000)
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IOException) {
+                closeNormally()
+                this@BookSourceDebugWebSocket.cancel()
             }
         }
     }
@@ -43,58 +47,84 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
         reason: String,
         initiatedByRemote: Boolean
     ) {
-        cancel()
+        this@BookSourceDebugWebSocket.cancel()
     }
 
     override fun onMessage(message: NanoWSD.WebSocketFrame) {
         launch(IO) {
-            kotlin.runCatching {
-                if (!message.textPayload.isJson()) {
-                    send("数据必须为Json格式")
-                    close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
+            try {
+                val payload = message.textPayload
+                if (!payload.isJson()) {
+                    sendOrCancel("数据必须为Json格式")
                     return@launch
                 }
-                val debugBean =
-                    GSON.fromJsonObject<Map<String, String>>(message.textPayload).getOrNull()
-                if (debugBean != null) {
-                    val tag = debugBean["tag"]
-                    val key = debugBean["key"]
-                    if (tag.isNullOrBlank() || key.isNullOrBlank()) {
-                        send(appCtx.getString(R.string.cannot_empty))
-                        close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
-                        return@launch
-                    }
-                    appDb.bookSourceDao.getBookSource(tag)?.let { source ->
-                        when (
-                            val result = DebugRunner.run(
-                                ownerId = runOwnerId,
-                                kind = DebugRunKind.BOOK_WEBSOCKET,
-                                sourceUrl = source.bookSourceUrl,
-                                onEvent = { event ->
-                                    if (isOpen && event.state !in notPrintState) {
-                                        runCatching { send(event.displayMessage) }
-                                    }
-                                }
-                            ) {
-                                Debug.startDebug(source, key)
-                            }
-                        ) {
-                            is DebugRunResult.Busy -> if (isOpen) send("调试任务忙：${result.activeOwnerId}")
-                            is DebugRunResult.Completed -> if (isOpen) {
-                                close(
-                                    NanoWSD.WebSocketFrame.CloseCode.NormalClosure,
-                                    "调试结束",
-                                    false
-                                )
+                val debugBean = GSON.fromJsonObject<Map<String, String>>(payload).getOrNull()
+                if (debugBean == null) {
+                    sendOrCancel("数据必须为Json格式")
+                    return@launch
+                }
+                val tag = debugBean["tag"]
+                val key = debugBean["key"]
+                if (tag.isNullOrBlank() || key.isNullOrBlank()) {
+                    sendOrCancel(appCtx.getString(R.string.cannot_empty))
+                    return@launch
+                }
+                val source = appDb.bookSourceDao.getBookSource(tag)
+                if (source == null) {
+                    sendOrCancel("未找到书源：$tag")
+                    return@launch
+                }
+                when (
+                    val result = DebugRunner.run(
+                        ownerId = runOwnerId,
+                        kind = DebugRunKind.BOOK_WEBSOCKET,
+                        sourceUrl = source.bookSourceUrl,
+                        onEvent = { event ->
+                            if (event.state !in notPrintState) {
+                                sendOrCancel(event.displayMessage)
                             }
                         }
+                    ) {
+                        Debug.startDebug(source, key)
                     }
-                } else {
-                    send("数据必须为Json格式")
-                    close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
-                    return@launch
+                ) {
+                    is DebugRunResult.Busy -> sendOrCancel("调试任务忙：${result.activeOwnerId}")
+                    is DebugRunResult.Completed -> if (result.snapshot.terminalState == "failed") {
+                        sendOrCancel(
+                            "调试失败：${result.snapshot.error ?: "未知错误"}"
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                sendOrCancel(
+                    "调试失败：${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                )
+            } finally {
+                try {
+                    closeNormally()
+                } finally {
+                    this@BookSourceDebugWebSocket.cancel()
                 }
             }
+        }
+    }
+
+    private fun sendOrCancel(message: String) {
+        if (!isOpen) return
+        try {
+            send(message)
+        } catch (_: IOException) {
+            this@BookSourceDebugWebSocket.cancel()
+        }
+    }
+
+    private fun closeNormally() {
+        if (!isOpen) return
+        try {
+            close(NanoWSD.WebSocketFrame.CloseCode.NormalClosure, "调试结束", false)
+        } catch (_: IOException) {
         }
     }
 
@@ -103,7 +133,7 @@ class BookSourceDebugWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
     }
 
     override fun onException(exception: IOException) {
-        cancel()
+        this@BookSourceDebugWebSocket.cancel()
     }
 
 }

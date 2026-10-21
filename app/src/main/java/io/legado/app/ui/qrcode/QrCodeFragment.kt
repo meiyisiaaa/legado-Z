@@ -1,5 +1,7 @@
 package io.legado.app.ui.qrcode
 
+import android.view.View
+import android.widget.ImageView
 import com.google.zxing.Result
 import com.king.camera.scan.AnalyzeResult
 import com.king.camera.scan.CameraScan
@@ -7,8 +9,33 @@ import com.king.zxing.BarcodeCameraScanFragment
 import com.king.zxing.DecodeConfig
 import com.king.zxing.DecodeFormatManager
 import com.king.zxing.analyze.MultiFormatAnalyzer
+import io.legado.app.R
+import kotlin.math.roundToInt
 
 class QrCodeFragment : BarcodeCameraScanFragment() {
+
+    override fun initUI() {
+        super.initUI()
+        val flashlight = ivFlashlight ?: return
+        val minTouchTarget = (48 * flashlight.resources.displayMetrics.density).roundToInt()
+        flashlight.minimumWidth = maxOf(flashlight.minimumWidth, minTouchTarget)
+        flashlight.minimumHeight = maxOf(flashlight.minimumHeight, minTouchTarget)
+        (flashlight as? ImageView)?.scaleType = ImageView.ScaleType.CENTER
+        updateFlashlightAccessibilityLabel(flashlight)
+
+        // Keep the library's torch toggle behavior and update the action label to match its state.
+        flashlight.setOnClickListener {
+            onClickFlashlight()
+            updateFlashlightAccessibilityLabel(flashlight)
+        }
+    }
+
+    private fun updateFlashlightAccessibilityLabel(flashlight: View) {
+        flashlight.contentDescription = getString(
+            if (flashlight.isSelected) R.string.qr_flashlight_turn_off
+            else R.string.qr_flashlight_turn_on
+        )
+    }
 
     override fun initCameraScan(cameraScan: CameraScan<Result>) {
         super.initCameraScan(cameraScan)

@@ -14,8 +14,8 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
-import io.legado.app.databinding.DialogBookshelfConfigBinding
-import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
@@ -30,8 +30,6 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.utils.checkByIndex
-import io.legado.app.utils.getCheckedIndex
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.readText
@@ -63,11 +61,9 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 if (uri.toString().isAbsUrl()) {
                     setMessage(DirectLinkUpload.getSummary())
                 }
-                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                    editView.hint = getString(R.string.path)
-                    editView.setText(uri.toString())
-                }
-                customView { alertBinding.root }
+                customView { LegadoComposeView(requireContext()).apply {
+                    setContent { LegadoTheme { BookshelfInput(getString(R.string.path), uri.toString(), readOnly = true) } }
+                } }
                 okButton {
                     requireContext().sendToClip(uri.toString())
                 }
@@ -148,131 +144,70 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
 
     @SuppressLint("InflateParams")
     fun showAddBookByUrlAlert() {
+        var input = ""
         alert(titleResource = R.string.add_book_url) {
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = "url"
-            }
-            customView { alertBinding.root }
+            customView { LegadoComposeView(requireContext()).apply {
+                setContent { LegadoTheme { BookshelfInput("URL") { input = it } } }
+            } }
             okButton {
-                alertBinding.editView.text?.toString()?.let {
-                    waitDialog.setText("添加中...")
-                    waitDialog.show()
-                    viewModel.addBookByUrl(it)
-                }
+                waitDialog.setText("添加中...")
+                waitDialog.show()
+                viewModel.addBookByUrl(input)
             }
             cancelButton()
         }
     }
 
-    @SuppressLint("InflateParams")
     fun configBookshelf() {
+        val original = BookshelfOptions(AppConfig.bookGroupStyle.coerceIn(0, 1),
+            AppConfig.bookshelfLayout.coerceIn(0, 6), AppConfig.bookshelfSort.coerceIn(0, 5),
+            AppConfig.showBookname.coerceIn(0, 2), AppConfig.bookshelfMargin.coerceIn(0, 60),
+            AppConfig.showUnread, AppConfig.showLastUpdateTime, AppConfig.showWaitUpCount,
+            AppConfig.showBookshelfFastScroller)
+        var draft = original
         alert(titleResource = R.string.bookshelf_layout) {
-            var bookshelfLayout = AppConfig.bookshelfLayout
-            var bookshelfSort = AppConfig.bookshelfSort
-            var showBookname = AppConfig.showBookname
-            val alertBinding =
-                DialogBookshelfConfigBinding.inflate(layoutInflater)
-                    .apply {
-                        if (AppConfig.bookGroupStyle !in 0..<spGroupStyle.count) {
-                            AppConfig.bookGroupStyle = 0
+            customView {
+                io.legado.app.ui.widget.compose.LegadoComposeView(requireContext()).apply {
+                    setContent {
+                        io.legado.app.ui.widget.compose.LegadoTheme {
+                            BookshelfOptionsContent(original) { draft = it }
                         }
-                        if (bookshelfLayout !in rgLayout.indices) {
-                            bookshelfLayout = 0
-                            AppConfig.bookshelfLayout = 0
-                        }
-                        if (bookshelfSort !in rgSort.indices) {
-                            bookshelfSort = 0
-                            AppConfig.bookshelfSort = 0
-                        }
-                        if (showBookname !in rgbLayout.indices) {
-                            showBookname = 0
-                            AppConfig.showBookname = 0
-                        }
-                        spGroupStyle.setSelection(AppConfig.bookGroupStyle)
-                        swShowUnread.isChecked = AppConfig.showUnread
-                        swShowLastUpdateTime.isChecked = AppConfig.showLastUpdateTime
-                        swShowWaitUpBooks.isChecked = AppConfig.showWaitUpCount
-                        swShowBookshelfFastScroller.isChecked = AppConfig.showBookshelfFastScroller
-                        rgLayout.checkByIndex(bookshelfLayout)
-                        rgbLayout.checkByIndex(showBookname)
-                        if (bookshelfLayout < 2) {
-                            bookNameChoice.visibility = View.GONE
-                        }
-                        rgLayout.setOnCheckedChangeListener { group, checkedId ->
-                            val index = group.getCheckedIndex()
-                            bookNameChoice.visibility = if (index > 1) View.VISIBLE else View.GONE
-                        }
-                        rgSort.checkByIndex(bookshelfSort)
-                        margin.progress = AppConfig.bookshelfMargin
                     }
-            customView { alertBinding.root }
+                }
+            }
             okButton {
-                alertBinding.apply {
-                    var notifyMain = false
-                    var recreate = false
-                    if (AppConfig.bookGroupStyle != spGroupStyle.selectedItemPosition) {
-                        AppConfig.bookGroupStyle = spGroupStyle.selectedItemPosition
-                        notifyMain = true
-                    }
-                    if (showBookname != rgbLayout.getCheckedIndex()) {
-                        AppConfig.showBookname = rgbLayout.getCheckedIndex()
-                        recreate = true
-                    }
-                    if (AppConfig.bookshelfMargin != margin.progress) {
-                        AppConfig.bookshelfMargin = margin.progress
-                        recreate = true
-                    }
-                    if (AppConfig.showUnread != swShowUnread.isChecked) {
-                        AppConfig.showUnread = swShowUnread.isChecked
+                AppConfig.bookGroupStyle = draft.groupStyle
+                AppConfig.bookshelfLayout = draft.layout
+                AppConfig.bookshelfSort = draft.sort
+                AppConfig.showBookname = draft.bookName
+                AppConfig.bookshelfMargin = draft.margin
+                AppConfig.showUnread = draft.unread
+                AppConfig.showLastUpdateTime = draft.lastUpdate
+                AppConfig.showWaitUpCount = draft.updateCount
+                AppConfig.showBookshelfFastScroller = draft.fastScroll
+                if (draft.updateCount != original.updateCount) activityViewModel.postUpBooksLiveData(true)
+                if (draft.sort != original.sort) upSort()
+                when {
+                    draft.layout != original.layout || draft.bookName != original.bookName ||
+                        draft.margin != original.margin -> postEvent(EventBus.RECREATE, "")
+                    draft.groupStyle != original.groupStyle -> postEvent(EventBus.NOTIFY_MAIN, false)
+                    else -> {
                         postEvent(EventBus.BOOKSHELF_REFRESH, "")
-                    }
-                    if (AppConfig.showLastUpdateTime != swShowLastUpdateTime.isChecked) {
-                        AppConfig.showLastUpdateTime = swShowLastUpdateTime.isChecked
-                        postEvent(EventBus.BOOKSHELF_REFRESH, "")
-                    }
-                    if (AppConfig.showWaitUpCount != swShowWaitUpBooks.isChecked) {
-                        AppConfig.showWaitUpCount = swShowWaitUpBooks.isChecked
-                        activityViewModel.postUpBooksLiveData(true)
-                    }
-                    if (AppConfig.showBookshelfFastScroller != swShowBookshelfFastScroller.isChecked) {
-                        AppConfig.showBookshelfFastScroller = swShowBookshelfFastScroller.isChecked
-                        postEvent(EventBus.BOOKSHELF_REFRESH, "")
-                    }
-                    if (bookshelfSort != rgSort.getCheckedIndex()) {
-                        AppConfig.bookshelfSort = rgSort.getCheckedIndex()
-                        upSort()
-                    }
-                    if (bookshelfLayout != rgLayout.getCheckedIndex()) {
-                        AppConfig.bookshelfLayout = rgLayout.getCheckedIndex()
-                        if (AppConfig.bookshelfLayout < 2) {
-                            activityViewModel.booksGridRecycledViewPool.clear()
-                        } else {
-                            activityViewModel.booksListRecycledViewPool.clear()
-                        }
-                        recreate = true
-                    }
-                    if (recreate) {
-                        postEvent(EventBus.RECREATE, "")
-                    } else if (notifyMain) {
-                        postEvent(EventBus.NOTIFY_MAIN, false)
                     }
                 }
             }
             cancelButton()
         }
     }
-
 
     private fun importBookshelfAlert(groupId: Long) {
+        var input = ""
         alert(titleResource = R.string.import_bookshelf) {
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = "url/json"
-            }
-            customView { alertBinding.root }
+            customView { LegadoComposeView(requireContext()).apply {
+                setContent { LegadoTheme { BookshelfInput("URL / JSON") { input = it } } }
+            } }
             okButton {
-                alertBinding.editView.text?.toString()?.let {
-                    viewModel.importBookshelf(it, groupId)
-                }
+                viewModel.importBookshelf(input, groupId)
             }
             cancelButton()
             neutralButton(R.string.select_file) {

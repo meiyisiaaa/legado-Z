@@ -6,6 +6,8 @@ import android.view.MenuItem
 import android.view.SubMenu
 import android.view.View
 import androidx.appcompat.widget.SearchView
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -16,10 +18,9 @@ import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.FragmentRssBinding
-import io.legado.app.databinding.ItemRssBinding
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.rss.article.ReadRecordDialog
 import io.legado.app.ui.rss.article.RssSortActivity
@@ -28,10 +29,10 @@ import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.rss.source.manage.RssSourceActivity
 import io.legado.app.ui.rss.subscription.RuleSubActivity
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.openUrl
-import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.transaction
@@ -42,41 +43,53 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import io.legado.app.ui.login.SourceLoginActivity
 
-/**
- * 订阅界面
- */
-class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainFragmentInterface,
-    RssAdapter.CallBack {
+/** 订阅界面。列表状态保留在 Fragment，数据仍由原有 DAO flow 提供。 */
+class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainFragmentInterface {
 
     constructor(position: Int) : this() {
-        val bundle = Bundle()
-        bundle.putInt("position", position)
-        arguments = bundle
+        arguments = Bundle().apply { putInt("position", position) }
     }
 
     override val position: Int? get() = arguments?.getInt("position")
+    override val viewModel by viewModels<RssViewModel>()
 
     private val binding by viewBinding(FragmentRssBinding::bind)
-    override val viewModel by viewModels<RssViewModel>()
-    private val adapter by lazy {
-        RssAdapter(requireContext(), this, this, viewLifecycleOwner.lifecycle)
-    }
+    private val sources = mutableStateListOf<RssSource>()
+    private val groups = linkedSetOf<String>()
     private val searchView: SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
     }
+    private var searchKey = ""
+    private var groupsMenu: SubMenu? = null
     private var groupsFlowJob: Job? = null
     private var rssFlowJob: Job? = null
-    private val groups = linkedSetOf<String>()
-    private var groupsMenu: SubMenu? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
         initSearchView()
-        initRecyclerView()
+        binding.legadoRssComposeRoot.setViewCompositionStrategy(
+            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+        )
+        binding.legadoRssComposeRoot.setContent {
+            LegadoTheme {
+                RssSubscriptionContent(
+                    fragment = this@RssFragment,
+                    lifecycle = viewLifecycleOwner.lifecycle,
+                    sources = sources,
+                    onRuleSubscription = { startActivity<RuleSubActivity>() },
+                    onOpen = ::openRss,
+                    onEdit = ::edit,
+                    onTop = ::toTop,
+                    onLogin = ::login,
+                    onDelete = ::del,
+                    onDisable = ::disable
+                )
+            }
+        }
         initGroupData()
-        upRssFlowJob()
+        searchKey = searchView.query?.toString().orEmpty()
+        upRssFlowJob(searchKey)
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu) {
@@ -98,14 +111,14 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     }
 
     override fun onPause() {
-        super.onPause()
         searchView.clearFocus()
+        super.onPause()
     }
 
     private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
         subMenu.removeGroup(R.id.menu_group_text)
-        groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+        groups.forEach { group ->
+            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, group)
         }
     }
 
@@ -113,30 +126,16 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         searchView.applyTint(primaryTextColor)
         searchView.isSubmitButtonEnabled = true
         searchView.queryHint = getString(R.string.rss)
+        searchView.clearFocus()
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
+            override fun onQueryTextSubmit(query: String?): Boolean = false
 
             override fun onQueryTextChange(newText: String?): Boolean {
-                upRssFlowJob(newText)
+                searchKey = newText.orEmpty()
+                upRssFlowJob(searchKey)
                 return false
             }
         })
-    }
-
-    private fun initRecyclerView() {
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        binding.recyclerView.adapter = adapter
-        adapter.addHeaderView {
-            ItemRssBinding.inflate(layoutInflater, it, false).apply {
-                tvName.setText(R.string.rule_subscription)
-                ivIcon.setImageResource(R.drawable.image_legado)
-                root.setOnClickListener {
-                    startActivity<RuleSubActivity>()
-                }
-            }
-        }
     }
 
     private fun initGroupData() {
@@ -148,9 +147,9 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
                 AppDatabase.RSS_SOURCE_TABLE_NAME
-            ).conflate().collect {
+            ).conflate().collect { values ->
                 groups.clear()
-                groups.addAll(it)
+                groups.addAll(values)
                 upGroupsMenu()
             }
         }
@@ -161,11 +160,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
         rssFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             when {
                 searchKey.isNullOrEmpty() -> appDb.rssSourceDao.flowEnabled()
-                searchKey.startsWith("group:") -> {
-                    val key = searchKey.substringAfter("group:")
-                    appDb.rssSourceDao.flowEnabledByGroup(key)
-                }
-
+                searchKey.startsWith("group:") -> appDb.rssSourceDao.flowEnabledByGroup(searchKey.substringAfter("group:"))
                 else -> appDb.rssSourceDao.flowEnabled(searchKey)
             }.flowWithLifecycleAndDatabaseChange(
                 viewLifecycleOwner.lifecycle,
@@ -173,22 +168,19 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
                 AppDatabase.RSS_SOURCE_TABLE_NAME
             ).catch {
                 AppLog.put("订阅界面更新数据出错", it)
-            }.flowOn(IO).collect {
-                adapter.setItems(it)
+            }.flowOn(IO).collect { values ->
+                sources.clear()
+                sources.addAll(values)
             }
         }
     }
 
-    override fun openRss(rssSource: RssSource) {
+    private fun openRss(rssSource: RssSource) {
         if (rssSource.singleUrl) {
             viewModel.getSingleUrl(rssSource) { url ->
                 if (url.startsWith("http", true)) {
                     ReadRssActivity.start(
-                        requireContext(),
-                        true,
-                        rssSource.sourceUrl,
-                        rssSource.sourceName,
-                        url
+                        requireContext(), true, rssSource.sourceUrl, rssSource.sourceName, url
                     )
                 } else {
                     context?.openUrl(url)
@@ -196,49 +188,35 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
             }
         } else {
             viewModel.launchRssWithHtml(rssSource, {
-                startActivity<RssSortActivity> {
-                    putExtra("sourceUrl", rssSource.sourceUrl)
-                }
+                startActivity<RssSortActivity> { putExtra("sourceUrl", rssSource.sourceUrl) }
             }) { html ->
                 ReadRssActivity.start(
-                    requireContext(),
-                    true,
-                    rssSource.sourceUrl,
-                    rssSource.sourceName,
-                    startHtml = html
+                    requireContext(), true, rssSource.sourceUrl, rssSource.sourceName, startHtml = html
                 )
             }
         }
     }
 
-    override fun toTop(rssSource: RssSource) {
-        viewModel.topSource(rssSource)
-    }
+    private fun toTop(rssSource: RssSource) = viewModel.topSource(rssSource)
 
-    override fun login(rssSource: RssSource) {
+    private fun login(rssSource: RssSource) {
         startActivity<SourceLoginActivity> {
             putExtra("type", "rssSource")
             putExtra("key", rssSource.sourceUrl)
         }
     }
 
-    override fun edit(rssSource: RssSource) {
-        startActivity<RssSourceEditActivity> {
-            putExtra("sourceUrl", rssSource.sourceUrl)
-        }
+    private fun edit(rssSource: RssSource) {
+        startActivity<RssSourceEditActivity> { putExtra("sourceUrl", rssSource.sourceUrl) }
     }
 
-    override fun del(rssSource: RssSource) {
+    private fun del(rssSource: RssSource) {
         alert(R.string.draw) {
             setMessage(getString(R.string.sure_del) + "\n" + rssSource.sourceName)
             noButton()
-            yesButton {
-                viewModel.del(rssSource)
-            }
+            yesButton { viewModel.del(rssSource) }
         }
     }
 
-    override fun disable(rssSource: RssSource) {
-        viewModel.disable(rssSource)
-    }
+    private fun disable(rssSource: RssSource) = viewModel.disable(rssSource)
 }

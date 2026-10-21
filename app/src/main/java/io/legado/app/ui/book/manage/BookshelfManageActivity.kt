@@ -9,9 +9,8 @@ import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.ItemTouchHelper
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
@@ -27,23 +26,19 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.SelectActionBar
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.WaitDialog
-import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
-import io.legado.app.ui.widget.recycler.ItemTouchCallback
-import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.sendToClip
-import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -64,18 +59,23 @@ class BookshelfManageActivity :
     VMBaseActivity<ActivityArrangeBookBinding, BookshelfManageViewModel>(),
     PopupMenu.OnMenuItemClickListener,
     SelectActionBar.CallBack,
-    BookAdapter.CallBack,
     SourcePickerDialog.Callback,
     GroupSelectDialog.CallBack {
 
     override val binding by viewBinding(ActivityArrangeBookBinding::inflate)
     override val viewModel by viewModels<BookshelfManageViewModel>()
-    override val groupList: ArrayList<BookGroup> = arrayListOf()
+    private val groupList: ArrayList<BookGroup> = arrayListOf()
     private val groupRequestCode = 22
+    private val bookGroupRequestCode = 12
     private val addToGroupRequestCode = 34
     private val removeToGroupRequestCode = 42
-    private val adapter by lazy { BookAdapter(this, this) }
-    private val itemTouchCallback by lazy { ItemTouchCallback(adapter) }
+    private val composeBooks = mutableStateOf<List<Book>>(emptyList())
+    private val selectedBooks = mutableStateOf<Set<String>>(emptySet())
+    private val composeGroups = mutableStateOf<List<BookGroup>>(emptyList())
+    private val titleOpensInfo = mutableStateOf(AppConfig.openBookInfoByClickTitle)
+    private val canReorder = mutableStateOf(false)
+    private var actionItem: Book? = null
+    private var manualOrderChanged = false
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private val searchView: SearchView by lazy {
@@ -111,7 +111,7 @@ class BookshelfManageActivity :
             upTitle()
         }
         initSearchView()
-        initRecyclerView()
+        initComposeList()
         initOtherView()
         initGroupData()
         upBookDataByGroupId()
@@ -145,11 +145,17 @@ class BookshelfManageActivity :
     }
 
     override fun selectAll(selectAll: Boolean) {
-        adapter.selectAll(selectAll)
+        selectedBooks.value = if (selectAll) selectedBooks.value + composeBooks.value.map { it.bookUrl } else emptySet()
+        upSelectCount()
     }
 
     override fun revertSelection() {
-        adapter.revertSelection()
+        selectedBooks.value = selectedBooks.value.toMutableSet().apply {
+            composeBooks.value.forEach { book ->
+                if (!add(book.bookUrl)) remove(book.bookUrl)
+            }
+        }
+        upSelectCount()
     }
 
     override fun onClickSelectBarMainAction() {
@@ -176,19 +182,27 @@ class BookshelfManageActivity :
         })
     }
 
-    private fun initRecyclerView() {
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView.addItemDecoration(VerticalDivider(this))
-        binding.recyclerView.adapter = adapter
-        itemTouchCallback.isCanDrag = AppConfig.bookshelfSort == 3
-        val dragSelectTouchHelper: DragSelectTouchHelper =
-            DragSelectTouchHelper(adapter.dragSelectCallback).setSlideArea(16, 50)
-        dragSelectTouchHelper.attachToRecyclerView(binding.recyclerView)
-        // When this page is opened, it is in selection mode
-        dragSelectTouchHelper.activeSlideSelect()
-        // Note: need judge selection first, so add ItemTouchHelper after it.
-        ItemTouchHelper(itemTouchCallback).attachToRecyclerView(binding.recyclerView)
+    private fun initComposeList() {
+        binding.composeList.setContent {
+            LegadoTheme {
+                BookshelfManageContent(
+                    books = composeBooks.value,
+                    selected = selectedBooks.value,
+                    groups = composeGroups.value,
+                    canReorder = canReorder.value,
+                    openInfoOnTitle = titleOpensInfo.value,
+                    onToggleSelection = ::toggleSelection,
+                    onOpenBook = ::openBook,
+                    onDeleteBook = ::deleteBook,
+                    onSelectGroup = { book ->
+                        actionItem = book
+                        selectGroup(bookGroupRequestCode, book.group)
+                    },
+                    onMove = ::moveBook,
+                    onMoveFinished = ::finishManualOrder
+                )
+            }
+        }
     }
 
     private fun initOtherView() {
@@ -209,7 +223,7 @@ class BookshelfManageActivity :
             }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
-                adapter.notifyDataSetChanged()
+                composeGroups.value = it
                 upMenu()
             }
         }
@@ -246,8 +260,8 @@ class BookshelfManageActivity :
             }.flowOn(IO)
                 .conflate().collect {
                     books = it
+                    canReorder.value = bookSort == 3
                     upBookData()
-                    itemTouchCallback.isCanDrag = bookSort == 3
                 }
         }
     }
@@ -255,15 +269,14 @@ class BookshelfManageActivity :
     private fun upBookData() {
         books?.let { books ->
             val searchKey = searchView.query
-            if (searchKey.isNullOrEmpty()) {
-                adapter.setItems(books)
+            composeBooks.value = if (searchKey.isNullOrEmpty()) {
+                books
             } else {
                 books.filter {
                     it.contains(searchKey.toString())
-                }.let {
-                    adapter.setItems(it)
                 }
             }
+            upSelectCount()
         }
     }
 
@@ -272,7 +285,7 @@ class BookshelfManageActivity :
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_open_book_info_by_click_title -> {
                 AppConfig.openBookInfoByClickTitle = !item.isChecked
-                adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                titleOpensInfo.value = AppConfig.openBookInfoByClickTitle
             }
 
             R.id.menu_export_all_use_book_source -> viewModel.saveAllUseBookSourceToFile { file ->
@@ -301,16 +314,16 @@ class BookshelfManageActivity :
         when (item?.itemId) {
             R.id.menu_del_selection -> alertDelSelection()
             R.id.menu_update_enable ->
-                viewModel.upCanUpdate(adapter.selection, true)
+                viewModel.upCanUpdate(currentSelection(), true)
 
             R.id.menu_update_disable ->
-                viewModel.upCanUpdate(adapter.selection, false)
+                viewModel.upCanUpdate(currentSelection(), false)
 
             R.id.menu_add_to_group -> selectGroup(addToGroupRequestCode, 0)
             R.id.menu_remove_to_group -> selectGroup(removeToGroupRequestCode, 0)
             R.id.menu_change_source -> showDialogFragment<SourcePickerDialog>()
-            R.id.menu_clear_cache -> viewModel.clearCache(adapter.selection)
-            R.id.menu_check_selected_interval -> adapter.checkSelectedInterval()
+            R.id.menu_clear_cache -> viewModel.clearCache(currentSelection())
+            R.id.menu_check_selected_interval -> checkSelectedInterval()
         }
         return false
     }
@@ -337,13 +350,54 @@ class BookshelfManageActivity :
             customView { view }
             okButton {
                 LocalConfig.deleteBookOriginal = checkBox.isChecked
-                viewModel.deleteBook(adapter.selection, checkBox.isChecked)
+                viewModel.deleteBook(currentSelection(), checkBox.isChecked)
             }
             noButton()
         }
     }
 
-    override fun selectGroup(requestCode: Int, groupId: Long) {
+    private fun currentSelection(): List<Book> = composeBooks.value.filter { it.bookUrl in selectedBooks.value }
+
+    private fun toggleSelection(book: Book) {
+        selectedBooks.value = selectedBooks.value.toMutableSet().apply {
+            if (!add(book.bookUrl)) remove(book.bookUrl)
+        }
+        upSelectCount()
+    }
+
+    private fun checkSelectedInterval() {
+        val selectedIndices = composeBooks.value.indices.filter { composeBooks.value[it].bookUrl in selectedBooks.value }
+        if (selectedIndices.isEmpty()) return
+        val first = selectedIndices.first()
+        val last = selectedIndices.last()
+        selectedBooks.value = selectedBooks.value + composeBooks.value.subList(first, last + 1).map { it.bookUrl }
+        upSelectCount()
+    }
+
+    private fun moveBook(from: Int, to: Int) {
+        if (!canReorder.value) return
+        val items = composeBooks.value.toMutableList()
+        if (from !in items.indices || to !in items.indices || from == to) return
+        val source = items[from]
+        val target = items[to]
+        if (source.order == target.order) {
+            items.forEachIndexed { index, book -> book.order = index + 1 }
+        } else {
+            source.order = target.order.also { target.order = source.order }
+        }
+        items.add(to, items.removeAt(from))
+        composeBooks.value = items
+        manualOrderChanged = true
+    }
+
+    private fun finishManualOrder() {
+        if (manualOrderChanged) {
+            viewModel.updateBook(*composeBooks.value.toTypedArray())
+            manualOrderChanged = false
+        }
+    }
+
+    fun selectGroup(requestCode: Int, groupId: Long) {
         showDialogFragment(
             GroupSelectDialog(groupId, requestCode)
         )
@@ -351,20 +405,20 @@ class BookshelfManageActivity :
 
     override fun upGroup(requestCode: Int, groupId: Long) {
         when (requestCode) {
-            groupRequestCode -> adapter.selection.let { books ->
+            groupRequestCode -> currentSelection().let { books ->
                 val array = Array(books.size) {
                     books[it].copy(group = groupId)
                 }
                 viewModel.updateBook(*array)
             }
 
-            adapter.groupRequestCode -> {
-                adapter.actionItem?.let {
+            bookGroupRequestCode -> {
+                actionItem?.let {
                     viewModel.updateBook(it.copy(group = groupId))
                 }
             }
 
-            addToGroupRequestCode -> adapter.selection.let { books ->
+            addToGroupRequestCode -> currentSelection().let { books ->
                 val array = Array(books.size) { index ->
                     val book = books[index]
                     book.copy(group = book.group or groupId)
@@ -372,7 +426,7 @@ class BookshelfManageActivity :
                 viewModel.updateBook(*array)
             }
 
-            removeToGroupRequestCode -> adapter.selection.let { books ->
+            removeToGroupRequestCode -> currentSelection().let { books ->
                 val array = Array(books.size) { index ->
                     val book = books[index]
                     book.copy(group = book.group and groupId.inv())
@@ -382,15 +436,11 @@ class BookshelfManageActivity :
         }
     }
 
-    override fun upSelectCount() {
-        binding.selectActionBar.upCountView(adapter.selection.size, adapter.getItems().size)
+    fun upSelectCount() {
+        binding.selectActionBar.upCountView(currentSelection().size, composeBooks.value.size)
     }
 
-    override fun updateBook(vararg book: Book) {
-        viewModel.updateBook(*book)
-    }
-
-    override fun deleteBook(book: Book) {
+    private fun deleteBook(book: Book) {
         alert(titleResource = R.string.draw, messageResource = R.string.sure_del) {
             var checkBox: CheckBox? = null
             if (book.isLocal) {
@@ -413,7 +463,7 @@ class BookshelfManageActivity :
         }
     }
 
-    override fun openBook(book: Book) {
+    private fun openBook(book: Book) {
         startActivity<BookInfoActivity> {
             putExtra("name", book.name)
             putExtra("author", book.author)
@@ -421,7 +471,7 @@ class BookshelfManageActivity :
     }
 
     override fun sourceOnClick(source: BookSource) {
-        viewModel.changeSource(adapter.selection, source)
+        viewModel.changeSource(currentSelection(), source)
         viewModel.batchChangeSourceState.value = true
     }
 

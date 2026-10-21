@@ -1,24 +1,22 @@
 package io.legado.app.ui.book.search
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.SearchView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.constant.AppLog
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
-import io.legado.app.databinding.DialogSearchScopeBinding
-import io.legado.app.databinding.ItemCheckBoxBinding
-import io.legado.app.databinding.ItemRadioButtonBinding
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.utils.applyTint
+import io.legado.app.databinding.DialogSearchScopeComposeBinding
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -31,18 +29,18 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class SearchScopeDialog : BaseDialogFragment(R.layout.dialog_search_scope) {
+class SearchScopeDialog : BaseDialogFragment(R.layout.dialog_search_scope_compose) {
 
-    private val binding by viewBinding(DialogSearchScopeBinding::bind)
+    private val binding by viewBinding(DialogSearchScopeComposeBinding::bind)
+    private val callback: Callback get() = parentFragment as? Callback ?: activity as Callback
+    private var groups by mutableStateOf<List<String>>(emptyList())
+    private var sources by mutableStateOf<List<BookSourcePart>>(emptyList())
+    private val selectedGroups = mutableStateListOf<String>()
+    private var selectedSource by mutableStateOf<BookSourcePart?>(null)
+    private var mode by mutableStateOf(SearchScopeMode.Group)
+    private var filterText by mutableStateOf("")
+    private var isFilterVisible by mutableStateOf(false)
     private var sourceFlowJob: Job? = null
-    val callback: Callback get() = parentFragment as? Callback ?: activity as Callback
-    var groups: List<String> = emptyList()
-    val screenSources = arrayListOf<BookSourcePart>()
-    var screenText: String? = null
-
-    val adapter by lazy {
-        RecyclerAdapter()
-    }
 
     override fun onStart() {
         super.onStart()
@@ -50,206 +48,94 @@ class SearchScopeDialog : BaseDialogFragment(R.layout.dialog_search_scope) {
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.recyclerView.adapter = adapter
-        initMenu()
-        initSearchView()
-        initOtherView()
-        initData()
-    }
-
-    private fun initMenu() {
-        binding.toolBar.inflateMenu(R.menu.book_search_scope)
-        binding.toolBar.menu.applyTint(requireContext())
-    }
-
-    private fun initSearchView() {
-        val searchView = binding.toolBar.menu.findItem(R.id.menu_screen).actionView as SearchView
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
-
-            override fun onQueryTextChange(newText: String?): Boolean {
-                screenText = newText
-                upData()
-                return false
-            }
-
-        })
-    }
-
-    private fun initOtherView() {
-        binding.rgScope.setOnCheckedChangeListener { _, checkedId ->
-            binding.toolBar.menu.findItem(R.id.menu_screen)?.isVisible = checkedId == R.id.rb_source
-            upData()
-        }
-        binding.tvCancel.setOnClickListener {
-            dismiss()
-        }
-        binding.tvAllSource.setOnClickListener {
-            callback.onSearchScopeOk(SearchScope(""))
-            dismiss()
-        }
-        binding.tvOk.setOnClickListener {
-            if (binding.rbGroup.isChecked) {
-                callback.onSearchScopeOk(SearchScope(adapter.selectGroups))
-            } else {
-                val selectSource = adapter.selectSource
-                if (selectSource != null) {
-                    callback.onSearchScopeOk(SearchScope(selectSource))
-                } else {
-                    callback.onSearchScopeOk(SearchScope(""))
+        binding.composeContent.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    SearchScopeContent(
+                        mode = mode,
+                        groups = groups,
+                        sources = sources,
+                        selectedGroups = selectedGroups.toSet(),
+                        selectedSource = selectedSource,
+                        filterText = filterText,
+                        isFilterVisible = isFilterVisible,
+                        onModeChange = ::changeMode,
+                        onFilterTextChange = {
+                            filterText = it
+                            if (mode == SearchScopeMode.Source) upBookSource(it)
+                        },
+                        onFilterToggle = { isFilterVisible = !isFilterVisible },
+                        onGroupToggle = ::toggleGroup,
+                        onSourceSelect = { selectedSource = it },
+                        onAllSources = {
+                            callback.onSearchScopeOk(SearchScope(""))
+                            dismissAllowingStateLoss()
+                        },
+                        onCancel = { dismissAllowingStateLoss() },
+                        onConfirm = ::confirmScope
+                    )
                 }
             }
-            dismiss()
+        }
+        initGroups()
+    }
+
+    override fun onDestroyView() {
+        sourceFlowJob?.cancel()
+        sourceFlowJob = null
+        super.onDestroyView()
+    }
+
+    private fun initGroups() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            groups = withContext(IO) { appDb.bookSourceDao.allEnabledGroups() }
         }
     }
 
-    private fun initData() {
-        lifecycleScope.launch {
-            groups = withContext(IO) {
-                appDb.bookSourceDao.allEnabledGroups()
-            }
-            upData()
-        }
+    private fun changeMode(next: SearchScopeMode) {
+        if (mode == next) return
+        mode = next
+        if (next == SearchScopeMode.Source) upBookSource(filterText)
     }
 
-    @SuppressLint("NotifyDataSetChanged")
-    private fun upData() {
-        if (binding.rbSource.isChecked) {
-            upBookSource(screenText)
+    private fun toggleGroup(group: String, checked: Boolean) {
+        if (checked && group !in selectedGroups) selectedGroups.add(group)
+        if (!checked) selectedGroups.remove(group)
+    }
+
+    private fun confirmScope() {
+        if (mode == SearchScopeMode.Group) {
+            callback.onSearchScopeOk(SearchScope(selectedGroups.toList()))
         } else {
-            adapter.notifyDataSetChanged()
+            selectedSource?.let { callback.onSearchScopeOk(SearchScope(it)) }
+                ?: callback.onSearchScopeOk(SearchScope(""))
         }
+        dismissAllowingStateLoss()
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     private fun upBookSource(searchKey: String? = null) {
         sourceFlowJob?.cancel()
-        sourceFlowJob = lifecycleScope.launch {
-            when {
-                searchKey.isNullOrEmpty() -> {
-                    appDb.bookSourceDao.flowAll()
-                }
-
-                else -> {
-                    appDb.bookSourceDao.flowSearch(searchKey)
-                }
-            }.flowWithLifecycleAndDatabaseChange(
-                lifecycle,
+        sourceFlowJob = viewLifecycleOwner.lifecycleScope.launch {
+            val flow = if (searchKey.isNullOrEmpty()) {
+                appDb.bookSourceDao.flowAll()
+            } else {
+                appDb.bookSourceDao.flowSearch(searchKey)
+            }
+            flow.flowWithLifecycleAndDatabaseChange(
+                viewLifecycleOwner.lifecycle,
                 table = AppDatabase.BOOK_SOURCE_TABLE_NAME
             ).catch {
                 AppLog.put("多分组/书源界面更新书源出错", it)
             }.flowOn(IO).conflate().collect { data ->
-                screenSources.clear()
-                screenSources.addAll(data)
-                adapter.notifyDataSetChanged()
+                sources = data
                 delay(500)
             }
         }
     }
 
-    inner class RecyclerAdapter : RecyclerView.Adapter<ItemViewHolder>() {
-
-        val selectGroups = arrayListOf<String>()
-        var selectSource: BookSourcePart? = null
-
-        override fun getItemViewType(position: Int): Int {
-            return if (binding.rbSource.isChecked) {
-                1
-            } else {
-                0
-            }
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
-            return if (viewType == 1) {
-                ItemViewHolder(ItemRadioButtonBinding.inflate(layoutInflater, parent, false))
-            } else {
-                ItemViewHolder(ItemCheckBoxBinding.inflate(layoutInflater, parent, false))
-            }
-        }
-
-        override fun onBindViewHolder(
-            holder: ItemViewHolder,
-            position: Int,
-            payloads: MutableList<Any>
-        ) {
-            if (payloads.isEmpty()) {
-                super.onBindViewHolder(holder, position, payloads)
-            } else {
-                when (holder.binding) {
-                    is ItemCheckBoxBinding -> {
-                        groups.getOrNull(position)?.let {
-                            holder.binding.checkBox.isChecked = selectGroups.contains(it)
-                            holder.binding.checkBox.text = it
-                        }
-                    }
-
-                    is ItemRadioButtonBinding -> {
-                        screenSources.getOrNull(position)?.let {
-                            holder.binding.radioButton.isChecked = selectSource == it
-                            holder.binding.radioButton.text = it.bookSourceName
-                        }
-                    }
-                }
-            }
-        }
-
-        override fun onBindViewHolder(holder: ItemViewHolder, position: Int) {
-            when (holder.binding) {
-                is ItemCheckBoxBinding -> {
-                    groups.getOrNull(position)?.let {
-                        holder.binding.checkBox.isChecked = selectGroups.contains(it)
-                        holder.binding.checkBox.text = it
-                        holder.binding.checkBox.setOnUserCheckedChangeListener { isChecked ->
-                            if (isChecked) {
-                                selectGroups.add(it)
-                            } else {
-                                selectGroups.remove(it)
-                            }
-                            holder.itemView.post {
-                                notifyItemRangeChanged(0, itemCount, "up")
-                            }
-                        }
-                    }
-                }
-
-                is ItemRadioButtonBinding -> {
-                    screenSources.getOrNull(position)?.let {
-                        holder.binding.radioButton.isChecked = selectSource == it
-                        holder.binding.radioButton.text = it.bookSourceName
-                        holder.binding.radioButton.setOnUserCheckedChangeListener { isChecked ->
-                            if (isChecked) {
-                                selectSource = it
-                            }
-                            holder.itemView.post {
-                                notifyItemRangeChanged(0, itemCount, "up")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        override fun getItemCount(): Int {
-            return if (binding.rbSource.isChecked) {
-                screenSources.size
-            } else {
-                groups.size
-            }
-        }
-
-    }
-
     interface Callback {
-
-        /**
-         * 搜索范围确认
-         */
+        /** Called with the selected multi-group, individual source, or all-source scope. */
         fun onSearchScopeOk(searchScope: SearchScope)
-
     }
-
 }

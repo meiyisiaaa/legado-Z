@@ -1,23 +1,25 @@
 package io.legado.app.ui.book.search
 
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View.GONE
-import android.view.View.VISIBLE
-import android.widget.TextView
+import android.view.View
+import android.view.ViewGroup
+import android.view.Window
+import android.widget.FrameLayout
 import androidx.activity.viewModels
-import androidx.appcompat.widget.SearchView
-import androidx.core.os.bundleOf
-import androidx.core.view.isVisible
+import androidx.core.view.ViewCompat
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.flexbox.FlexboxLayoutManager
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
@@ -30,28 +32,20 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.databinding.ActivityBookSearchBinding
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.Selector
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.backgroundColor
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.info.BookInfoActivity
+import io.legado.app.ui.book.info.EXTRA_SHARED_COVER_TRANSITION_NAME
+import io.legado.app.ui.book.info.isBookCoverTransitionEnabled
+import io.legado.app.ui.book.info.newBookCoverTransition
 import io.legado.app.ui.book.source.manage.BookSourceActivity
-import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.applyNavigationBarMargin
-import io.legado.app.utils.applyNavigationBarPadding
-import io.legado.app.utils.applyTint
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.getPrefBoolean
-import io.legado.app.utils.gone
-import io.legado.app.utils.invisible
 import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
@@ -61,45 +55,94 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
-import kotlin.math.abs
 
 class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel>(),
-    BookAdapter.CallBack,
-    HistoryKeyAdapter.CallBack,
-    SearchScopeDialog.Callback,
-    SearchAdapter.CallBack {
+    SearchScopeDialog.Callback {
+
+    private var coverTransitionsEnabled = false
 
     override val binding by viewBinding(ActivityBookSearchBinding::inflate)
     override val viewModel by viewModels<SearchViewModel>()
 
-    private val adapter by lazy { SearchAdapter(this, this) }
-    private val bookAdapter by lazy {
-        BookAdapter(this, this).apply {
-            setHasStableIds(true)
-        }
-    }
-    private val historyKeyAdapter by lazy {
-        HistoryKeyAdapter(this, this).apply {
-            setHasStableIds(true)
-        }
-    }
-    private val searchView: SearchView by lazy {
-        binding.titleBar.findViewById(R.id.search_view)
-    }
-    private var menu: Menu? = null
-    private var groups: List<String>? = null
+    private var uiState by mutableStateOf(SearchUiState())
+    private var searchBooks: List<SearchBook> = emptyList()
+    private var historyItems: List<SearchKeyword> = emptyList()
+    private var groups: List<String> = emptyList()
     private var historyFlowJob: Job? = null
     private var booksFlowJob: Job? = null
+    private var menu: Menu? = null
     private var precisionSearchMenuItem: MenuItem? = null
     private var isManualStopSearch = false
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        coverTransitionsEnabled = isBookCoverTransitionEnabled()
+        if (coverTransitionsEnabled) {
+            window.requestFeature(Window.FEATURE_CONTENT_TRANSITIONS)
+            window.sharedElementExitTransition = newBookCoverTransition()
+            window.sharedElementReenterTransition = newBookCoverTransition()
+        }
+        super.onCreate(savedInstanceState)
+    }
+
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        binding.llInputHelp.setBackgroundColor(backgroundColor)
-        initRecyclerView()
-        initSearchView()
-        initOtherView()
+        uiState = uiState.copy(hasMore = viewModel.hasMore)
+        binding.titleBar.findViewById<ComposeView>(R.id.search_toolbar_compose).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    SearchToolbar(
+                        state = uiState,
+                        onQueryChange = ::onQueryChanged,
+                        onQueryFocusChange = ::onQueryFocusChanged,
+                        onSubmit = ::submitSearch
+                    )
+                }
+            }
+        }
+        binding.composeContainer.addView(
+            LegadoComposeView(this).apply {
+                setContent {
+                    LegadoTheme {
+                        SearchScreen(
+                            state = uiState,
+                            onHistoryClick = ::searchHistory,
+                            onHistoryDelete = ::deleteHistory,
+                            onClearHistory = ::alertClearHistory,
+                            onLocalBookClick = { showBookInfo(it.name, it.author, it.bookUrl) },
+                            onBookClick = { book, cover ->
+                                showBookInfo(book.name, book.author, book.bookUrl, cover)
+                            },
+                            onStopSearch = ::stopSearch,
+                            onContinueSearch = ::continueSearch,
+                            onListEndReached = ::scrollToBottom
+                        )
+                    }
+                }
+            },
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
         initData()
-        receiptIntent(intent)
+        if (savedInstanceState == null) {
+            receiptIntent(intent)
+        } else {
+            uiState = uiState.copy(
+                query = savedInstanceState.getString(KEY_QUERY).orEmpty(),
+                showInputHelp = savedInstanceState.getBoolean(KEY_SHOW_HELP, true),
+                queryFocused = savedInstanceState.getBoolean(KEY_QUERY_FOCUSED),
+                focusRequestId = if (savedInstanceState.getBoolean(KEY_QUERY_FOCUSED)) 1 else 0
+            )
+            refreshSuggestions(uiState.query.trim())
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(KEY_QUERY, uiState.query)
+        outState.putBoolean(KEY_SHOW_HELP, uiState.showInputHelp)
+        outState.putBoolean(KEY_QUERY_FOCUSED, uiState.queryFocused)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -135,14 +178,14 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                             hasChecked = true
                         }
                     }
-            groups?.forEach {
-                if (searchScopeNames.contains(it)) {
-                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, it).apply {
+            groups.forEach { group ->
+                if (searchScopeNames.contains(group)) {
+                    menu.add(R.id.menu_group_1, Menu.NONE, Menu.NONE, group).apply {
                         isChecked = true
                         hasChecked = true
                     }
                 } else {
-                    menu.add(R.id.menu_group_2, Menu.NONE, Menu.NONE, it)
+                    menu.add(R.id.menu_group_2, Menu.NONE, Menu.NONE, group)
                 }
             }
             if (!hasChecked) {
@@ -158,13 +201,12 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_precision_search -> {
-                putPrefBoolean(
-                    PreferKey.precisionSearch,
-                    !getPrefBoolean(PreferKey.precisionSearch)
-                )
-                precisionSearchMenuItem?.isChecked = getPrefBoolean(PreferKey.precisionSearch)
-                searchView.query?.toString()?.trim()?.let {
-                    searchView.setQuery(it, true)
+                val enabled = !getPrefBoolean(PreferKey.precisionSearch)
+                putPrefBoolean(PreferKey.precisionSearch, enabled)
+                precisionSearchMenuItem?.isChecked = enabled
+                uiState.query.trim().let { query ->
+                    uiState = uiState.copy(query = query)
+                    submitSearch()
                 }
             }
 
@@ -183,134 +225,26 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         return super.onCompatOptionsItemSelected(item)
     }
 
-    private fun initSearchView() {
-        searchView.applyTint(primaryTextColor)
-        searchView.isSubmitButtonEnabled = true
-        searchView.queryHint = getString(R.string.search_book_key)
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String): Boolean {
-                searchView.clearFocus()
-                query.trim().let { searchKey ->
-                    isManualStopSearch = false
-                    viewModel.saveSearchKey(searchKey)
-                    viewModel.searchKey = ""
-                    viewModel.search(searchKey)
-                }
-                visibleInputHelp(false)
-                return true
-            }
-
-            override fun onQueryTextChange(newText: String): Boolean {
-                viewModel.stop()
-                binding.fbStartStop.invisible()
-                upHistory(newText.trim())
-                return false
-            }
-        })
-        searchView.setOnQueryTextFocusChangeListener { _, hasFocus ->
-            if (binding.refreshProgressBar.isAutoLoading || (!hasFocus && adapter.isNotEmpty() && searchView.query.isNotBlank())) {
-                visibleInputHelp(false)
-            } else {
-                visibleInputHelp(true)
-            }
-        }
-        visibleInputHelp(true)
-    }
-
-    private fun initRecyclerView() {
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        binding.rvBookshelfSearch.setEdgeEffectColor(primaryColor)
-        binding.rvHistoryKey.setEdgeEffectColor(primaryColor)
-        binding.rvBookshelfSearch.layoutManager = FlexboxLayoutManager(this)
-        binding.rvBookshelfSearch.adapter = bookAdapter
-        binding.rvBookshelfSearch.applyNavigationBarMargin()
-        binding.rvHistoryKey.layoutManager = FlexboxLayoutManager(this)
-        binding.rvHistoryKey.adapter = historyKeyAdapter
-        binding.rvHistoryKey.applyNavigationBarMargin()
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.itemAnimator = null
-        binding.recyclerView.applyNavigationBarPadding()
-        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                super.onItemRangeInserted(positionStart, itemCount)
-                if (positionStart == 0) {
-                    binding.recyclerView.scrollToPosition(0)
-                }
-            }
-
-            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) {
-                super.onItemRangeMoved(fromPosition, toPosition, itemCount)
-                if (toPosition == 0) {
-                    binding.recyclerView.scrollToPosition(0)
-                }
-            }
-        })
-        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                if (!recyclerView.canScrollVertically(1)) {
-                    val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                    val lastPosition = layoutManager.findLastCompletelyVisibleItemPosition()
-                    if (lastPosition == RecyclerView.NO_POSITION) {
-                        return
-                    }
-                    val lastView = layoutManager.findViewByPosition(lastPosition)
-                    if (lastView == null) {
-                        scrollToBottom()
-                        return
-                    }
-                    val bottom =
-                        abs(lastView.bottom - recyclerView.height) - recyclerView.paddingBottom
-                    if (bottom <= 1) {
-                        scrollToBottom()
-                    }
-                }
-            }
-        })
-    }
-
-    private fun initOtherView() {
-        binding.fbStartStop.backgroundTintList =
-            Selector.colorBuild()
-                .setDefaultColor(accentColor)
-                .setPressedColor(ColorUtils.darkenColor(accentColor))
-                .create()
-        binding.fbStartStop.setOnClickListener {
-            if (viewModel.isSearchLiveData.value == true) {
-                isManualStopSearch = true
-                viewModel.stop()
-                binding.refreshProgressBar.isAutoLoading = false
-            } else {
-                viewModel.search("")
-            }
-        }
-        binding.fbStartStop.applyNavigationBarMargin(true)
-        binding.tvClearHistory.setOnClickListener { alertClearHistory() }
-    }
-
     private fun initData() {
         viewModel.searchScope.stateLiveData.observe(this) {
-            if (!binding.llInputHelp.isVisible) {
-                searchView.query?.toString()?.trim()?.let {
-                    searchView.setQuery(it, true)
-                }
-            }
+            if (!uiState.showInputHelp) submitSearch()
         }
-        viewModel.isSearchLiveData.observe(this) {
-            if (it) {
-                startSearch()
-            } else {
-                searchFinally()
-            }
+        viewModel.isSearchLiveData.observe(this) { searching ->
+            uiState = uiState.copy(
+                isSearching = searching,
+                hasMore = viewModel.hasMore,
+                manuallyStopped = isManualStopSearch
+            )
         }
-        viewModel.searchBookLiveData.observe(this) {
-            adapter.setItems(it)
+        viewModel.searchBookLiveData.observe(this) { books ->
+            searchBooks = books
+            publishSearchBooks()
+        }
+        viewModel.upAdapterLiveData.observe(this) {
+            publishSearchBooks()
         }
         lifecycleScope.launch {
-            appDb.bookSourceDao.flowEnabledGroups().collect {
-                groups = it
-            }
+            appDb.bookSourceDao.flowEnabledGroups().collect { groups = it }
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -324,72 +258,89 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         }
     }
 
-    /**
-     * 处理传入数据
-     */
     private fun receiptIntent(intent: Intent? = null) {
-        val searchScope = intent?.getStringExtra("searchScope")
-        searchScope?.let {
-            viewModel.searchScope.update(searchScope, postValue = false, save = false)
+        intent?.getStringExtra("searchScope")?.let { scope ->
+            viewModel.searchScope.update(scope, postValue = false, save = false)
         }
         val key = intent?.getStringExtra("key")
         if (key.isNullOrBlank()) {
-            searchView.findViewById<TextView>(androidx.appcompat.R.id.search_src_text)
-                .requestFocus()
+            uiState = uiState.copy(
+                query = "",
+                showInputHelp = true,
+                queryFocused = true,
+                focusRequestId = uiState.focusRequestId + 1
+            )
+            refreshSuggestions("")
         } else {
-            searchView.setQuery(key, true)
+            uiState = uiState.copy(query = key, queryFocused = false)
+            submitSearch()
         }
     }
 
-    /**
-     * 滚动到底部事件
-     */
+    private fun onQueryChanged(query: String) {
+        uiState = uiState.copy(query = query)
+        viewModel.stop()
+        refreshSuggestions(query.trim())
+    }
+
+    private fun onQueryFocusChanged(focused: Boolean) {
+        if (uiState.queryFocused == focused) return
+        val showHelp = !uiState.isSearching &&
+            (focused || uiState.results.isEmpty() || uiState.query.isBlank())
+        uiState = uiState.copy(queryFocused = focused, showInputHelp = showHelp)
+        if (showHelp) refreshSuggestions(uiState.query.trim())
+    }
+
+    private fun submitSearch() {
+        val query = uiState.query.trim()
+        isManualStopSearch = false
+        uiState = uiState.copy(
+            query = query,
+            showInputHelp = false,
+            queryFocused = false,
+            manuallyStopped = false
+        )
+        viewModel.saveSearchKey(query)
+        viewModel.searchKey = ""
+        viewModel.search(query)
+    }
+
+    private fun stopSearch() {
+        isManualStopSearch = true
+        uiState = uiState.copy(manuallyStopped = true)
+        viewModel.stop()
+    }
+
+    private fun continueSearch() {
+        isManualStopSearch = false
+        uiState = uiState.copy(manuallyStopped = false)
+        viewModel.search("")
+    }
+
     private fun scrollToBottom() {
-        if (isManualStopSearch) {
-            return
-        }
-        if (viewModel.isSearchLiveData.value == false
-            && viewModel.searchKey.isNotEmpty()
-            && viewModel.hasMore
+        if (!isManualStopSearch &&
+            !uiState.isSearching &&
+            viewModel.searchKey.isNotEmpty() &&
+            viewModel.hasMore
         ) {
             viewModel.search("")
         }
     }
 
-    /**
-     * 打开关闭输入帮助
-     */
-    private fun visibleInputHelp(visible: Boolean) {
-        if (visible) {
-            upHistory(searchView.query.toString())
-            binding.llInputHelp.visibility = VISIBLE
-        } else {
-            binding.llInputHelp.visibility = GONE
-        }
-    }
-
-    /**
-     * 更新搜索历史
-     */
-    private fun upHistory(key: String? = null) {
+    private fun refreshSuggestions(key: String?) {
         booksFlowJob?.cancel()
-        booksFlowJob = lifecycleScope.launch {
-            if (key.isNullOrBlank()) {
-                binding.tvBookShow.gone()
-                binding.rvBookshelfSearch.gone()
-            } else {
-                appDb.bookDao.flowSearch(key).conflate().collect {
-                    if (it.isEmpty()) {
-                        binding.tvBookShow.gone()
-                        binding.rvBookshelfSearch.gone()
-                    } else {
-                        binding.tvBookShow.visible()
-                        binding.rvBookshelfSearch.visible()
-                    }
-                    bookAdapter.setItems(it)
+        if (key.isNullOrBlank()) {
+            uiState = uiState.copy(localBooks = emptyList())
+        } else {
+            booksFlowJob = lifecycleScope.launch {
+                appDb.bookDao.flowSearch(key).conflate().collect { books ->
+                    uiState = uiState.copy(
+                        localBooks = books.map { SearchLocalBookUi(it.name, it.author, it.bookUrl) }
+                    )
                 }
             }
         }
+
         historyFlowJob?.cancel()
         historyFlowJob = lifecycleScope.launch {
             when {
@@ -397,44 +348,81 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 else -> appDb.searchKeywordDao.flowSearch(key)
             }.catch {
                 AppLog.put("搜索界面获取搜索历史数据失败\n${it.localizedMessage}", it)
-            }.flowOn(IO).conflate().collect {
-                historyKeyAdapter.setItems(it)
-                if (it.isEmpty()) {
-                    binding.tvClearHistory.invisible()
-                } else {
-                    binding.tvClearHistory.visible()
-                }
+            }.flowOn(IO).conflate().collect { items ->
+                historyItems = items
+                uiState = uiState.copy(history = items.map(SearchKeyword::word))
             }
         }
     }
 
-    /**
-     * 开始搜索
-     */
-    private fun startSearch() {
-        binding.refreshProgressBar.visible()
-        binding.refreshProgressBar.isAutoLoading = true
-        binding.fbStartStop.setImageResource(R.drawable.ic_stop_black_24dp)
-        binding.fbStartStop.visible()
+    private fun publishSearchBooks() {
+        uiState = uiState.copy(
+            results = searchBooks.map { book ->
+                SearchBookUi(
+                    bookUrl = book.bookUrl,
+                    name = book.name,
+                    author = book.author,
+                    coverUrl = book.coverUrl,
+                    origin = book.origin,
+                    originCount = book.origins.size,
+                    latestChapter = book.latestChapterTitle,
+                    intro = book.trimIntro(this),
+                    kinds = book.getKindList(),
+                    inBookshelf = viewModel.isInBookShelf(book)
+                )
+            }
+        )
     }
 
-    /**
-     * 搜索结束
-     */
-    private fun searchFinally() {
-        binding.refreshProgressBar.isAutoLoading = false
-        binding.refreshProgressBar.gone()
-        if (!isManualStopSearch && viewModel.hasMore) {
-            binding.fbStartStop.setImageResource(R.drawable.ic_play_24dp)
-        } else {
-            binding.fbStartStop.invisible()
+    private fun showBookInfo(name: String, author: String, bookUrl: String, coverView: View? = null) {
+        val intent = Intent(this, BookInfoActivity::class.java).apply {
+            putExtra("name", name)
+            putExtra("author", author)
+            putExtra("bookUrl", bookUrl)
         }
+        val sourceCover = coverView?.takeIf { it.isAttachedToWindow && it.width > 0 && it.height > 0 }
+        val transitionName = sourceCover?.let { ViewCompat.getTransitionName(it) }
+        if (coverTransitionsEnabled && isBookCoverTransitionEnabled() && sourceCover != null &&
+            transitionName != null && transitionName.isNotBlank()
+        ) {
+            intent.putExtra(EXTRA_SHARED_COVER_TRANSITION_NAME, transitionName)
+            startActivity(
+                intent,
+                ActivityOptions.makeSceneTransitionAnimation(
+                    this,
+                    sourceCover,
+                    transitionName
+                ).toBundle()
+            )
+        } else {
+            startActivity(intent)
+        }
+    }
+
+    private fun searchHistory(key: String) {
+        lifecycleScope.launch {
+            val shouldSubmit = uiState.query == key || withContext(IO) {
+                appDb.bookDao.findByName(key).isEmpty()
+            }
+            if (shouldSubmit) {
+                uiState = uiState.copy(query = key)
+                submitSearch()
+            } else {
+                onQueryChanged(key)
+                uiState = uiState.copy(showInputHelp = true)
+            }
+        }
+    }
+
+    private fun deleteHistory(word: String) {
+        historyItems.firstOrNull { it.word == word }?.let(viewModel::deleteHistory)
+    }
+
+    override fun onSearchScopeOk(searchScope: SearchScope) {
+        viewModel.searchScope.update(searchScope.toString())
     }
 
     override fun observeLiveBus() {
-        viewModel.upAdapterLiveData.observe(this) {
-            adapter.notifyItemRangeChanged(0, adapter.itemCount, bundleOf(it to null))
-        }
         viewModel.searchFinishLiveData.observe(this) { isEmpty ->
             if (!isEmpty || viewModel.searchScope.isAll()) return@observe
             alert("搜索结果为空") {
@@ -446,75 +434,15 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                         appCtx.putPrefBoolean(PreferKey.precisionSearch, false)
                         precisionSearchMenuItem?.isChecked = false
                         viewModel.searchKey = ""
-                        viewModel.search(searchView.query.toString())
+                        viewModel.search(uiState.query)
                     }
                 } else {
                     setMessage("${displayScope}分组搜索结果为空，是否切换到全部分组？")
-                    yesButton {
-                        viewModel.searchScope.update("")
-                    }
+                    yesButton { viewModel.searchScope.update("") }
                 }
                 noButton()
             }
         }
-    }
-
-    /**
-     * 显示书籍详情
-     */
-    override fun showBookInfo(name: String, author: String, bookUrl: String) {
-        startActivity<BookInfoActivity> {
-            putExtra("name", name)
-            putExtra("author", author)
-            putExtra("bookUrl", bookUrl)
-        }
-    }
-
-    /**
-     * 是否已经加入书架
-     */
-    override fun isInBookshelf(book: SearchBook): Boolean {
-        return viewModel.isInBookShelf(book)
-    }
-
-    /**
-     * 显示书籍详情
-     */
-    override fun showBookInfo(book: Book) {
-        showBookInfo(book.name, book.author, book.bookUrl)
-    }
-
-    /**
-     * 点击历史关键字
-     */
-    override fun searchHistory(key: String) {
-        lifecycleScope.launch {
-            when {
-                searchView.query.toString() == key -> {
-                    searchView.setQuery(key, true)
-                }
-
-                withContext(IO) { appDb.bookDao.findByName(key).isEmpty() } -> {
-                    searchView.setQuery(key, true)
-                }
-
-                else -> {
-                    searchView.setQuery(key, false)
-                }
-            }
-        }
-    }
-
-    /**
-     * 删除搜索记录
-     */
-    override fun deleteHistory(searchKeyword: SearchKeyword) {
-        viewModel.deleteHistory(searchKeyword)
-    }
-
-
-    override fun onSearchScopeOk(searchScope: SearchScope) {
-        viewModel.searchScope.update(searchScope.toString())
     }
 
     private fun alertSearchScope() {
@@ -524,22 +452,15 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     private fun alertClearHistory() {
         alert(R.string.draw) {
             setMessage(R.string.sure_clear_search_history)
-            yesButton {
-                viewModel.clearHistory()
-            }
+            yesButton { viewModel.clearHistory() }
             noButton()
         }
     }
 
-    override fun finish() {
-        if (searchView.hasFocus()) {
-            searchView.clearFocus()
-            return
-        }
-        super.finish()
-    }
-
     companion object {
+        private const val KEY_QUERY = "searchQuery"
+        private const val KEY_SHOW_HELP = "searchShowHelp"
+        private const val KEY_QUERY_FOCUSED = "searchQueryFocused"
 
         fun start(context: Context, key: String?, searchScope: String? = null) {
             context.startActivity<SearchActivity> {
@@ -561,6 +482,5 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 putExtra("searchScope", SearchScope(source).toString())
             }
         }
-
     }
 }

@@ -6,8 +6,8 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.SeekBar
 import androidx.activity.viewModels
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -32,24 +32,19 @@ import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.login.SourceLoginActivity
-import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.StartActivityContract
-import io.legado.app.utils.applyNavigationBarPadding
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.invisible
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.observeEventSticky
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
-import io.legado.app.utils.toDurationTime
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import splitties.views.onLongClick
 import java.util.Locale
 import io.legado.app.ui.book.audio.config.AudioSkipCredits
 import com.dirror.lyricviewx.OnPlayClickListener
@@ -72,6 +67,12 @@ class AudioPlayActivity :
     override val viewModel by viewModels<AudioPlayViewModel>()
     private val timerSliderPopup by lazy { SliderPopup(this, TIMER) }
     private val speedControlPopup by lazy { SliderPopup(this, SPEED) }
+    private val playerUiState = mutableStateOf(
+        AudioPlayerUiState(
+            modeIcon = AudioPlay.playMode.iconRes,
+            showSpeed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+        )
+    )
     private var adjustProgress = false
     private var playMode = AudioPlay.PlayMode.LIST_END_STOP
     private val lyricViewX by lazy { binding.lyricViewX }
@@ -107,9 +108,7 @@ class AudioPlayActivity :
             upCover(it)
         }
         viewModel.customBtnListData.observe(this) { menuCustomBtn?.isVisible = it }
-        viewModel.initData(intent) {
-            initListener()
-        }
+        viewModel.initData(intent) {}
         initView()
     }
 
@@ -187,64 +186,58 @@ class AudioPlayActivity :
     }
 
     private fun initView() {
+        binding.audioControls.setContent {
+            LegadoTheme {
+                AudioPlayerContent(
+                    state = playerUiState.value,
+                    onAction = ::onPlayerAction,
+                    onSeekChange = { progress ->
+                        adjustProgress = true
+                        playerUiState.value = playerUiState.value.copy(currentProgress = progress)
+                    },
+                    onSeekFinished = {
+                        adjustProgress = false
+                        AudioPlay.adjustProgress(playerUiState.value.currentProgress)
+                    }
+                )
+            }
+        }
+        updatePlaybackIndicators()
         observeEventSticky<AudioPlay.PlayMode>(EventBus.PLAY_MODE_CHANGED) {
             playMode = it
             updatePlayModeIcon()
         }
-        binding.playerProgress.setOnSeekBarChangeListener(object : SeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                binding.tvDurTime.text = progress.toDurationTime()
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar) {
-                adjustProgress = true
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                adjustProgress = false
-                AudioPlay.adjustProgress(seekBar.progress)
-            }
-        })
-        /* 低于安卓6不显示调速按钮 */
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            binding.ivSpeedControl.invisible()
-        }
-        
-        binding.ivSpeedControl.setOnClickListener {
-            speedControlPopup.showAsDropDown(it, 0, (-100).dpToPx(), Gravity.TOP)
-        }
-
-        binding.ivTimer.setOnClickListener {
-            timerSliderPopup.showAsDropDown(it, 0, (-100).dpToPx(), Gravity.TOP)
-        }
-        binding.llPlayMenu.applyNavigationBarPadding()
     }
 
-    private fun initListener() {
-        binding.ivPlayMode.setOnClickListener {
-            AudioPlay.changePlayMode()
-        }
-        binding.fabPlayStop.setOnClickListener {
-            playButton()
-        }
-        binding.fabPlayStop.onLongClick {
-            AudioPlay.stop()
-        }
-        binding.ivSkipNext.setOnClickListener {
-            AudioPlay.next()
-        }
-        binding.ivSkipPrevious.setOnClickListener {
-            AudioPlay.prev()
-        }
-        binding.ivChapter.setOnClickListener {
-            AudioPlay.book?.let {
-                tocActivityResult.launch(it.bookUrl)
+    private fun onPlayerAction(action: AudioPlayerAction) {
+        when (action) {
+            AudioPlayerAction.Timer -> timerSliderPopup.showAtLocation(binding.audioControls, Gravity.BOTTOM, 0, 0)
+            AudioPlayerAction.Speed -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                speedControlPopup.showAtLocation(binding.audioControls, Gravity.BOTTOM, 0, 0)
             }
+            AudioPlayerAction.Previous -> AudioPlay.prev()
+            AudioPlayerAction.Play -> playButton()
+            AudioPlayerAction.Stop -> AudioPlay.stop()
+            AudioPlayerAction.Next -> AudioPlay.next()
+            AudioPlayerAction.Mode -> AudioPlay.changePlayMode()
+            AudioPlayerAction.Chapters -> AudioPlay.book?.let { tocActivityResult.launch(it.bookUrl) }
         }
     }
 
     private fun updatePlayModeIcon() {
-        binding.ivPlayMode.setImageResource(playMode.iconRes)
+        playerUiState.value = playerUiState.value.copy(modeIcon = playMode.iconRes)
+    }
+
+    private fun updatePlaybackIndicators() {
+        val state = playerUiState.value
+        binding.tvTimer.apply {
+            text = state.timer.orEmpty()
+            visible(state.timer != null)
+        }
+        binding.tvSpeed.apply {
+            text = state.speed.orEmpty()
+            visible(state.showSpeed && state.speed != null)
+        }
     }
 
     private fun upCover(path: String?) {
@@ -372,46 +365,41 @@ class AudioPlayActivity :
         }
         observeEventSticky<Int>(EventBus.AUDIO_STATE) {
             AudioPlay.status = it
-            if (it == Status.PLAY) {
-                binding.fabPlayStop.setImageResource(R.drawable.ic_pause_24dp)
-            } else {
-                binding.fabPlayStop.setImageResource(R.drawable.ic_play_24dp)
-            }
+            playerUiState.value = playerUiState.value.copy(isPlaying = it == Status.PLAY)
         }
         observeEventSticky<String>(EventBus.AUDIO_SUB_TITLE) {
-            binding.tvSubTitle.text = it
-            binding.ivSkipPrevious.isEnabled = AudioPlay.durChapterIndex > 0
-            binding.ivSkipNext.isEnabled =
-                AudioPlay.durChapterIndex < AudioPlay.simulatedChapterSize - 1
+            playerUiState.value = playerUiState.value.copy(
+                subtitle = it,
+                canPrevious = AudioPlay.durChapterIndex > 0,
+                canNext = AudioPlay.durChapterIndex < AudioPlay.simulatedChapterSize - 1
+            )
         }
         observeEventSticky<Int>(EventBus.AUDIO_SIZE) {
-            binding.playerProgress.max = it
-            binding.tvAllTime.text = it.toDurationTime()
+            playerUiState.value = playerUiState.value.copy(duration = it)
         }
         observeEventSticky<Int>(EventBus.AUDIO_PROGRESS) {
-            if (!adjustProgress) binding.playerProgress.progress = it
-            binding.tvDurTime.text = it.toDurationTime()
+            if (!adjustProgress) playerUiState.value = playerUiState.value.copy(currentProgress = it)
         }
         observeEventSticky<Int>(EventBus.AUDIO_BUFFER_PROGRESS) {
-            binding.playerProgress.secondaryProgress = it
+            playerUiState.value = playerUiState.value.copy(buffered = it)
         }
         observeEventSticky<Float>(EventBus.AUDIO_SPEED) {
-            if (it == 1f) {
-                binding.tvSpeed.invisible()
-            } else {
-                binding.tvSpeed.text = String.format(Locale.ROOT, "%.1fX", it)
-                binding.tvSpeed.visible()
-            }
+            playerUiState.value = playerUiState.value.copy(
+                speed = if (it == 1f) null else String.format(Locale.ROOT, "%.1fX", it)
+            )
+            updatePlaybackIndicators()
         }
         observeEventSticky<Int>(EventBus.AUDIO_DS) {
-            binding.tvTimer.text = "${it}m"
-            binding.tvTimer.visible(it > 0)
+            playerUiState.value = playerUiState.value.copy(
+                timer = it.takeIf { minutes -> minutes > 0 }?.let { minutes -> "${minutes}m" }
+            )
+            updatePlaybackIndicators()
         }
     }
 
     override fun upLoading(loading: Boolean) {
         runOnUiThread {
-            binding.progressLoading.visible(loading)
+            playerUiState.value = playerUiState.value.copy(loading = loading)
         }
     }
 }

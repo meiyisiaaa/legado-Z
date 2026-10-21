@@ -4,7 +4,15 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.FrameLayout
+import android.widget.ImageView
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -20,6 +28,9 @@ import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.removeType
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.externalFiles
@@ -45,16 +56,57 @@ class BookInfoEditActivity :
 
     override val binding by viewBinding(ActivityBookInfoEditBinding::inflate)
     override val viewModel by viewModels<BookInfoEditViewModel>()
+    private var uiState by mutableStateOf(BookInfoEditUiState())
+    private val coverImageView by lazy {
+        CoverImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = getString(R.string.img_cover)
+        }
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        installComposeContent()
+        initView()
         viewModel.bookData.observe(this) { upView(it) }
         if (viewModel.bookData.value == null) {
             intent.getStringExtra("bookUrl")?.let {
                 viewModel.loadBook(it)
             }
         }
-        initView()
-        initEvent()
+    }
+
+    private fun installComposeContent() {
+        binding.composeContainer.addView(
+            LegadoComposeView(this).apply {
+                setContent {
+                    LegadoTheme {
+                        BookInfoEditScreen(
+                            state = uiState,
+                            onStateChange = { uiState = it },
+                            coverContent = { modifier ->
+                                AndroidView(factory = { coverImageView }, modifier = modifier.fillMaxSize())
+                            },
+                            onSelectCover = {
+                                selectCover.launch { mode = HandleFileContract.IMAGE }
+                            },
+                            onChangeCover = {
+                                viewModel.bookData.value?.let { book ->
+                                    showDialogFragment(ChangeCoverDialog(book.name, book.author))
+                                }
+                            },
+                            onRefreshCover = {
+                                viewModel.book?.customCoverUrl = uiState.coverUrl
+                                upCover()
+                            }
+                        )
+                    }
+                }
+            },
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -78,54 +130,35 @@ class BookInfoEditActivity :
         }
     }
 
-    private fun initEvent() = binding.run {
-        tvChangeCover.setOnClickListener {
-            viewModel.bookData.value?.let {
-                showDialogFragment(
-                    ChangeCoverDialog(it.name, it.author)
-                )
-            }
-        }
-        tvSelectCover.setOnClickListener {
-            selectCover.launch {
-                mode = HandleFileContract.IMAGE
-            }
-        }
-        tvRefreshCover.setOnClickListener {
-            viewModel.book?.customCoverUrl = tieCoverUrl.text?.toString()
-            upCover()
-        }
-    }
-
-    private fun upView(book: Book) = binding.run {
-        tieBookName.setText(book.name)
-        tieBookAuthor.setText(book.author)
-        spType.setSelection(
-            when {
+    private fun upView(book: Book) {
+        uiState = uiState.copy(
+            name = book.name,
+            author = book.author,
+            type = when {
                 book.isVideo -> 4
                 book.isImage -> 2
                 book.isAudio -> 1
                 else -> 0
-            }
+            },
+            coverUrl = book.getDisplayCover().orEmpty(),
+            intro = book.getDisplayIntro().orEmpty()
         )
-        tieCoverUrl.setText(book.getDisplayCover())
-        tieBookIntro.setText(book.getDisplayIntro())
         upCover()
     }
 
     private fun upCover() {
         viewModel.book?.let {
-            binding.ivCover.load(it, false)
+            coverImageView.load(it, false)
         }
     }
 
-    private fun saveData() = binding.run {
-        val book = viewModel.book ?: return@run
+    private fun saveData() {
+        val book = viewModel.book ?: return
         val oldBook = book.copy()
-        book.name = tieBookName.text?.toString() ?: ""
-        book.author = tieBookAuthor.text?.toString() ?: ""
+        book.name = uiState.name
+        book.author = uiState.author
         val local = if (book.isLocal) BookType.local else 0
-        val bookType = when (spType.selectedItemPosition) {
+        val bookType = when (uiState.type) {
             4 -> BookType.video or local
             2 -> BookType.image or local
             1 -> BookType.audio or local
@@ -133,9 +166,9 @@ class BookInfoEditActivity :
         }
         book.removeType(BookType.video, BookType.local, BookType.image, BookType.audio, BookType.text)
         book.addType(bookType)
-        val customCoverUrl = tieCoverUrl.text?.toString()
+        val customCoverUrl = uiState.coverUrl
         book.customCoverUrl = if (customCoverUrl == book.coverUrl) null else customCoverUrl
-        val customIntro = tieBookIntro.text?.toString()
+        val customIntro = uiState.intro
         book.customIntro = if (customIntro == book.intro) null else customIntro
         BookHelp.updateCacheFolder(oldBook, book)
         viewModel.saveBook(book) {
@@ -146,7 +179,7 @@ class BookInfoEditActivity :
 
     override fun coverChangeTo(coverUrl: String) {
         viewModel.book?.customCoverUrl = coverUrl
-        binding.tieCoverUrl.setText(coverUrl)
+        uiState = uiState.copy(coverUrl = coverUrl)
         upCover()
     }
 

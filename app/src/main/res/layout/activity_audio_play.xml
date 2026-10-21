@@ -75,7 +75,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/tv_sub_title"
+        app:layout_constraintBottom_toTopOf="@+id/audio_controls"
         app:layout_constraintTop_toBottomOf="@+id/iv_cover"
         app:lrcCurrentTextColor="@color/md_white_1000"
         app:lrcPadding="16dp"
@@ -92,6 +92,7 @@
         android:paddingEnd="16dp"
         android:paddingBottom="6dp"
         android:textColor="@color/md_white_1000"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/ll_player_progress" />
 
     <LinearLayout
@@ -102,6 +103,7 @@
         android:orientation="horizontal"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/ll_play_menu">
 
         <TextView
@@ -137,6 +139,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="6dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <io.legado.app.ui.widget.image.ImageButton
@@ -262,5 +265,11 @@
             tools:ignore="ImageContrastCheck" />
 
     </LinearLayout>
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/audio_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

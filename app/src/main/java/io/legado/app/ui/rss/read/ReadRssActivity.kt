@@ -28,6 +28,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.size
 import com.script.rhino.runScriptWithContext
@@ -51,6 +55,7 @@ import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.rss.favorites.RssFavoritesDialog
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ACache
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.gone
@@ -114,8 +119,10 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     private lateinit var pooledWebView: PooledWebView
     private lateinit var currentWebView: WebView
 
-    private var starMenuItem: MenuItem? = null
-    private var ttsMenuItem: MenuItem? = null
+    private var screenTitle by mutableStateOf("")
+    private var hasArticle by mutableStateOf(false)
+    private var isFavorite by mutableStateOf(false)
+    private var isSpeaking by mutableStateOf(false)
     private var isFullscreen = false
     private var wasScreenOff = false
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -156,9 +163,27 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         pooledWebView = WebViewPool.acquire(this)
         currentWebView = pooledWebView.realWebView
         binding.webViewContainer.addView(currentWebView)
+        binding.titleBar.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.titleBar.setContent {
+            LegadoTheme {
+                ReadRssComposeBar(
+                    title = screenTitle,
+                    hasArticle = hasArticle,
+                    isFavorite = isFavorite,
+                    isSpeaking = isSpeaking,
+                    hasLogin = !viewModel.rssSource?.loginUrl.isNullOrBlank(),
+                    onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onRefresh = ::refresh,
+                    onFavorite = { performReadAction(R.id.menu_rss_star) },
+                    onShare = { performReadAction(R.id.menu_share_it) },
+                    onSpeak = { performReadAction(R.id.menu_aloud) },
+                    onAction = ::performReadAction
+                )
+            }
+        }
         viewModel.upStarMenuData.observe(this) { upStarMenu() }
         viewModel.upTtsMenuData.observe(this) { upTtsMenu(it) }
-        viewModel.upTitleData.observe(this) { binding.titleBar.title = it }
+        viewModel.upTitleData.observe(this) { screenTitle = it }
         initView()
         initWebView()
         initLiveData()
@@ -240,25 +265,8 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         }
     }
 
-    override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.rss_read, menu)
-        return super.onCompatCreateOptionsMenu(menu)
-    }
-
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        starMenuItem = menu.findItem(R.id.menu_rss_star)
-        ttsMenuItem = menu.findItem(R.id.menu_aloud)
-        upStarMenu()
-        return super.onPrepareOptionsMenu(menu)
-    }
-
-    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !viewModel.rssSource?.loginUrl.isNullOrBlank()
-        return super.onMenuOpened(featureId, menu)
-    }
-
-    override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
+    private fun performReadAction(actionId: Int) {
+        when (actionId) {
             R.id.menu_rss_refresh -> refresh()
 
             R.id.menu_rss_star -> {
@@ -293,7 +301,6 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
             R.id.menu_read_record -> showDialogFragment(ReadRecordDialog(viewModel.rssSource?.sourceUrl))
         }
-        return super.onCompatOptionsItemSelected(item)
     }
 
     override fun updateFavorite(title: String?, group: String?) {
@@ -437,28 +444,12 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     }
 
     private fun upStarMenu() {
-        starMenuItem?.isVisible = viewModel.rssArticle != null
-        if (viewModel.rssStar != null) {
-            starMenuItem?.setIcon(R.drawable.ic_star)
-            starMenuItem?.setTitle(R.string.in_favorites)
-        } else {
-            starMenuItem?.setIcon(R.drawable.ic_star_border)
-            starMenuItem?.setTitle(R.string.out_favorites)
-        }
-        starMenuItem?.icon?.setTintMutate(primaryTextColor)
+        hasArticle = viewModel.rssArticle != null
+        isFavorite = viewModel.rssStar != null
     }
 
     private fun upTtsMenu(isPlaying: Boolean) {
-        lifecycleScope.launch {
-            if (isPlaying) {
-                ttsMenuItem?.setIcon(R.drawable.ic_stop_black_24dp)
-                ttsMenuItem?.setTitle(R.string.aloud_stop)
-            } else {
-                ttsMenuItem?.setIcon(R.drawable.ic_volume_up)
-                ttsMenuItem?.setTitle(R.string.read_aloud)
-            }
-            ttsMenuItem?.icon?.setTintMutate(primaryTextColor)
-        }
+        this.isSpeaking = isPlaying
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -719,9 +710,9 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     && title.isNotBlank()
                     && url != BLANK_HTML
                     && !url.contains(title)) {
-                    binding.titleBar.title = title
+                    screenTitle = title
                 } else {
-                    binding.titleBar.title = viewModel.upTitleData.value
+                    screenTitle = viewModel.upTitleData.value.orEmpty()
                 }
             }
             viewModel.rssSource?.injectJs?.let {

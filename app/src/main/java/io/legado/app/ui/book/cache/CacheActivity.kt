@@ -5,11 +5,15 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.textfield.TextInputLayout
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -36,9 +40,10 @@ import io.legado.app.model.CacheBook
 import io.legado.app.service.ExportBookService
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ACache
 import io.legado.app.utils.FileDoc
-import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyOpenTint
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.checkWrite
@@ -69,16 +74,16 @@ import kotlin.math.max
  * cache/download 缓存界面
  */
 class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>(),
-    PopupMenu.OnMenuItemClickListener,
-    CacheAdapter.CallBack {
+    PopupMenu.OnMenuItemClickListener {
 
     override val binding by viewBinding(ActivityCacheBookBinding::inflate)
     override val viewModel by viewModels<CacheViewModel>()
 
     private val exportBookPathKey = "exportBookPath"
     private val exportTypes = arrayListOf("txt", "epub")
-    private val layoutManager by lazy { LinearLayoutManager(this) }
-    private val adapter by lazy { CacheAdapter(this, this) }
+    private var books by mutableStateOf<List<Book>>(emptyList())
+    private var booksLoaded by mutableStateOf(false)
+    private var listRevision by mutableIntStateOf(0)
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private val groupList: ArrayList<BookGroup> = arrayListOf()
@@ -118,7 +123,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                     ?: getString(R.string.no_group)
             }
         }
-        initRecyclerView()
+        initComposeContent()
         initGroupData()
         initBookData()
     }
@@ -173,7 +178,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_download,
             R.id.menu_download_after -> {
                 if (!CacheBook.isRun) sureCacheBook {
-                    adapter.getItems().forEach { book ->
+                    books.forEach { book ->
                         CacheBook.start(
                             this@CacheActivity,
                             book,
@@ -188,7 +193,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
             R.id.menu_download_all -> {
                 if (!CacheBook.isRun) sureCacheBook {
-                    adapter.getItems().forEach { book ->
+                    books.forEach { book ->
                         CacheBook.start(
                             this@CacheActivity,
                             book,
@@ -230,10 +235,36 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         return onCompatOptionsItemSelected(item)
     }
 
-    private fun initRecyclerView() {
-        binding.recyclerView.layoutManager = layoutManager
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.applyNavigationBarPadding()
+    private fun initComposeContent() {
+        val composeView = LegadoComposeView(this).apply {
+            id = View.generateViewId()
+        }
+        binding.composeContainer.addView(
+            composeView,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        composeView.setContent {
+            LegadoTheme {
+                CacheScreen(
+                    books = books,
+                    cacheChapters = viewModel.cacheChapters,
+                    revision = listRevision,
+                    isLoading = !booksLoaded,
+                    onDownload = ::toggleBookCache,
+                    onExport = ::export,
+                    exportProgress = ::exportProgress,
+                    exportMessage = ::exportMsg
+                )
+            }
+        }
+    }
+
+    private fun toggleBookCache(book: Book) {
+        CacheBook.cacheBookMap[book.bookUrl]?.let { cache ->
+            if (!cache.isStop()) CacheBook.remove(this, book.bookUrl)
+            else CacheBook.start(this, book, 0, book.lastChapterIndex)
+        } ?: CacheBook.start(this, book, 0, book.lastChapterIndex)
+        listRevision++
     }
 
     private fun initBookData() {
@@ -261,7 +292,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             ).catch {
                 AppLog.put("缓存管理界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect { books ->
-                adapter.setItems(books)
+                this@CacheActivity.books = books
+                booksLoaded = true
+                listRevision++
                 viewModel.loadCacheFiles(books)
             }
         }
@@ -275,21 +308,14 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
-                adapter.notifyDataSetChanged()
+                listRevision++
                 upMenu()
             }
         }
     }
 
     private fun notifyItemChanged(bookUrl: String) {
-        kotlin.runCatching {
-            adapter.getItems().forEachIndexed { index, book ->
-                if (bookUrl == book.bookUrl) {
-                    adapter.notifyItemChanged(index, true)
-                    return
-                }
-            }
-        }
+        if (books.any { it.bookUrl == bookUrl }) listRevision++
     }
 
     override fun observeLiveBus() {
@@ -303,6 +329,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             notifyItemChanged(it)
         }
         observeEvent<String>(EventBus.UP_DOWNLOAD_STATE) {
+            listRevision++
             if (!CacheBook.isRun) {
                 menu?.findItem(R.id.menu_download)?.let { item ->
                     item.setIconCompat(R.drawable.ic_play_24dp)
@@ -318,12 +345,12 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             }
         }
         observeEvent<Pair<Book, BookChapter>>(EventBus.SAVE_CONTENT) { (book, chapter) ->
-            viewModel.cacheChapters[book.bookUrl]?.add(chapter.url)
+            viewModel.cacheChapters.getOrPut(book.bookUrl) { hashSetOf() }.add(chapter.url)
             notifyItemChanged(book.bookUrl)
         }
     }
 
-    override fun export(position: Int) {
+    private fun export(position: Int) {
         val path = ACache.get().getAsString(exportBookPathKey)
         lifecycleScope.launch {
             if (path.isNullOrEmpty() ||
@@ -367,7 +394,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 fun enableLyEtEpubFilenameIcon() {
                     lyEtEpubFilename.endIconMode = TextInputLayout.END_ICON_CUSTOM
                     lyEtEpubFilename.setEndIconOnClickListener {
-                        adapter.getItem(position)?.run {
+                        books.getOrNull(position)?.run {
                             lyEtEpubFilename.helperText =
                                 if (verifyExportFileNameJsStr(etEpubFilename.text.toString()))
                                     "${resources.getString(R.string.result_analyzed)}: ${
@@ -455,7 +482,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 }
                 etInputScope.error = null
                 val epubSize = etEpubSize.text.toString().toIntOrNull() ?: 1
-                adapter.getItem(position)?.let { book ->
+                books.getOrNull(position)?.let { book ->
                     startService<ExportBookService> {
                         action = IntentAction.start
                         putExtra("bookUrl", book.bookUrl)
@@ -489,8 +516,8 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             else -> "txt"
         }
         if (exportPosition == -10) {
-            if (adapter.getItems().isNotEmpty()) {
-                adapter.getItems().forEach { book ->
+            if (books.isNotEmpty()) {
+                books.forEach { book ->
                     startService<ExportBookService> {
                         action = IntentAction.start
                         putExtra("bookUrl", book.bookUrl)
@@ -502,7 +529,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 toastOnUi(R.string.no_book)
             }
         } else if (exportPosition >= 0) {
-            adapter.getItem(exportPosition)?.let { book ->
+            books.getOrNull(exportPosition)?.let { book ->
                 startService<ExportBookService> {
                     action = IntentAction.start
                     putExtra("bookUrl", book.bookUrl)
@@ -567,14 +594,11 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         }
     }
 
-    override val cacheChapters: HashMap<String, HashSet<String>>
-        get() = viewModel.cacheChapters
-
-    override fun exportProgress(bookUrl: String): Int? {
+    private fun exportProgress(bookUrl: String): Int? {
         return ExportBookService.exportProgress[bookUrl]
     }
 
-    override fun exportMsg(bookUrl: String): String? {
+    private fun exportMsg(bookUrl: String): String? {
         return ExportBookService.exportMsg[bookUrl]
     }
 

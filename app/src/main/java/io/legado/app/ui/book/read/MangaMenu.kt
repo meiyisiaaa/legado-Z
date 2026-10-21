@@ -1,243 +1,167 @@
 package io.legado.app.ui.book.read
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
-import android.view.LayoutInflater
-import android.view.animation.Animation
+import android.view.View
 import android.widget.FrameLayout
-import android.widget.SeekBar
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import io.legado.app.R
-import io.legado.app.databinding.ViewMangaMenuBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.source.getSourceType
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadManga
 import io.legado.app.ui.browser.WebViewActivity
-import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
-import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.ConstraintModify
-import io.legado.app.utils.activity
-import io.legado.app.utils.applyNavigationBarPadding
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.gone
-import io.legado.app.utils.invisible
-import io.legado.app.utils.loadAnimation
-import io.legado.app.utils.modifyBegin
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.help.source.getSourceType
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.startActivity
-import io.legado.app.utils.visible
 
+/** Compose overlay for manga controls; the Webtoon RecyclerView remains the image renderer. */
 class MangaMenu @JvmOverloads constructor(
     context: Context,
-    attrs: AttributeSet? = null,
+    attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs) {
-    private val binding = ViewMangaMenuBinding.inflate(LayoutInflater.from(context), this, true)
-    private val callBack: CallBack get() = activity as CallBack
-    var canShowMenu: Boolean = false
-    private val menuTopIn: Animation by lazy {
-        loadAnimation(context, R.anim.anim_readbook_top_in)
-    }
-    private val menuTopOut: Animation by lazy {
-        loadAnimation(context, R.anim.anim_readbook_top_out)
-    }
-    private val menuBottomIn: Animation by lazy {
-        loadAnimation(context, R.anim.anim_readbook_bottom_in)
-    }
-    private val menuBottomOut: Animation by lazy {
-        loadAnimation(context, R.anim.anim_readbook_bottom_out)
-    }
+
+    private val callBack: CallBack get() = context as CallBack
+    private val composeView = LegadoComposeView(context).apply { id = View.generateViewId() }
+    private var menuVisible by mutableStateOf(false)
+    private var animateMenu by mutableStateOf(!AppConfig.isEInkMode)
     private var isMenuOutAnimating = false
-    private var bgColor = context.bottomBackground
-
-    private val menuOutListener = object : Animation.AnimationListener {
-        override fun onAnimationStart(animation: Animation) {
-            isMenuOutAnimating = true
-            binding.vwMenuBg.setOnClickListener(null)
-        }
-
-        override fun onAnimationEnd(animation: Animation) {
-            this@MangaMenu.invisible()
-            binding.titleBar.invisible()
-            binding.bottomMenu.invisible()
-            isMenuOutAnimating = false
-            canShowMenu = false
-            callBack.upSystemUiVisibility(false)
-        }
-
-        override fun onAnimationRepeat(animation: Animation) = Unit
-    }
-    private val menuInListener = object : Animation.AnimationListener {
-        override fun onAnimationStart(animation: Animation) {
-            binding.tvSourceAction.text =
-                ReadManga.bookSource?.bookSourceName ?: context.getString(R.string.book_source)
-            callBack.upSystemUiVisibility(true)
-            binding.tvSourceAction.isGone = false
-        }
-
-        @SuppressLint("RtlHardcoded")
-        override fun onAnimationEnd(animation: Animation) {
-            binding.run {
-                vwMenuBg.setOnClickListener { runMenuOut() }
-            }
-        }
-
-        override fun onAnimationRepeat(animation: Animation) = Unit
-    }
+    private var uiState by mutableStateOf(createState())
+    private var onMenuOutEnd: (() -> Unit)? = null
+    var canShowMenu: Boolean = false
 
     init {
-        initView()
-        bindEvent()
-    }
-
-    private fun initView() = binding.run {
-        initAnimation()
-        val brightnessBackground = GradientDrawable()
-        brightnessBackground.cornerRadius = 5F.dpToPx()
-        brightnessBackground.setColor(ColorUtils.adjustAlpha(bgColor, 0.5f))
-        if (AppConfig.isEInkMode) {
-            titleBar.setBackgroundResource(R.drawable.bg_eink_border_bottom)
-            bottomMenu.setBackgroundResource(R.drawable.bg_eink_border_top)
-        } else {
-            bottomMenu.setBackgroundColor(bgColor)
+        addView(composeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        composeView.setContent {
+            LegadoTheme {
+                MangaMenuContent(
+                    visible = menuVisible,
+                    animate = animateMenu,
+                    title = uiState.title,
+                    chapterName = uiState.chapterName,
+                    chapterUrl = uiState.chapterUrl,
+                    sourceName = uiState.sourceName,
+                    showTitleBarAddition = uiState.showTitleBarAddition,
+                    progress = uiState.progress,
+                    pageCount = uiState.pageCount,
+                    onAction = ::handleAction,
+                    onClosed = ::finishMenuOut
+                )
+            }
         }
-        if (AppConfig.showReadTitleBarAddition) {
-            titleBarAddition.visible()
-        } else {
-            titleBarAddition.gone()
-        }
-        upBrightnessVwPos()
-        /**
-         * 确保视图不被导航栏遮挡
-         */
-        bottomMenu.applyNavigationBarPadding()
-    }
-
-    private fun upBrightnessVwPos() {
-        if (AppConfig.brightnessVwPos) {
-            binding.root.modifyBegin()
-                .clear(R.id.ll_brightness, ConstraintModify.Anchor.LEFT)
-                .rightToRightOf(R.id.ll_brightness, R.id.vw_menu_root)
-                .commit()
-        } else {
-            binding.root.modifyBegin()
-                .clear(R.id.ll_brightness, ConstraintModify.Anchor.RIGHT)
-                .leftToLeftOf(R.id.ll_brightness, R.id.vw_menu_root)
-                .commit()
-        }
-    }
-
-    private fun initAnimation() {
-        menuTopIn.setAnimationListener(menuInListener)
-        menuTopOut.setAnimationListener(menuOutListener)
+        refreshBookState()
     }
 
     fun runMenuOut(anim: Boolean = !AppConfig.isEInkMode) {
-        if (isMenuOutAnimating) {
-            return
-        }
-        if (this.isVisible) {
-            if (anim) {
-                binding.titleBar.startAnimation(menuTopOut)
-                binding.bottomMenu.startAnimation(menuBottomOut)
-            } else {
-                menuOutListener.onAnimationStart(menuBottomOut)
-                menuOutListener.onAnimationEnd(menuBottomOut)
-            }
-        }
+        if (isMenuOutAnimating || !menuVisible) return
+        isMenuOutAnimating = true
+        animateMenu = anim
+        menuVisible = false
     }
 
     fun runMenuIn(anim: Boolean = !AppConfig.isEInkMode) {
-        this.visible()
-        binding.titleBar.visible()
-        binding.bottomMenu.visible()
-        if (anim) {
-            binding.titleBar.startAnimation(menuTopIn)
-            binding.bottomMenu.startAnimation(menuBottomIn)
-        } else {
-            menuInListener.onAnimationStart(menuBottomIn)
-            menuInListener.onAnimationEnd(menuBottomIn)
-        }
-    }
-
-
-    private fun bindEvent() = binding.run {
-        vwMenuBg.setOnClickListener { runMenuOut() }
-        titleBar.toolbar.setOnClickListener {
-            callBack.openBookInfoActivity()
-        }
-        val chapterViewClickListener = OnClickListener {
-            if (AppConfig.readUrlInBrowser) {
-                context.openUrl(tvChapterUrl.text.toString().substringBefore(",{"))
-            } else {
-                context.startActivity<WebViewActivity> {
-                    val url = tvChapterUrl.text.toString()
-                    val bookSource = ReadBook.bookSource
-                    putExtra("title", tvChapterName.text)
-                    putExtra("url", url)
-                    putExtra("sourceOrigin", bookSource?.bookSourceUrl)
-                    putExtra("sourceName", bookSource?.bookSourceName)
-                    putExtra("sourceType", bookSource?.getSourceType())
-                }
-            }
-        }
-        val chapterViewLongClickListener = OnLongClickListener {
-            context.alert(R.string.open_fun) {
-                setMessage(R.string.use_browser_open)
-                okButton {
-                    AppConfig.readUrlInBrowser = true
-                }
-                noButton {
-                    AppConfig.readUrlInBrowser = false
-                }
-            }
-            true
-        }
-        tvChapterName.setOnClickListener(chapterViewClickListener)
-        tvChapterName.setOnLongClickListener(chapterViewLongClickListener)
-        tvChapterUrl.setOnClickListener(chapterViewClickListener)
-        tvChapterUrl.setOnLongClickListener(chapterViewLongClickListener)
-
-        tvNext.setOnClickListener {
-            ReadManga.moveToNextChapter(true)
-        }
-        tvPre.setOnClickListener {
-            ReadManga.moveToPrevChapter(true)
-        }
-
-        seekReadPage.setOnSeekBarChangeListener(object : SeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    callBack.skipToPage(seekBar.progress)
-                }
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar) {
-                binding.vwMenuBg.setOnClickListener(null)
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                binding.vwMenuBg.setOnClickListener { runMenuOut() }
-            }
-        })
+        isMenuOutAnimating = false
+        onMenuOutEnd = null
+        animateMenu = anim
+        refreshBookState()
+        visibility = View.VISIBLE
+        menuVisible = true
+        callBack.upSystemUiVisibility(true)
     }
 
     fun upSeekBar(value: Int, count: Int) {
-        binding.seekReadPage.apply {
-            max = count.minus(1)
-            progress = value
+        uiState = uiState.copy(
+            progress = value.coerceIn(0, (count - 1).coerceAtLeast(0)),
+            pageCount = count.coerceAtLeast(0)
+        )
+    }
+
+    private fun refreshBookState() {
+        val book = ReadManga.book
+        val chapter = ReadManga.curMangaChapter?.chapter
+        uiState = uiState.copy(
+            title = book?.name.orEmpty(),
+            chapterName = chapter?.title.orEmpty(),
+            chapterUrl = chapter?.getAbsoluteURL().orEmpty(),
+            sourceName = ReadManga.bookSource?.bookSourceName.orEmpty(),
+            showTitleBarAddition = AppConfig.showReadTitleBarAddition,
+            progress = ReadManga.durChapterPos.coerceAtLeast(0),
+            pageCount = ReadManga.curMangaChapter?.imageCount ?: 0
+        )
+    }
+
+    private fun handleAction(action: ReaderMenuAction, value: Int) {
+        when (action) {
+            ReaderMenuAction.BookInfo -> if (value == 0) callBack.openBookInfoActivity()
+            ReaderMenuAction.OpenChapter -> if (value == 1) showOpenUrlPreference() else openCurrentChapter()
+            ReaderMenuAction.PreviousChapter -> ReadManga.moveToPrevChapter(true)
+            ReaderMenuAction.NextChapter -> ReadManga.moveToNextChapter(true)
+            ReaderMenuAction.SeekPage -> callBack.skipToPage(value)
+            ReaderMenuAction.Dismiss -> runMenuOut()
+            else -> Unit
         }
     }
+
+    private fun openCurrentChapter() {
+        val chapter = ReadManga.curMangaChapter?.chapter ?: return
+        val url = chapter.getAbsoluteURL()
+        if (AppConfig.readUrlInBrowser) {
+            context.openUrl(url.substringBefore(",{"))
+        } else {
+            context.startActivity<WebViewActivity> {
+                putExtra("title", chapter.title)
+                putExtra("url", url)
+                putExtra("sourceOrigin", ReadManga.bookSource?.bookSourceUrl)
+                putExtra("sourceName", ReadManga.bookSource?.bookSourceName)
+                putExtra("sourceType", ReadManga.bookSource?.getSourceType())
+            }
+        }
+    }
+
+    private fun showOpenUrlPreference() {
+        context.alert(R.string.open_fun) {
+            setMessage(R.string.use_browser_open)
+            okButton { AppConfig.readUrlInBrowser = true }
+            noButton { AppConfig.readUrlInBrowser = false }
+        }
+    }
+
+    private fun finishMenuOut() {
+        if (menuVisible) return
+        visibility = View.GONE
+        isMenuOutAnimating = false
+        canShowMenu = false
+        callBack.upSystemUiVisibility(false)
+        onMenuOutEnd?.invoke()
+        onMenuOutEnd = null
+    }
+
+    private fun createState() = MangaMenuUiState(
+        title = ReadManga.book?.name.orEmpty(),
+        chapterName = ReadManga.curMangaChapter?.chapter?.title.orEmpty(),
+        chapterUrl = ReadManga.curMangaChapter?.chapter?.getAbsoluteURL().orEmpty(),
+        sourceName = ReadManga.bookSource?.bookSourceName.orEmpty(),
+        showTitleBarAddition = AppConfig.showReadTitleBarAddition,
+        progress = ReadManga.durChapterPos.coerceAtLeast(0),
+        pageCount = ReadManga.curMangaChapter?.imageCount ?: 0
+    )
+
+    private data class MangaMenuUiState(
+        val title: String = "",
+        val chapterName: String = "",
+        val chapterUrl: String = "",
+        val sourceName: String = "",
+        val showTitleBarAddition: Boolean = true,
+        val progress: Int = 0,
+        val pageCount: Int = 0
+    )
 
     interface CallBack {
         fun openBookInfoActivity()
         fun upSystemUiVisibility(menuIsVisible: Boolean)
         fun skipToPage(index: Int)
     }
-
 }

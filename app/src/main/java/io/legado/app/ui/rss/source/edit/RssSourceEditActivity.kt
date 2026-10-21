@@ -11,6 +11,11 @@ import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -33,8 +38,14 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
+import io.legado.app.ui.book.source.edit.SourceEditAction
+import io.legado.app.ui.book.source.edit.SourceEditChoice
+import io.legado.app.ui.book.source.edit.SourceEditContent
+import io.legado.app.ui.book.source.edit.SourceEditSwitch
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.GSON
@@ -66,14 +77,24 @@ class RssSourceEditActivity :
 
     override val binding by viewBinding(ActivityRssSourceEditBinding::inflate)
     override val viewModel by viewModels<RssSourceEditViewModel>()
+    private var composeRoot: ComposeView? = null
     private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, lifecycleScope, binding.root, this)
+        KeyboardToolPop(this, lifecycleScope, composeRoot ?: binding.root, this)
     }
     private val adapter by lazy { RssSourceEditAdapter() }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val listEntities: ArrayList<EditEntity> = ArrayList()
     private val webViewEntities: ArrayList<EditEntity> = ArrayList()
     private val startEntities: ArrayList<EditEntity> = ArrayList()
+    private val composeEntities = mutableStateListOf<EditEntity>()
+    private var selectedEditTab by mutableStateOf(0)
+    private var sourceEnabled by mutableStateOf(true)
+    private var singleUrl by mutableStateOf(false)
+    private var cookieEnabled by mutableStateOf(true)
+    private var preloadEnabled by mutableStateOf(false)
+    private var autoCompleteEnabled by mutableStateOf(false)
+    private var sourceTypeIndex by mutableStateOf(0)
+    private var articleStyleIndex by mutableStateOf(0)
     private val selectDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -92,8 +113,68 @@ class RssSourceEditActivity :
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        autoCompleteEnabled = viewModel.autoComplete
+        val root = LegadoComposeView(this).apply { id = R.id.legado_rss_source_compose_root }
+        composeRoot = root
+        setSupportActionBar(null)
+        setContentView(root)
+        root.setContent {
+            LegadoTheme {
+                SourceEditContent(
+                    title = getString(R.string.rss_source_edit),
+                    tabs = listOf(
+                        getString(R.string.source_tab_base),
+                        getString(R.string.source_tab_start),
+                        getString(R.string.source_tab_list),
+                        "WEB_VIEW"
+                    ),
+                    selectedTab = selectedEditTab,
+                    entities = composeEntities,
+                    switches = listOf(
+                        SourceEditSwitch("enabled", getString(R.string.is_enable), sourceEnabled),
+                        SourceEditSwitch("singleUrl", getString(R.string.single_url), singleUrl),
+                        SourceEditSwitch("cookie", getString(R.string.auto_save_cookie), cookieEnabled),
+                        SourceEditSwitch("preload", getString(R.string.enable_preload), preloadEnabled)
+                    ),
+                    choices = listOf(
+                        SourceEditChoice("type", getString(R.string.book_type), resources.getStringArray(R.array.rss_type).toList(), sourceTypeIndex),
+                        SourceEditChoice("articleStyle", getString(R.string.layout_type), resources.getStringArray(R.array.layout_type).toList(), articleStyleIndex)
+                    ),
+                    quickActions = listOf(
+                        SourceEditAction(R.id.menu_fullscreen_edit, R.string.edit_content, R.drawable.ic_code),
+                        SourceEditAction(R.id.menu_save, R.string.action_save, R.drawable.ic_save),
+                        SourceEditAction(R.id.menu_debug_source, R.string.debug_source, R.drawable.ic_bug_report)
+                    ),
+                    menuActions = listOfNotNull(
+                        viewModel.rssSource?.loginUrl?.takeIf(String::isNotBlank)?.let { SourceEditAction(R.id.menu_login, R.string.login) },
+                        SourceEditAction(R.id.menu_clear_cookie, R.string.cookie),
+                        SourceEditAction(R.id.menu_auto_complete, R.string.auto_complete, checked = autoCompleteEnabled),
+                        SourceEditAction(R.id.menu_copy_source, R.string.copy_source),
+                        SourceEditAction(R.id.menu_paste_source, R.string.paste_source),
+                        SourceEditAction(R.id.menu_set_source_variable, R.string.set_source_variable),
+                        SourceEditAction(R.id.menu_qr_code_camera, R.string.import_by_qr_code),
+                        SourceEditAction(R.id.menu_share_qr, R.string.qr_share),
+                        SourceEditAction(R.id.menu_share_str, R.string.str_share),
+                        SourceEditAction(R.id.menu_log, R.string.log),
+                        SourceEditAction(R.id.menu_help, R.string.help)
+                    ),
+                    onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onTabSelected = ::setEditEntities,
+                    onSwitchChange = ::onSourceSwitchChanged,
+                    onChoiceChange = { key, index ->
+                        when (key) {
+                            "type" -> sourceTypeIndex = index
+                            "articleStyle" -> articleStyleIndex = index
+                        }
+                    },
+                    onAction = ::performAction
+                )
+            }
+        }
         softKeyboardTool.attachToWindow(window)
-        initView()
+        root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus is EditText) newFocus.postDelayed({ sendText("") }, 120)
+        }
         viewModel.initData(intent) {
             upSourceView(viewModel.rssSource)
         }
@@ -172,7 +253,12 @@ class RssSourceEditActivity :
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
+        performAction(item.itemId)
+        return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun performAction(actionId: Int) {
+        when (actionId) {
             R.id.menu_fullscreen_edit -> onFullEditClicked()
 
             R.id.menu_save -> viewModel.save(getRssSource()) {
@@ -195,7 +281,10 @@ class RssSourceEditActivity :
 
             R.id.menu_set_source_variable -> setSourceVariable()
             R.id.menu_clear_cookie -> viewModel.clearCookie(getRssSource().sourceUrl)
-            R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
+            R.id.menu_auto_complete -> {
+                viewModel.autoComplete = !viewModel.autoComplete
+                autoCompleteEnabled = viewModel.autoComplete
+            }
             R.id.menu_copy_source -> sendToClip(GSON.toJson(getRssSource()))
             R.id.menu_qr_code_camera -> qrCodeResult.launch()
             R.id.menu_paste_source -> viewModel.pasteSource { upSourceView(it) }
@@ -209,7 +298,15 @@ class RssSourceEditActivity :
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
             R.id.menu_help -> showHelp("rssRuleHelp")
         }
-        return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun onSourceSwitchChanged(key: String, value: Boolean) {
+        when (key) {
+            "enabled" -> sourceEnabled = value
+            "singleUrl" -> singleUrl = value
+            "cookie" -> cookieEnabled = value
+            "preload" -> preloadEnabled = value
+        }
     }
 
     private fun initView() {
@@ -277,31 +374,27 @@ class RssSourceEditActivity :
     }
 
     private fun setEditEntities(tabPosition: Int?) {
-        when (tabPosition) {
-            1 -> adapter.editEntities = startEntities
-            2 -> adapter.editEntities = listEntities
-            3 -> adapter.editEntities = webViewEntities
-            else -> adapter.editEntities = sourceEntities
+        selectedEditTab = tabPosition ?: 0
+        val selected = when (tabPosition) {
+            1 -> startEntities
+            2 -> listEntities
+            3 -> webViewEntities
+            else -> sourceEntities
         }
-        binding.recyclerView.scrollToPosition(0)
+        composeEntities.clear()
+        composeEntities.addAll(selected)
         window.decorView.rootView.clearFocus()
     }
 
     private fun upSourceView(rssSource: RssSource?) {
         val rs = rssSource ?: RssSource()
         rs.let {
-            binding.cbIsEnable.isChecked = rs.enabled
-            binding.cbSingleUrl.isChecked = rs.singleUrl
-            binding.cbIsEnableCookie.isChecked = rs.enabledCookieJar == true
-            binding.cbIsEnablePreload.isChecked = rs.preload
-            if (rs.type !in 0..<binding.spType.count) {
-                rs.type = 0
-            }
-            binding.spType.setSelection(rs.type)
-            if (rs.articleStyle !in 0..<binding.lyType.count) {
-                rs.articleStyle = 0
-            }
-            binding.lyType.setSelection(rs.articleStyle)
+            sourceEnabled = rs.enabled
+            singleUrl = rs.singleUrl
+            cookieEnabled = rs.enabledCookieJar == true
+            preloadEnabled = rs.preload
+            sourceTypeIndex = rs.type.coerceIn(0, resources.getStringArray(R.array.rss_type).lastIndex)
+            articleStyleIndex = rs.articleStyle.coerceIn(0, resources.getStringArray(R.array.layout_type).lastIndex)
         }
         sourceEntities.clear()
         sourceEntities.apply {
@@ -385,18 +478,17 @@ class RssSourceEditActivity :
                 )
             )
         }
-        binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
         setEditEntities(0)
     }
 
     private fun getRssSource(): RssSource {
         val source = viewModel.rssSource?.copy() ?: RssSource()
-        source.enabled = binding.cbIsEnable.isChecked
-        source.singleUrl = binding.cbSingleUrl.isChecked
-        source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.preload = binding.cbIsEnablePreload.isChecked
-        source.type = binding.spType.selectedItemPosition
-        source.articleStyle = binding.lyType.selectedItemPosition
+        source.enabled = sourceEnabled
+        source.singleUrl = singleUrl
+        source.enabledCookieJar = cookieEnabled
+        source.preload = preloadEnabled
+        source.type = sourceTypeIndex
+        source.articleStyle = articleStyleIndex
         sourceEntities.forEach {
             it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {

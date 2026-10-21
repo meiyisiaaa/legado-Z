@@ -8,6 +8,7 @@ plugins {
 
     alias libs.plugins.android.application
     alias libs.plugins.kotlin.android
+    alias libs.plugins.compose.compiler
     alias libs.plugins.kotlin.parcelize
     alias libs.plugins.room
     alias libs.plugins.ksp
@@ -69,6 +70,7 @@ android {
         }
     }
     buildFeatures {
+        compose = true
         buildConfig = true
         viewBinding = true
     }
@@ -166,6 +168,17 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.compose.bom))
+    androidTestImplementation(platform(libs.compose.bom))
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.tooling.preview)
+    implementation(libs.compose.runtime.livedata)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    debugImplementation(libs.compose.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(libs.compose.ui.test.junit4)
     //compileOnly "com.android.tools.build:gradle:$agp_version"
     //noinspection GradleDependency,GradlePackageUpdate
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
@@ -264,7 +277,6 @@ dependencies {
 
     //webServer
     implementation(libs.nanohttpd.nanohttpd)
-    implementation(libs.nanohttpd.websocket)
     implementation('io.modelcontextprotocol:kotlin-sdk-server:0.14.0')
     implementation('io.ktor:ktor-server-cio:3.4.3')
     androidTestImplementation('io.modelcontextprotocol:kotlin-sdk-client:0.14.0')

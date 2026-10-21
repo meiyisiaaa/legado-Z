@@ -49,6 +49,11 @@ class BookSourceAdapter(
             }
         }
 
+    fun setSelected(source: BookSourcePart, isSelected: Boolean) {
+        if (isSelected) selected.add(source) else selected.remove(source)
+        callBack.upCountView()
+    }
+
     val diffItemCallback = object : DiffUtil.ItemCallback<BookSourcePart>() {
 
         override fun areItemsTheSame(oldItem: BookSourcePart, newItem: BookSourcePart): Boolean {

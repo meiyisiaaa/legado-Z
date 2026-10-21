@@ -12,15 +12,27 @@ import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewStructure
+import android.view.accessibility.AccessibilityEvent
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.autofill.AutofillValue
 import android.widget.FrameLayout
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.widget.AppCompatEditText
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputEditText
 import io.github.rosemoe.sora.event.PublishSearchResultEvent
@@ -38,9 +50,12 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.config.ChangeThemeDialog
 import io.legado.app.ui.code.config.SettingsDialog
+import io.legado.app.ui.widget.TitleBar
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.utils.imeHeight
 import io.legado.app.utils.putPrefBoolean
@@ -66,18 +81,49 @@ class CodeEditActivity :
     }
     override val binding by viewBinding(ActivityCodeEditBinding::inflate)
     override val viewModel by viewModels<CodeEditViewModel>()
+    private val titleBar: TitleBar by lazy {
+        TitleBar(this).apply {
+            id = R.id.title_bar
+            title = getString(R.string.edit_code)
+            if (!AppConfig.isEInkMode) setBackgroundColor(context.primaryColor)
+        }
+    }
+    private val editorContainer: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            addView(
+                editor,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+    }
+    private val editor: CodeEditor by lazy {
+        CodeEditor(this).apply {
+            id = R.id.editText
+            setTextSize(18f)
+        }
+    }
     private val softKeyboardTool by lazy {
         KeyboardToolPop(this, lifecycleScope, binding.root, this)
     }
-    private val editor: CodeEditor by lazy { binding.editText }
     private val editorSearcher: EditorSearcher by lazy { editor.searcher }
     private var searchOptions: SearchOptions? = null
     private var menuSaveBtn: MenuItem? = null
     private var optionsMenu: Menu? = null
     private var safeEditText: AppCompatEditText? = null
     private var saveInProgress = false
+    private var searchPanelVisible by mutableStateOf(false)
+    private var replacePanelVisible by mutableStateOf(false)
+    private var searchQuery by mutableStateOf(findText)
+    private var replacementQuery by mutableStateOf(replaceText)
+    private var searchRegex by mutableStateOf(isRegex)
+    private var searchSummary by mutableStateOf("0")
+    private var replaceAllEnabled by mutableStateOf(false)
+    private var closeSearchAction: (() -> Unit)? = null
     private val initDataCallback: () -> Unit = {
-        viewModel.title?.let { binding.titleBar.title = it }
+        viewModel.title?.let { titleBar.title = it }
         menuSaveBtn?.isVisible = viewModel.writable
         if (viewModel.useSafeEditor) {
             setupSafeEditor()
@@ -114,6 +160,79 @@ class CodeEditActivity :
         softKeyboardTool.attachToWindow(window)
         viewModel.initData(intent, savedInstanceState, initDataCallback, initRestoreFailureCallback)
         initView()
+        initSearchPanel()
+    }
+
+    private fun initSearchPanel() {
+        binding.root.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.root.setContent {
+            LegadoTheme {
+                // adjustResize and KeyboardToolPop already reserve the IME and helper space.
+                Column(Modifier.fillMaxSize()) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxWidth(),
+                        factory = { titleBar }
+                    )
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        factory = { editorContainer }
+                    )
+                    CodeSearchPanel(
+                        visible = searchPanelVisible,
+                        replaceVisible = replacePanelVisible,
+                        query = searchQuery,
+                        replacement = replacementQuery,
+                        isRegex = searchRegex,
+                        resultSummary = searchSummary,
+                        replaceAllEnabled = replaceAllEnabled,
+                        onQueryChange = { query ->
+                            searchQuery = query
+                            if (query.isNotEmpty()) findText = query
+                            if (query.isNotEmpty()) searchTxt(query) else {
+                                editorSearcher.stopSearch()
+                                editor.invalidate()
+                            }
+                        },
+                        onReplacementChange = { replacement ->
+                            replacementQuery = replacement
+                            if (replacement.isNotEmpty()) replaceText = replacement
+                        },
+                        onRegexChange = { checked ->
+                            searchRegex = checked
+                            isRegex = checked
+                            setSearchOptions()
+                            if (searchQuery.isNotEmpty()) searchTxt(searchQuery)
+                        },
+                        onClose = { closeSearchAction?.invoke() },
+                        onPrevious = {
+                            if (editorSearcher.hasQuery()) editorSearcher.gotoPrevious()
+                        },
+                        onNext = {
+                            if (editorSearcher.hasQuery()) editorSearcher.gotoNext()
+                        },
+                        onToggleReplace = {
+                            if (replacePanelVisible) {
+                                if (editorSearcher.hasQuery()) {
+                                    editorSearcher.replaceCurrentMatch(replacementQuery)
+                                }
+                            } else {
+                                replacePanelVisible = true
+                                replaceAllEnabled = true
+                            }
+                        },
+                        onCloseReplace = {
+                            replacePanelVisible = false
+                            replaceAllEnabled = false
+                        },
+                        onReplaceAll = {
+                            if (editorSearcher.hasQuery()) editorSearcher.replaceAll(replacementQuery)
+                        }
+                    )
+                }
+            }
+        }
     }
 
     private fun finishAfterRestoreFailure() {
@@ -123,13 +242,32 @@ class CodeEditActivity :
     }
 
     private fun setupSafeEditor() {
-        binding.editText.isGone = true
-        binding.searchGroup.isGone = true
+        editor.isGone = true
+        searchPanelVisible = false
+        replacePanelVisible = false
         updateSafeMenu()
         val draft = viewModel.safeDraft ?: viewModel.initialText
         val cursor = if (viewModel.safeDraft == null) viewModel.cursorPosition else viewModel.safeCursorPosition
         val horizontalScrolling = !AppConfig.editAutoWrap
-        val safeEditor = AppCompatEditText(this).apply {
+        val safeEditor = object : AppCompatEditText(this) {
+            override fun sendAccessibilityEventUnchecked(event: AccessibilityEvent) {
+                if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+                    // Match Android's current-text parcel limit for the otherwise unbounded beforeText.
+                    event.beforeText = event.beforeText?.let(EditSafety::accessibilityBeforeText)
+                }
+                super.sendAccessibilityEventUnchecked(event)
+            }
+
+            override fun getAutofillType() = View.AUTOFILL_TYPE_NONE
+
+            // Autofill can request values even for views marked not important.
+            override fun getAutofillValue(): AutofillValue? = null
+
+            override fun onProvideAutofillStructure(structure: ViewStructure, flags: Int) {
+                super.onProvideAutofillStructure(structure, flags)
+                structure.setText("")
+            }
+        }.apply {
             tag = SAFE_EDITOR_TAG
             id = View.generateViewId()
             hint = getString(R.string.edit_code)
@@ -158,7 +296,7 @@ class CodeEditActivity :
             setText(draft)
             setSelection(cursor.coerceIn(0, draft.length))
         }
-        binding.editorContainer.addView(
+        editorContainer.addView(
             safeEditor,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -389,30 +527,28 @@ class CodeEditActivity :
     }
 
     private fun search() {
-        if (binding.searchGroup.isVisible) return
-        binding.switchRegex.run {
-            isChecked = isRegex
-            setSearchOptions()
-            setOnCheckedChangeListener { _, isChecked ->
-                isRegex = isChecked
-                setSearchOptions()
-                searchTxt(binding.etFind.text.toString())
-            }
-        }
+        if (searchPanelVisible) return
+        searchQuery = findText
+        replacementQuery = replaceText
+        searchRegex = isRegex
+        searchSummary = "0"
+        searchPanelVisible = true
+        setSearchOptions()
         val receiptSearch =
             editor.subscribeEvent(PublishSearchResultEvent::class.java) { event, _ ->
                 if (event.editor == editor) {
-                    updateSearchResults()
+                    runOnUiThread { updateSearchResults() }
                 }
             }
         val receiptChange = editor.subscribeEvent(SelectionChangeEvent::class.java) { event, _ ->
             if (event.cause == SelectionChangeEvent.CAUSE_SEARCH) {
-                updateSearchResults()
+                runOnUiThread { updateSearchResults() }
             }
         }
-        binding.searchGroup.visibility = View.VISIBLE
-        binding.btnCloseFind.setOnClickListener {
-            binding.searchGroup.visibility = View.GONE
+        closeSearchAction = {
+            searchPanelVisible = false
+            replacePanelVisible = false
+            replaceAllEnabled = false
             editorSearcher.stopSearch()
             receiptSearch.unsubscribe()
             receiptChange.unsubscribe()
@@ -420,59 +556,6 @@ class CodeEditActivity :
             editor.invalidate()
         }
         searchTxt(findText)
-        binding.etFind.run {
-            requestFocus()
-            setText(findText)
-            addTextChangedListener { text ->
-                if (!text.isNullOrEmpty()) {
-                    findText = text.toString()
-                    searchTxt(findText)
-                } else {
-                    editorSearcher.stopSearch()
-                    editor.invalidate()
-                }
-            }
-
-        }
-        binding.etReplace.run {
-            setText(replaceText)
-            addTextChangedListener { text ->
-                if (!text.isNullOrEmpty()) {
-                    replaceText = text.toString()
-                }
-            }
-        }
-        binding.btnPrevious.setOnClickListener {
-            if (editorSearcher.hasQuery()) {
-                editorSearcher.gotoPrevious()
-            }
-        }
-        binding.btnNext.setOnClickListener {
-            if (editorSearcher.hasQuery()) {
-                editorSearcher.gotoNext()
-            }
-        }
-        binding.btnReplace.setOnClickListener {
-            if (binding.replaceGroup.isGone) {
-                binding.replaceGroup.visibility = View.VISIBLE
-                binding.btnReplaceAll.isEnabled = true
-                binding.etReplace.requestFocus()
-            } else {
-                if (editorSearcher.hasQuery()) {
-                    editorSearcher.replaceCurrentMatch(binding.etReplace.text.toString())
-                }
-            }
-        }
-        binding.btnCloseReplace.setOnClickListener {
-            binding.replaceGroup.visibility = View.GONE
-            binding.btnReplaceAll.isEnabled = false
-            binding.etFind.requestFocus()
-        }
-        binding.btnReplaceAll.setOnClickListener {
-            if (editorSearcher.hasQuery()) {
-                editorSearcher.replaceAll(binding.etReplace.text.toString())
-            }
-        }
     }
 
     private fun searchTxt(txt: String) {
@@ -494,8 +577,7 @@ class CodeEditActivity :
         if (editorSearcher.hasQuery()) {
             val totalResults = editorSearcher.matchedPositionCount
             val currentPosition = editorSearcher.currentMatchedPositionIndex + 1
-            binding.tvSearchResult.text =
-                "${if (currentPosition > 0) "$currentPosition/" else ""}$totalResults"
+            searchSummary = "${if (currentPosition > 0) "$currentPosition/" else ""}$totalResults"
         }
     }
 

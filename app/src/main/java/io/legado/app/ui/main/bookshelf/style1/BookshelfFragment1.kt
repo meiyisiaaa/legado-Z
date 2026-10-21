@@ -9,7 +9,16 @@ import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
-import com.google.android.material.tabs.TabLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
+import androidx.viewpager.widget.ViewPager
+import io.legado.app.ui.main.bookshelf.BookshelfGroups
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.compose.LocalLegadoMotion
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.ComposeView
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
@@ -33,7 +42,6 @@ import kotlin.collections.set
  * 书架界面
  */
 class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1),
-    TabLayout.OnTabSelectedListener,
     SearchView.OnQueryTextListener {
 
     constructor(position: Int) : this() {
@@ -43,11 +51,10 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     private val binding by viewBinding(FragmentBookshelf1Binding::bind)
+    private val groupTabs: ComposeView get() = binding.titleBar.findViewById(R.id.group_tabs)
     private val adapter by lazy { TabFragmentPageAdapter(childFragmentManager) }
-    private val tabLayout: TabLayout by lazy {
-        binding.titleBar.findViewById(R.id.tab_layout)
-    }
-    private val bookGroups = mutableListOf<BookGroup>()
+    private var selectedIndex by mutableIntStateOf(0)
+    private val bookGroups = mutableStateListOf<BookGroup>()
     private val fragmentMap = hashMapOf<Long, BooksFragment>()
     override val groupId: Long get() = selectedGroup?.groupId ?: 0
 
@@ -65,14 +72,30 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     private val selectedGroup: BookGroup?
-        get() = bookGroups.getOrNull(tabLayout.selectedTabPosition)
+        get() = bookGroups.getOrNull(selectedIndex)
 
     private fun initView() {
         binding.viewPagerBookshelf.setEdgeEffectColor(primaryColor)
-        tabLayout.isTabIndicatorFullWidth = false
-        tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
-        tabLayout.setSelectedTabIndicatorColor(requireContext().accentColor)
-        tabLayout.setupWithViewPager(binding.viewPagerBookshelf)
+        groupTabs.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        groupTabs.setContent {
+            LegadoTheme {
+                val motion = LocalLegadoMotion.current
+                BookshelfGroups(bookGroups, selectedIndex, { index ->
+                    if (selectedIndex == index) {
+                        selectedGroup?.let { group ->
+                            toastOnUi("${group.groupName}(${fragmentMap[group.groupId]?.getBooksCount() ?: 0})")
+                        }
+                    } else binding.viewPagerBookshelf.setCurrentItem(index, motion.enabled)
+                }, { showDialogFragment(GroupEditDialog(it)) })
+            }
+        }
+        binding.viewPagerBookshelf.addOnPageChangeListener(object : ViewPager.SimpleOnPageChangeListener() {
+            override fun onPageSelected(position: Int) {
+                selectedIndex = position
+                onlyUpdateRead = selectedGroup?.onlyUpdateRead ?: false
+                AppConfig.saveTabPosition = position
+            }
+        })
         binding.viewPagerBookshelf.offscreenPageLimit = 1
         binding.viewPagerBookshelf.adapter = adapter
     }
@@ -96,12 +119,6 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
                 bookGroups.addAll(data)
                 adapter.notifyDataSetChanged()
                 selectLastTab()
-                for (i in 0 until adapter.count) {
-                    tabLayout.getTabAt(i)?.view?.setOnLongClickListener {
-                        showDialogFragment(GroupEditDialog(bookGroups[i]))
-                        true
-                    }
-                }
             }
         }
     }
@@ -111,25 +128,11 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
     }
 
     private fun selectLastTab() {
-        tabLayout.post {
-            tabLayout.removeOnTabSelectedListener(this)
-            tabLayout.getTabAt(AppConfig.saveTabPosition)?.select()
-            tabLayout.addOnTabSelectedListener(this)
+        binding.viewPagerBookshelf.post {
+            selectedIndex = AppConfig.saveTabPosition.coerceIn(0, (bookGroups.size - 1).coerceAtLeast(0))
+            onlyUpdateRead = selectedGroup?.onlyUpdateRead ?: false
+            binding.viewPagerBookshelf.setCurrentItem(selectedIndex, false)
         }
-    }
-
-    override fun onTabReselected(tab: TabLayout.Tab) {
-        selectedGroup?.let { group ->
-            fragmentMap[group.groupId]?.let {
-                toastOnUi("${group.groupName}(${it.getBooksCount()})")
-            }
-        }
-    }
-
-    override fun onTabUnselected(tab: TabLayout.Tab) = Unit
-
-    override fun onTabSelected(tab: TabLayout.Tab) {
-        AppConfig.saveTabPosition = tab.position
     }
 
     override fun gotoTop() {
@@ -155,7 +158,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
                 return POSITION_NONE
             }
             val bookSort = group.getRealBookSort()
-            fragment.setEnableRefresh(group.enableRefresh)
+            fragment.updateGroup(group)
             if (fragment.bookSort != bookSort) {
                 fragment.upBookSort(bookSort)
             }
@@ -164,7 +167,6 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
 
         override fun getItem(position: Int): Fragment {
             val group = bookGroups[position]
-            onlyUpdateRead = group.onlyUpdateRead
             return BooksFragment(position, group)
         }
 

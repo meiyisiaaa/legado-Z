@@ -71,6 +71,7 @@
             android:id="@+id/recycler_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:visibility="gone"
             tools:ignore="SpeakableTextPresentCheck" />
 
         <TextView
@@ -83,6 +84,11 @@
             android:text="@string/empty"
             android:visibility="gone"
             tools:text="TextView" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/import_compose"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
     </FrameLayout>
 

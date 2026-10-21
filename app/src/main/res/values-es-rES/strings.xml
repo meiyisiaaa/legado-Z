@@ -473,6 +473,8 @@
     <string name="import_by_qr_code">Importar desde código QR</string>
     <string name="share_selected_source">Compartir fuentes seleccionadas</string>
     <string name="scan_qr_code">Escanear código QR</string>
+    <string name="qr_flashlight_turn_on">Activar linterna</string>
+    <string name="qr_flashlight_turn_off">Desactivar linterna</string>
     <string name="click_on_selected_show_menu">Toque para mostrar el menú cuando esté seleccionado</string>
     <string name="theme">Tema</string>
     <string name="theme_mode">Tipo de tema</string>

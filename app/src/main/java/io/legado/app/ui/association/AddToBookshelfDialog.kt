@@ -6,6 +6,28 @@ import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.R
@@ -27,6 +49,7 @@ import io.legado.app.utils.setLayout
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.ui.widget.compose.LegadoTheme
 
 /**
  * 添加书籍链接到书架，需要对应网站书源
@@ -47,6 +70,7 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
 
     val binding by viewBinding(DialogAddToBookshelfBinding::bind)
     val viewModel by viewModels<ViewModel>()
+    private var loading by mutableStateOf(true)
 
     override fun onStart() {
         super.onStart()
@@ -60,8 +84,13 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
         }
     }
 
-    @SuppressLint("SetTextI18n")
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
+        binding.composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.composeView.setContent {
+            LegadoTheme {
+                AddToBookshelfContent(loading = loading, onCancel = { dismiss() })
+            }
+        }
         val bookUrl = arguments?.getString("bookUrl")
         if (bookUrl.isNullOrBlank()) {
             toastOnUi("url不能为空")
@@ -79,11 +108,7 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
             return
         }
         viewModel.loadStateLiveData.observe(this) {
-            if (it) {
-                binding.rotateLoading.visible()
-            } else {
-                binding.rotateLoading.gone()
-            }
+            loading = it
         }
         viewModel.loadErrorLiveData.observe(this) {
             toastOnUi(it)
@@ -98,9 +123,6 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
                 }
                 dismiss()
             }
-        }
-        binding.tvCancel.setOnClickListener {
-            dismiss()
         }
     }
 
@@ -184,4 +206,42 @@ class AddToBookshelfDialog() : BaseDialogFragment(R.layout.dialog_add_to_bookshe
 
     }
 
+}
+
+@Composable
+private fun AddToBookshelfContent(loading: Boolean, onCancel: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(3.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column {
+            Text(
+                stringResource(R.string.add_to_bookshelf),
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (loading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 3.dp)
+                    Text(
+                        text = stringResource(R.string.loading),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+            }
+        }
+    }
 }
