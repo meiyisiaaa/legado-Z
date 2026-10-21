@@ -8,8 +8,9 @@ import androidx.compose.ui.test.performClick
 import androidx.preference.Preference
 import androidx.preference.PreferenceManager
 import androidx.test.platform.app.InstrumentationRegistry
-import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.R
+import io.legado.app.lib.prefs.SeekBarPreference
+import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.ui.widget.compose.LegadoTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -96,5 +97,33 @@ class ComposePreferenceScreenTest {
 
         composeRule.onNodeWithText(newSummary).assertExists()
         composeRule.onNodeWithContentDescription("备份路径. $newSummary").assertExists()
+    }
+
+    @Test
+    fun seekBarAccessibilityUsesThePreferenceTitle() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val manager = PreferenceManager(context)
+        val screen = manager.createPreferenceScreen(context)
+        val attributes = context.resources.getXml(R.xml.pref_config_welcome).apply {
+            while (next() != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG && name == SeekBarPreference::class.java.name) break
+            }
+            check(eventType == XmlPullParser.START_TAG && name == SeekBarPreference::class.java.name)
+        }
+        val preference = SeekBarPreference(context, attributes).apply {
+            key = "compose.preference.seekbar"
+            title = "滑块值"
+            isPersistent = false
+        }
+        attributes.close()
+        screen.addPreference(preference)
+
+        composeRule.setContent {
+            LegadoTheme {
+                ComposePreferenceScreen(screen)
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("滑块值").assertExists()
     }
 }

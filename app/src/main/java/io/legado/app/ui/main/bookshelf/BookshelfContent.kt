@@ -196,7 +196,7 @@ private fun ShelfEntry(entry: Any, grid: Boolean, updating: (Book) -> Boolean,
     val clickable = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .clip(MaterialTheme.shapes.extraSmall).combinedClickable(
             interactionSource = interactions, indication = if (motion.enabled) LocalIndication.current else null,
-            onClick = { onOpen(entry) }, onLongClick = { onDetails(entry) },
+            role = Role.Button, onClick = { onOpen(entry) }, onLongClick = { onDetails(entry) },
             onLongClickLabel = stringResource(R.string.bookshelf_long_press_action))
     when (entry) {
         is Book -> {

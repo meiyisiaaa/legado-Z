@@ -27,8 +27,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -58,12 +68,17 @@ import kotlinx.coroutines.launch
 internal data class ExploreUiState(
     val sources: List<BookSourcePart> = emptyList(),
     val groups: List<String> = emptyList(),
+    val isLoadingSources: Boolean = false,
+    val sourcesError: String? = null,
+    val isLoadingGroups: Boolean = false,
+    val groupsError: String? = null,
     val query: String = "",
     val selectedGroup: String? = null,
     val expandedSourceUrl: String? = null,
     val kindsBySource: Map<String, List<ExploreKind>> = emptyMap(),
     val renderRevisionBySource: Map<String, Int> = emptyMap(),
     val loadingSourceUrls: Set<String> = emptySet(),
+    val kindErrorsBySource: Map<String, String> = emptyMap(),
     val isResumed: Boolean = false,
     val scrollToTopRequest: Int = 0
 )
@@ -116,6 +131,8 @@ internal fun ExploreContent(
     onToggleSource: (BookSourcePart) -> Unit,
     onSourceAction: (BookSourcePart, ExploreSourceAction) -> Unit,
     onOpenExplore: (String, String, String?) -> Unit,
+    onRetrySources: () -> Unit,
+    onRetryGroups: () -> Unit,
     kindContent: @Composable (BookSourcePart, List<ExploreKind>, Int, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -132,56 +149,107 @@ internal fun ExploreContent(
     val firstSourceUrl = state.sources.firstOrNull()?.bookSourceUrl
     var previousFirstSourceUrl by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(firstSourceUrl) {
-        if (firstSourceUrl != null && previousFirstSourceUrl != null && firstSourceUrl != previousFirstSourceUrl) {
-            listState.scrollToItem(0)
+        if (firstSourceUrl != null) {
+            if (previousFirstSourceUrl != null && firstSourceUrl != previousFirstSourceUrl) {
+                listState.scrollToItem(0)
+            }
+            previousFirstSourceUrl = firstSourceUrl
         }
-        previousFirstSourceUrl = firstSourceUrl
     }
 
-    Box(
+    val loadingDescription = stringResource(R.string.data_loading)
+    val retryLabel = stringResource(R.string.retry)
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (state.sources.isEmpty()) {
-            if (state.query.isBlank() && state.selectedGroup == null) {
+        when {
+            state.isLoadingGroups -> LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().semantics {
+                    contentDescription = loadingDescription
+                    liveRegion = LiveRegionMode.Polite
+                }
+            )
+            state.groupsError != null -> Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = stringResource(R.string.explore_empty),
-                    modifier = Modifier.align(Alignment.Center).padding(16.dp),
+                    text = state.groupsError.orEmpty(),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.error
+                )
+                TextButton(onClick = onRetryGroups) { Text(retryLabel) }
+            }
+        }
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                state.isLoadingSources -> CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center).size(30.dp).semantics {
+                        contentDescription = loadingDescription
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                    strokeWidth = 2.dp
+                )
+                state.sourcesError != null -> Column(
+                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = state.sourcesError.orEmpty(),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = onRetrySources) { Text(retryLabel) }
+                }
+                state.sources.isEmpty() -> Text(
+                    text = stringResource(
+                        if (state.query.isBlank() && state.selectedGroup == null) {
+                            R.string.explore_empty
+                        } else {
+                            R.string.empty
+                        }
+                    ),
+                    modifier = Modifier.align(Alignment.Center).padding(16.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 0.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                items(
-                    items = state.sources,
-                    key = BookSourcePart::bookSourceUrl
-                ) { source ->
-                    val expanded = state.expandedSourceUrl == source.bookSourceUrl
-                    ExploreSourceCard(
-                        source = source,
-                        expanded = expanded,
-                        isLoading = source.bookSourceUrl in state.loadingSourceUrls,
-                        kinds = state.kindsBySource[source.bookSourceUrl].orEmpty(),
-                        renderRevision = state.renderRevisionBySource[source.bookSourceUrl] ?: 0,
-                        isResumed = state.isResumed,
-                        motionDuration = motionDuration,
-                        onToggle = {
-                            onToggleSource(source)
-                            if (!expanded) {
-                                scope.launch { listState.animateScrollToItem(state.sources.indexOf(source)) }
-                            }
-                        },
-                        onSourceAction = { action -> onSourceAction(source, action) },
-                        onOpenExplore = onOpenExplore,
-                        kindContent = kindContent
-                    )
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 0.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    items(
+                        items = state.sources,
+                        key = BookSourcePart::bookSourceUrl
+                    ) { source ->
+                        val expanded = state.expandedSourceUrl == source.bookSourceUrl
+                        ExploreSourceCard(
+                            source = source,
+                            expanded = expanded,
+                            isLoading = source.bookSourceUrl in state.loadingSourceUrls,
+                            kinds = state.kindsBySource[source.bookSourceUrl].orEmpty(),
+                            kindsLoaded = source.bookSourceUrl in state.kindsBySource,
+                            kindError = state.kindErrorsBySource[source.bookSourceUrl],
+                            renderRevision = state.renderRevisionBySource[source.bookSourceUrl] ?: 0,
+                            isResumed = state.isResumed,
+                            motionDuration = motionDuration,
+                            onToggle = {
+                                onToggleSource(source)
+                                if (!expanded) {
+                                    scope.launch { listState.animateScrollToItem(state.sources.indexOf(source)) }
+                                }
+                            },
+                            onSourceAction = { action -> onSourceAction(source, action) },
+                            onOpenExplore = onOpenExplore,
+                            kindContent = kindContent
+                        )
+                    }
                 }
             }
         }
@@ -195,6 +263,8 @@ private fun ExploreSourceCard(
     expanded: Boolean,
     isLoading: Boolean,
     kinds: List<ExploreKind>,
+    kindsLoaded: Boolean,
+    kindError: String?,
     renderRevision: Int,
     isResumed: Boolean,
     motionDuration: Int,
@@ -204,6 +274,10 @@ private fun ExploreSourceCard(
     kindContent: @Composable (BookSourcePart, List<ExploreKind>, Int, Boolean) -> Unit
 ) {
     var menuExpanded by remember(source.bookSourceUrl) { mutableStateOf(false) }
+    val loadingDescription = stringResource(R.string.data_loading)
+    val expansionDescription = stringResource(
+        if (expanded) R.string.accessibility_expanded else R.string.accessibility_collapsed
+    )
 
     Column(
         modifier = Modifier
@@ -217,10 +291,16 @@ private fun ExploreSourceCard(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .combinedClickable(
+                        role = Role.Button,
                         onClick = onToggle,
                         onLongClick = { menuExpanded = true },
                         onLongClickLabel = stringResource(R.string.more_menu)
                     )
+                    .semantics {
+                        stateDescription = expansionDescription
+                        if (expanded) collapse { onToggle(); true }
+                        else expand { onToggle(); true }
+                    }
                     .padding(start = 10.dp, top = 6.dp, bottom = 6.dp, end = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -235,7 +315,10 @@ private fun ExploreSourceCard(
                 )
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.padding(end = 8.dp).size(18.dp),
+                        modifier = Modifier.padding(end = 8.dp).size(18.dp).semantics {
+                            contentDescription = loadingDescription
+                            liveRegion = LiveRegionMode.Polite
+                        },
                         strokeWidth = 2.dp
                     )
                 }
@@ -265,8 +348,33 @@ private fun ExploreSourceCard(
             exit = shrinkVertically(animationSpec = tween(motionDuration)) + fadeOut(animationSpec = tween(motionDuration)),
             label = "explore-source-controls"
         ) {
-            if (kinds.isNotEmpty()) {
-                Column {
+            when {
+                isLoading -> Unit
+                kindError != null -> Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        kindError,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = { onSourceAction(ExploreSourceAction.Refresh) }) {
+                        Text(stringResource(R.string.retry))
+                    }
+                    if (kinds.isNotEmpty()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)) {
+                            kindContent(source, kinds, renderRevision, isResumed)
+                        }
+                    }
+                }
+                kindsLoaded && kinds.isEmpty() -> Text(
+                    stringResource(R.string.empty),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                kinds.isNotEmpty() -> Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)) {
                         kindContent(source, kinds, renderRevision, isResumed)
@@ -323,6 +431,8 @@ private fun ExploreContentPreview() {
             onToggleSource = {},
             onSourceAction = { _, _ -> },
             onOpenExplore = { _, _, _ -> },
+            onRetrySources = {},
+            onRetryGroups = {},
             kindContent = { _, _, _, _ ->
                 Text(
                     text = "动态发现条件",

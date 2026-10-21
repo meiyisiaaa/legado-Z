@@ -39,7 +39,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
@@ -65,6 +64,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private var groupsMenu: SubMenu? = null
     private var exploreFlowJob: Job? = null
     private var groupsFlowJob: Job? = null
+    private var exploreFlowGeneration = 0L
+    private var groupsFlowGeneration = 0L
     private val kindLoadJobs = linkedMapOf<String, Job>()
     private val kindLoadTokens = linkedMapOf<String, Long>()
     private var nextKindLoadToken = 0L
@@ -84,6 +85,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                     onToggleSource = ::toggleSource,
                     onSourceAction = ::onSourceAction,
                     onOpenExplore = ::openExplore,
+                    onRetrySources = { upExploreData(uiState.query) },
+                    onRetryGroups = ::initGroupData,
                     kindContent = { source, kinds, revision, resumed ->
                         ExploreKindControls(
                             source = source,
@@ -145,21 +148,50 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun initGroupData() {
+        val generation = ++groupsFlowGeneration
         groupsFlowJob?.cancel()
+        uiState = uiState.copy(
+            groups = emptyList(),
+            isLoadingGroups = true,
+            groupsError = null
+        )
+        upGroupsMenu()
         groupsFlowJob = viewLifecycleOwner.lifecycleScope.launch {
-            appDb.bookSourceDao.flowExploreGroups()
-                .flowWithLifecycleAndDatabaseChange(
-                    viewLifecycleOwner.lifecycle,
-                    Lifecycle.State.RESUMED,
-                    AppDatabase.BOOK_SOURCE_TABLE_NAME
-                )
-                .conflate()
-                .distinctUntilChanged()
-                .collect { groups ->
-                    uiState = uiState.copy(groups = groups)
+            try {
+                appDb.bookSourceDao.flowExploreGroups()
+                    .flowWithLifecycleAndDatabaseChange(
+                        viewLifecycleOwner.lifecycle,
+                        Lifecycle.State.RESUMED,
+                        AppDatabase.BOOK_SOURCE_TABLE_NAME
+                    )
+                    .conflate()
+                    .distinctUntilChanged()
+                    .collect { groups ->
+                        if (generation != groupsFlowGeneration) return@collect
+                        uiState = uiState.copy(
+                            groups = groups,
+                            isLoadingGroups = false,
+                            groupsError = null
+                        )
+                        upGroupsMenu()
+                        delay(500)
+                    }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == groupsFlowGeneration) {
+                    AppLog.put("发现界面获取分组数据失败", error)
+                    uiState = uiState.copy(
+                        groups = emptyList(),
+                        groupsError = getString(R.string.error_get_data)
+                    )
                     upGroupsMenu()
-                    delay(500)
                 }
+            } finally {
+                if (generation == groupsFlowGeneration) {
+                    uiState = uiState.copy(isLoadingGroups = false)
+                }
+            }
         }
     }
 
@@ -170,39 +202,60 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     private fun upExploreData(searchKey: String? = null) {
+        val generation = ++exploreFlowGeneration
         exploreFlowJob?.cancel()
+        uiState = uiState.copy(
+            sources = emptyList(),
+            isLoadingSources = true,
+            sourcesError = null
+        )
         exploreFlowJob = viewLifecycleOwner.lifecycleScope.launch {
-            val sourceFlow = when {
-                searchKey.isNullOrBlank() -> appDb.bookSourceDao.flowExplore()
-                searchKey.startsWith("group:") -> appDb.bookSourceDao.flowGroupExplore(searchKey.substringAfter("group:"))
-                else -> appDb.bookSourceDao.flowExplore(searchKey)
-            }
-            sourceFlow
-                .flowWithLifecycleAndDatabaseChange(
-                    viewLifecycleOwner.lifecycle,
-                    Lifecycle.State.RESUMED,
-                    AppDatabase.BOOK_SOURCE_TABLE_NAME
-                )
-                .catch { error ->
-                    if (error is CancellationException) throw error
-                    AppLog.put("发现界面更新数据出错", error)
+            try {
+                val sourceFlow = when {
+                    searchKey.isNullOrBlank() -> appDb.bookSourceDao.flowExplore()
+                    searchKey.startsWith("group:") -> appDb.bookSourceDao.flowGroupExplore(searchKey.substringAfter("group:"))
+                    else -> appDb.bookSourceDao.flowExplore(searchKey)
                 }
-                .conflate()
-                .flowOn(IO)
-                .collect { sources ->
-                    val previousExpandedUrl = uiState.expandedSourceUrl
-                    val expandedStillExists = previousExpandedUrl?.let { expandedUrl ->
-                        sources.any { it.bookSourceUrl == expandedUrl }
-                    } ?: true
-                    uiState = uiState.copy(
-                        sources = sources,
-                        expandedSourceUrl = if (expandedStillExists) uiState.expandedSourceUrl else null
+                sourceFlow
+                    .flowWithLifecycleAndDatabaseChange(
+                        viewLifecycleOwner.lifecycle,
+                        Lifecycle.State.RESUMED,
+                        AppDatabase.BOOK_SOURCE_TABLE_NAME
                     )
-                    if (!expandedStillExists) {
-                        previousExpandedUrl?.let(::cancelKindLoad)
+                    .conflate()
+                    .flowOn(IO)
+                    .collect { sources ->
+                        if (generation != exploreFlowGeneration) return@collect
+                        val previousExpandedUrl = uiState.expandedSourceUrl
+                        val expandedStillExists = previousExpandedUrl?.let { expandedUrl ->
+                            sources.any { it.bookSourceUrl == expandedUrl }
+                        } ?: true
+                        uiState = uiState.copy(
+                            sources = sources,
+                            isLoadingSources = false,
+                            sourcesError = null,
+                            expandedSourceUrl = if (expandedStillExists) uiState.expandedSourceUrl else null
+                        )
+                        if (!expandedStillExists) {
+                            previousExpandedUrl?.let(::cancelKindLoad)
+                        }
+                        delay(500)
                     }
-                    delay(500)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == exploreFlowGeneration) {
+                    AppLog.put("发现界面更新数据出错", error)
+                    uiState = uiState.copy(
+                        sources = emptyList(),
+                        sourcesError = getString(R.string.error_get_data)
+                    )
                 }
+            } finally {
+                if (generation == exploreFlowGeneration) {
+                    uiState = uiState.copy(isLoadingSources = false)
+                }
+            }
         }
     }
 
@@ -221,13 +274,25 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         kindLoadJobs.remove(sourceUrl)?.cancel()
         val token = ++nextKindLoadToken
         kindLoadTokens[sourceUrl] = token
-        uiState = uiState.copy(loadingSourceUrls = uiState.loadingSourceUrls + sourceUrl)
+        uiState = uiState.copy(
+            loadingSourceUrls = uiState.loadingSourceUrls + sourceUrl,
+            kindErrorsBySource = uiState.kindErrorsBySource - sourceUrl
+        )
         kindLoadJobs[sourceUrl] = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 if (refresh) source.clearExploreKindsCache()
                 val kinds = withContext(IO) { source.exploreKinds() }
+                val errorKind = kinds.firstOrNull { it.title.startsWith("ERROR:") }
+                val kindError = errorKind?.title?.removePrefix("ERROR:")
+                    ?.takeIf(String::isNotBlank)
+                    ?: errorKind?.let { getString(R.string.error_get_data) }
                 uiState = uiState.copy(
                     kindsBySource = uiState.kindsBySource + (sourceUrl to kinds),
+                    kindErrorsBySource = if (kindError == null) {
+                        uiState.kindErrorsBySource - sourceUrl
+                    } else {
+                        uiState.kindErrorsBySource + (sourceUrl to kindError)
+                    },
                     renderRevisionBySource = uiState.renderRevisionBySource +
                         (sourceUrl to ((uiState.renderRevisionBySource[sourceUrl] ?: 0) + 1))
                 )
@@ -235,7 +300,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 throw cancelled
             } catch (error: Exception) {
                 AppLog.put("发现书源分类加载失败: $sourceUrl", error)
-                uiState = uiState.copy(kindsBySource = uiState.kindsBySource + (sourceUrl to emptyList()))
+                uiState = uiState.copy(
+                    kindsBySource = uiState.kindsBySource + (sourceUrl to emptyList()),
+                    kindErrorsBySource = uiState.kindErrorsBySource + (sourceUrl to
+                        (error.localizedMessage?.takeIf(String::isNotBlank) ?: getString(R.string.error_get_data)))
+                )
             } finally {
                 if (kindLoadTokens[sourceUrl] == token) {
                     kindLoadTokens.remove(sourceUrl)
@@ -300,6 +369,8 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     }
 
     override fun onDestroyView() {
+        exploreFlowGeneration++
+        groupsFlowGeneration++
         exploreFlowJob?.cancel()
         groupsFlowJob?.cancel()
         kindLoadJobs.values.forEach(Job::cancel)

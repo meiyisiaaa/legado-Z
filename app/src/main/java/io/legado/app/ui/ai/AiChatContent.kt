@@ -1,8 +1,7 @@
 package io.legado.app.ui.ai
 
 import android.widget.TextView
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,14 +32,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +57,7 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AiChatContent(
     mode: Int,
@@ -167,13 +171,27 @@ internal fun AiChatContent(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 0.dp)
             ) {
                 items(items, key = { it.id }) { item ->
+                    val itemModifier = if (item.role == AiChatRole.ASSISTANT) {
+                        val copyLabel = stringResource(R.string.copy_text)
+                        val currentItemText by rememberUpdatedState(item.text)
+                        val currentOnCopy by rememberUpdatedState(onCopy)
+                        Modifier
+                            .pointerInput(item.id) {
+                                detectTapGestures(onLongPress = { currentOnCopy(currentItemText) })
+                            }
+                            .semantics(mergeDescendants = true) {
+                                customActions = listOf(
+                                    CustomAccessibilityAction(copyLabel) {
+                                        onCopy(item.text)
+                                        true
+                                    }
+                                )
+                            }
+                    } else Modifier
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { if (item.role == AiChatRole.ASSISTANT) onCopy(item.text) }
-                            )
+                            .then(itemModifier)
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         if (item.role == AiChatRole.USER) {

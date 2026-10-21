@@ -1541,4 +1541,26 @@
     <string name="ai_err_question_empty">请先输入问题</string>
     <string name="ai_err_selection_empty">请先选中一段文本</string>
     <string name="ai_err_batch_input_empty">请至少填写一个页面地址</string>
+
+    <!-- Compose state and accessibility labels -->
+    <string name="current_source">Current source</string>
+    <string name="current_chapter">Current chapter</string>
+    <string name="read_record_empty">No reading records</string>
+    <string name="more">More</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+    <string name="change_cover_empty">No available covers found</string>
+    <string name="rss_load_more">Load more</string>
+    <string name="rss_no_more_articles">No more articles</string>
+    <string name="rss_articles_empty_title">No articles</string>
+    <string name="rss_articles_empty_description">There are no articles in this group yet.</string>
+    <string name="rss_favorites_empty_title">No favorite articles</string>
+    <string name="rss_favorites_empty_description">Favorite an article to see it here.</string>
+    <string name="rss_articles_load_failed">Failed to load articles</string>
+    <string name="rss_favorite_groups_empty_title">No favorite groups</string>
+    <string name="rss_favorite_groups_empty_description">Favorite an article to see its group here.</string>
+    <string name="diagnostics_empty">No logs</string>
+    <string name="import_file_in_bookshelf">Already in bookshelf</string>
+    <string name="accessibility_expanded">Expanded</string>
+    <string name="accessibility_collapsed">Collapsed</string>
 </resources>

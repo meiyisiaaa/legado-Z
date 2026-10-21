@@ -22,6 +22,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,8 +49,9 @@ internal fun ImportBrowserContent(
     items: List<ImportBrowserItem>,
     emptyMessage: String,
     onItemClick: (Int) -> Unit,
-    onItemLongClick: (Int) -> Unit
+    onItemLongClick: ((Int) -> Unit)? = null
 ) {
+    val inBookshelfDescription = stringResource(R.string.import_file_in_bookshelf)
     if (items.isEmpty()) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -58,13 +65,24 @@ internal fun ImportBrowserContent(
         modifier = Modifier.fillMaxSize().padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        itemsIndexed(items) { index, item ->
+        itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
+            val selectable = !item.isDirectory && !item.inBookshelf
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp)
                     .combinedClickable(
+                        role = if (selectable) Role.Checkbox else Role.Button,
                         onClick = { onItemClick(index) },
-                        onLongClick = { onItemLongClick(index) }
-                    ),
+                        onLongClick = if (item.inBookshelf && onItemLongClick != null) {
+                            { onItemLongClick(index) }
+                        } else null
+                    )
+                    .semantics {
+                        if (selectable) {
+                            toggleableState = ToggleableState(item.selected)
+                        } else if (item.inBookshelf) {
+                            stateDescription = inBookshelfDescription
+                        }
+                    },
                 shape = RoundedCornerShape(18.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -87,7 +105,7 @@ internal fun ImportBrowserContent(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(26.dp)
                         )
-                        else -> Checkbox(checked = item.selected, onCheckedChange = { onItemClick(index) })
+                        else -> Checkbox(checked = item.selected, onCheckedChange = null)
                     }
                     Column(
                         modifier = Modifier.weight(1f).padding(start = 10.dp),

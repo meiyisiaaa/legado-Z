@@ -22,11 +22,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.entities.BookSourcePart
@@ -38,10 +43,12 @@ fun SourcePickerContent(
     isLoading: Boolean,
     hasError: Boolean,
     onQueryChange: (String) -> Unit,
+    onRetry: () -> Unit,
     onChangeDelay: () -> Unit,
     onSourceClick: (BookSourcePart) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val loadingLabel = stringResource(R.string.data_loading)
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -80,14 +87,22 @@ fun SourcePickerContent(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 isLoading -> CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center).size(30.dp),
+                    modifier = Modifier.align(Alignment.Center).size(30.dp).semantics {
+                        contentDescription = loadingLabel
+                    },
                     strokeWidth = 2.dp
                 )
-                hasError -> Text(
-                    text = stringResource(R.string.error_get_data),
+                hasError -> Column(
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(R.string.error_get_data),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                }
                 sources.isEmpty() -> Text(
                     text = stringResource(R.string.empty),
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),

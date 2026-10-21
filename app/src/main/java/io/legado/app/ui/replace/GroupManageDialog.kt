@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -135,13 +137,15 @@ private fun GroupManageContent(
     Column(modifier = modifier) {
         if (groups.isEmpty()) {
             Text(
-                "暂无分组",
+                stringResource(R.string.empty),
                 modifier = Modifier.padding(16.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             LazyColumn {
                 items(groups, key = { it }) { group ->
+                    val editLabel = stringResource(R.string.edit)
+                    val deleteLabel = stringResource(R.string.delete)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -153,10 +157,16 @@ private fun GroupManageContent(
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        TextButton(onClick = { onEdit(group) }) {
+                        TextButton(
+                            onClick = { onEdit(group) },
+                            modifier = Modifier.semantics { contentDescription = "$group, $editLabel" }
+                        ) {
                             Text(stringResource(R.string.edit))
                         }
-                        TextButton(onClick = { onDelete(group) }) {
+                        TextButton(
+                            onClick = { onDelete(group) },
+                            modifier = Modifier.semantics { contentDescription = "$group, $deleteLabel" }
+                        ) {
                             Text(stringResource(R.string.delete))
                         }
                     }

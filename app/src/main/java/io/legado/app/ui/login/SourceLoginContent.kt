@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,6 +101,7 @@ internal fun SourceLoginContent(
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                .semantics { liveRegion = LiveRegionMode.Polite }
                         )
                     }
                     FlowRow(
@@ -157,7 +160,11 @@ private fun LoginFieldContent(
             val hint = field.hint?.takeIf(String::isNotBlank)
             val error = field.error
             val placeholderContent: (@Composable () -> Unit)? = hint?.let { text -> { Text(text) } }
-            val supportingContent: (@Composable () -> Unit)? = error?.let { text -> { Text(text) } }
+            val supportingContent: (@Composable () -> Unit)? = error?.let { text ->
+                {
+                    Text(text, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                }
+            }
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -191,7 +198,9 @@ private fun LoginFieldContent(
                     OutlinedButton(
                         onClick = { expanded = true },
                         enabled = field.enabled && field.options.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+                            contentDescription = "${field.label}, $value"
+                        }
                     ) {
                         Text(
                             text = value,
@@ -211,7 +220,10 @@ private fun LoginFieldContent(
                         }
                     }
                 }
-                field.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                field.error?.let {
+                    Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
@@ -229,7 +241,10 @@ private fun LoginFieldContent(
                     modifier = Modifier.semantics { contentDescription = field.label }
                 )
             }
-            field.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            field.error?.let {
+                Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
         }
 
         field.type == RowUi.Type.toggle || field.type == RowUi.Type.button -> {

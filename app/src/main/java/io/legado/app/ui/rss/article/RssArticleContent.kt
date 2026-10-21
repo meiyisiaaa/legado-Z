@@ -48,6 +48,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import io.legado.app.R
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssStar
@@ -161,7 +166,13 @@ internal fun RssFavoriteListContent(
     modifier: Modifier = Modifier
 ) {
     if (favorites.isEmpty()) {
-        EmptyArticles(null, modifier)
+        EmptyArticles(
+            onRefresh = null,
+            modifier = modifier,
+            titleRes = R.string.rss_favorites_empty_title,
+            descriptionRes = R.string.rss_favorites_empty_description,
+            announceEmpty = false
+        )
     } else {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
@@ -190,10 +201,11 @@ private fun RssArticleCard(
 ) {
     val grid = articleStyle == 2 || articleStyle == 3 || articleStyle == 4
     val titleColor = if (article.read) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-    val clickModifier = if (onLongClick == null) Modifier.clickable(onClick = onClick) else Modifier.combinedClickable(
+    val clickModifier = if (onLongClick == null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier.combinedClickable(
         onClick = onClick,
         onLongClick = onLongClick,
-        onLongClickLabel = stringResource(R.string.delete)
+        onLongClickLabel = stringResource(R.string.delete),
+        role = Role.Button
     )
 
     if (articleStyle == 1) {
@@ -227,7 +239,7 @@ private fun RssArticleCard(
                     Box(imageModifier, contentAlignment = Alignment.Center) {
                         androidx.compose.foundation.Image(
                             painter = painterResource(R.drawable.image_rss_article),
-                            contentDescription = stringResource(R.string.img_cover),
+                            contentDescription = null,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -312,7 +324,7 @@ private fun RssArticleImage(url: String?, origin: String, modifier: Modifier) {
         factory = { ctx ->
             ImageView(ctx).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = ctx.getString(R.string.img_cover)
+                contentDescription = null
                 adjustViewBounds = true
                 clipToOutline = true
             }
@@ -339,20 +351,31 @@ private fun ArticleListFooter(
     error: String?,
     onLoadMore: (Boolean) -> Unit
 ) {
+    val loadingLabel = stringResource(R.string.loading)
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         when {
-            loading -> CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+            loading -> CircularProgressIndicator(
+                Modifier.size(22.dp).semantics { contentDescription = loadingLabel },
+                strokeWidth = 2.dp
+            )
             error != null -> {
-                Text(error.lineSequence().take(3).joinToString("\n"), color = MaterialTheme.colorScheme.error,
+                Text(error.lineSequence().take(3).joinToString("\n"),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 TextButton(onClick = { onLoadMore(true) }) { Text(stringResource(R.string.retry)) }
             }
-            hasMore -> TextButton(onClick = { onLoadMore(true) }) { Text("继续加载") }
-            else -> Text("没有更多文章", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            hasMore -> TextButton(onClick = { onLoadMore(true) }) { Text(stringResource(R.string.rss_load_more)) }
+            else -> Text(
+                stringResource(R.string.rss_no_more_articles),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -363,17 +386,32 @@ private fun LoadingArticles() {
         verticalArrangement = Arrangement.Center) {
         CircularProgressIndicator()
         Spacer(Modifier.height(14.dp))
-        Text(stringResource(R.string.loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            stringResource(R.string.loading),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
-private fun EmptyArticles(onRefresh: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun EmptyArticles(
+    onRefresh: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    titleRes: Int = R.string.rss_articles_empty_title,
+    descriptionRes: Int = R.string.rss_articles_empty_description,
+    announceEmpty: Boolean = true
+) {
     Column(modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
-        Text("暂无文章", style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(titleRes),
+            modifier = if (announceEmpty) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
+            style = MaterialTheme.typography.titleMedium
+        )
         Spacer(Modifier.height(8.dp))
-        Text("此分组暂时没有文章", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(descriptionRes), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (onRefresh != null) {
             Spacer(Modifier.height(12.dp))
             Button(onClick = onRefresh) { Text(stringResource(R.string.refresh)) }
@@ -385,7 +423,11 @@ private fun EmptyArticles(onRefresh: (() -> Unit)?, modifier: Modifier = Modifie
 private fun ArticleLoadError(error: String, onRefresh: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
-        Text("文章加载失败", style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.rss_articles_load_failed),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.titleMedium
+        )
         Spacer(Modifier.height(8.dp))
         Text(error.lineSequence().take(5).joinToString("\n"), color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall, maxLines = 7, overflow = TextOverflow.Ellipsis)

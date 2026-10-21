@@ -59,6 +59,7 @@ import io.legado.app.utils.startService
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.verificationField
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
@@ -83,8 +84,11 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private val exportTypes = arrayListOf("txt", "epub")
     private var books by mutableStateOf<List<Book>>(emptyList())
     private var booksLoaded by mutableStateOf(false)
+    private var booksLoadError by mutableStateOf<String?>(null)
+    private var groupLoadError by mutableStateOf<String?>(null)
     private var listRevision by mutableIntStateOf(0)
     private var booksFlowJob: Job? = null
+    private var groupFlowJob: Job? = null
     private var menu: Menu? = null
     private val groupList: ArrayList<BookGroup> = arrayListOf()
     private var groupId: Long = -1
@@ -117,12 +121,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         groupId = intent.getLongExtra("groupId", -1)
-        lifecycleScope.launch {
-            binding.titleBar.subtitle = withContext(IO) {
-                appDb.bookGroupDao.getByID(groupId)?.groupName
-                    ?: getString(R.string.no_group)
-            }
-        }
+        binding.titleBar.subtitle = getString(R.string.no_group)
         initComposeContent()
         initGroupData()
         initBookData()
@@ -223,8 +222,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             R.id.menu_export_charset -> showCharsetConfig()
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
             else -> if (item.groupId == R.id.menu_group) {
-                binding.titleBar.subtitle = item.title
-                groupId = appDb.bookGroupDao.getByName(item.title.toString())?.groupId ?: 0
+                val groupName = item.title.toString()
+                groupId = groupList.firstOrNull { it.groupName == groupName }?.groupId ?: 0
+                binding.titleBar.subtitle = groupName
                 initBookData()
             }
         }
@@ -253,7 +253,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                     onDownload = ::toggleBookCache,
                     onExport = ::export,
                     exportProgress = ::exportProgress,
-                    exportMessage = ::exportMsg
+                    exportMessage = ::exportMsg,
+                    loadError = groupLoadError ?: booksLoadError,
+                    onRetry = ::retryLoadData
                 )
             }
         }
@@ -268,6 +270,9 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     private fun initBookData() {
+        books = emptyList()
+        booksLoaded = false
+        booksLoadError = null
         booksFlowJob?.cancel()
         booksFlowJob = lifecycleScope.launch {
             appDb.bookDao.flowByGroup(groupId).map { books ->
@@ -289,10 +294,15 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 }
             }.flowWithLifecycleAndDatabaseChange(
                 lifecycle, table = AppDatabase.BOOK_TABLE_NAME
-            ).catch {
-                AppLog.put("缓存管理界面获取书籍列表失败\n${it.localizedMessage}", it)
-            }.flowOn(IO).conflate().collect { books ->
+            ).flowOn(IO).conflate().catch { error ->
+                if (error is CancellationException) throw error
+                AppLog.put("缓存管理界面获取书籍列表失败\n${error.localizedMessage}", error)
+                booksLoadError = error.localizedMessage?.takeIf(String::isNotBlank)
+                    ?: getString(R.string.error_get_data)
+                booksLoaded = true
+            }.collect { books ->
                 this@CacheActivity.books = books
+                booksLoadError = null
                 booksLoaded = true
                 listRevision++
                 viewModel.loadCacheFiles(books)
@@ -302,16 +312,30 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     @SuppressLint("NotifyDataSetChanged")
     private fun initGroupData() {
-        lifecycleScope.launch {
-            appDb.bookGroupDao.flowAll().catch {
+        groupFlowJob?.cancel()
+        groupLoadError = null
+        groupFlowJob = lifecycleScope.launch {
+            appDb.bookGroupDao.flowAll().flowOn(IO).conflate().catch {
+                if (it is CancellationException) throw it
                 AppLog.put("缓存管理界面获取分组数据失败\n${it.localizedMessage}", it)
-            }.flowOn(IO).conflate().collect {
+                groupLoadError = it.localizedMessage?.takeIf(String::isNotBlank)
+                    ?: getString(R.string.error_get_data)
+            }.collect {
                 groupList.clear()
                 groupList.addAll(it)
+                binding.titleBar.subtitle = groupList
+                    .firstOrNull { bookGroup -> bookGroup.groupId == groupId }
+                    ?.groupName ?: getString(R.string.no_group)
+                groupLoadError = null
                 listRevision++
                 upMenu()
             }
         }
+    }
+
+    private fun retryLoadData() {
+        initGroupData()
+        initBookData()
     }
 
     private fun notifyItemChanged(bookUrl: String) {

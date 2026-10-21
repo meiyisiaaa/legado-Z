@@ -141,8 +141,7 @@ class ImportBookActivity : BaseImportBookActivity<ImportBookViewModel>(),
                 ImportBrowserContent(
                     items = browserItems.value,
                     emptyMessage = androidx.compose.ui.res.stringResource(R.string.empty_msg_import_book),
-                    onItemClick = ::onBrowserItemClick,
-                    onItemLongClick = {}
+                    onItemClick = ::onBrowserItemClick
                 )
             }
         }

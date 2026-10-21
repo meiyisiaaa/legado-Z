@@ -1,6 +1,5 @@
 package io.legado.app.ui.rss.source.manage
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -15,8 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,6 +43,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -213,10 +215,12 @@ internal fun RssSourceManageContent(
         }
     ) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
+            val searchLabel = stringResource(R.string.search_rss_source)
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+                    .semantics { contentDescription = searchLabel },
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search_rss_source)) },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) }
@@ -235,7 +239,24 @@ internal fun RssSourceManageContent(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    items(sources, key = { it.sourceUrl }) { source ->
+                    itemsIndexed(sources, key = { _, source -> source.sourceUrl }) { sourceIndex, source ->
+                        val sourceLabel = source.getDisplayNameGroup()
+                        val moveUpLabel = stringResource(R.string.move_up)
+                        val moveDownLabel = stringResource(R.string.move_down)
+                        val reorderActions = buildList {
+                            sources.getOrNull(sourceIndex - 1)?.let { target ->
+                                add(CustomAccessibilityAction(moveUpLabel) {
+                                    onMove(source.sourceUrl, target.sourceUrl, false) {}
+                                    true
+                                })
+                            }
+                            sources.getOrNull(sourceIndex + 1)?.let { target ->
+                                add(CustomAccessibilityAction(moveDownLabel) {
+                                    onMove(source.sourceUrl, target.sourceUrl, true) {}
+                                    true
+                                })
+                            }
+                        }
                         val dragModifier = Modifier.pointerInput(source.sourceUrl, sources) {
                             var initialIndex = -1
                             var targetIndex = -1
@@ -282,20 +303,24 @@ internal fun RssSourceManageContent(
                             }
                         }
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).then(dragModifier),
+                            modifier = Modifier.fillMaxWidth()
+                                .toggleable(
+                                    value = source.sourceUrl in selectedUrls,
+                                    role = Role.Checkbox,
+                                    onValueChange = { onSelectionChange(source, it) }
+                                )
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .then(dragModifier),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
                                 checked = source.sourceUrl in selectedUrls,
-                                onCheckedChange = { onSelectionChange(source, it) }
+                                onCheckedChange = null,
+                                modifier = Modifier.semantics { customActions = reorderActions }
                             )
                             Text(
-                                text = source.getDisplayNameGroup(),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable(role = Role.Checkbox) {
-                                        onSelectionChange(source, source.sourceUrl !in selectedUrls)
-                                    },
+                                text = sourceLabel,
+                                modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyLarge,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -303,7 +328,9 @@ internal fun RssSourceManageContent(
                             Switch(
                                 checked = source.enabled,
                                 onCheckedChange = { onEnabledChange(source, it) },
-                                modifier = Modifier.semantics { contentDescription = enableLabel }
+                                modifier = Modifier.semantics {
+                                    contentDescription = "$enableLabel, $sourceLabel"
+                                }
                             )
                             IconButton(onClick = { onEdit(source) }, modifier = Modifier.size(40.dp)) {
                                 Icon(painterResource(R.drawable.ic_edit), contentDescription = stringResource(R.string.edit))

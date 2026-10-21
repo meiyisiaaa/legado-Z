@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 
@@ -37,9 +40,17 @@ internal fun MangaLoadingContent(state: MangaLoadingUiState, onRetry: () -> Unit
         ) {
             if (state.loading) {
                 if (state.showProgress) CircularProgressIndicator()
-                Text(stringResource(R.string.loading), color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    stringResource(R.string.loading),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             } else {
-                Text(state.message, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    state.message,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 if (state.showRetry) {
                     Button(onClick = onRetry) {
                         Text(stringResource(R.string.retry))

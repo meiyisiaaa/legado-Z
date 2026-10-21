@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -126,8 +131,12 @@ internal fun RuleSubContent(
                         typeLabel = typeLabels.getOrElse(item.type) { typeLabels.firstOrNull().orEmpty() },
                         menuExpanded = menuTarget == item.id,
                         isDragging = draggingIndex == index,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < subscriptions.lastIndex,
                         onOpen = { onOpen(item) },
                         onEdit = { onEdit(item) },
+                        onMoveUp = { onMove(index, index - 1); onDragFinished() },
+                        onMoveDown = { onMove(index, index + 1); onDragFinished() },
                         onMenu = { menuTarget = item.id },
                         onDismissMenu = { menuTarget = null },
                         onDelete = { menuTarget = null; onDelete(item) }
@@ -145,16 +154,27 @@ private fun RuleSubCard(
     typeLabel: String,
     menuExpanded: Boolean,
     isDragging: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onMenu: () -> Unit,
     onDismissMenu: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val moveUpLabel = stringResource(R.string.move_up)
+    val moveDownLabel = stringResource(R.string.move_down)
+    val accessibilityActions = buildList {
+        if (canMoveUp) add(CustomAccessibilityAction(moveUpLabel) { onMoveUp(); true })
+        if (canMoveDown) add(CustomAccessibilityAction(moveDownLabel) { onMoveDown(); true })
+    }
     Row(
         Modifier.fillMaxWidth()
+            .semantics(mergeDescendants = true) { customActions = accessibilityActions }
             .background(if (isDragging) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onOpen)
+            .clickable(role = Role.Button, onClick = onOpen)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -223,22 +243,38 @@ private fun RuleSubEditor(
                 }
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true)
                 OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("URL") }, singleLine = true)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = autoUpdate, onCheckedChange = {
-                        autoUpdate = it
-                        if (it && (interval.toIntOrNull() ?: 0) == 0) interval = "24"
-                        if (!it) {
-                            interval = "0"
-                            silentUpdate = false
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().toggleable(
+                        value = autoUpdate,
+                        role = Role.Checkbox,
+                        onValueChange = {
+                            autoUpdate = it
+                            if (it && (interval.toIntOrNull() ?: 0) == 0) interval = "24"
+                            if (!it) {
+                                interval = "0"
+                                silentUpdate = false
+                            }
                         }
-                    })
+                    )
+                ) {
+                    Checkbox(checked = autoUpdate, onCheckedChange = null)
                     Text(stringResource(R.string.auto_update), modifier = Modifier.weight(1f))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val silentUpdateEnabled = autoUpdate && interval.toIntOrNull() != 0
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().toggleable(
+                        value = silentUpdate,
+                        enabled = silentUpdateEnabled,
+                        role = Role.Checkbox,
+                        onValueChange = { silentUpdate = it }
+                    )
+                ) {
                     Checkbox(
                         checked = silentUpdate,
-                        enabled = autoUpdate && interval.toIntOrNull() != 0,
-                        onCheckedChange = { silentUpdate = it }
+                        enabled = silentUpdateEnabled,
+                        onCheckedChange = null
                     )
                     Text(stringResource(R.string.silent_update), modifier = Modifier.weight(1f))
                 }

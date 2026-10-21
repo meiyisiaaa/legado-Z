@@ -17,7 +17,7 @@
         >
           <PopCatalog @getContent="getContent" class="popup" />
           <template #reference>
-            <button class="tool-icon" type="button" aria-label="打开章节目录">
+            <button ref="catalogTrigger" class="tool-icon" type="button" aria-label="打开章节目录" :aria-expanded="popCataVisible">
               <el-icon><List /></el-icon><span class="icon-text">目录</span>
             </button>
           </template>
@@ -32,7 +32,7 @@
         >
           <read-settings class="popup" />
           <template #reference>
-            <button class="tool-icon" type="button" :disabled="noPoint" aria-label="阅读设置">
+            <button ref="settingsTrigger" class="tool-icon" type="button" :disabled="noPoint" aria-label="阅读设置" :aria-expanded="readSettingsVisible">
               <el-icon><Setting /></el-icon><span class="icon-text">设置</span>
             </button>
           </template>
@@ -76,7 +76,15 @@
         </button>
       </div>
     </nav>
-    <main class="chapter" ref="content" :style="chapterTheme">
+    <main class="chapter" ref="content" :style="chapterTheme" :aria-busy="isLoading">
+      <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {{ isLoading ? '正在获取章节内容…' : '' }}
+      </span>
+      <div v-if="catalogLoadError" class="chapter-error catalog-error" role="alert">
+        <strong>无法打开章节</strong>
+        <p>{{ catalogLoadError }}</p>
+        <button type="button" @click.stop="retryLoadReader">重试</button>
+      </div>
       <div class="content">
         <div class="top-bar" ref="top"></div>
         <div
@@ -85,6 +93,11 @@
           :chapterIndex="data.index"
           ref="chapter"
         >
+          <div v-if="showContent && data.error" class="chapter-error" role="alert">
+            <strong>{{ data.title }}</strong>
+            <p>{{ data.error }}</p>
+            <button type="button" :aria-label="`重试加载${data.title}`" @click.stop="getContent(data.index)">重试</button>
+          </div>
           <chapter-content
             ref="chapterRef"
             :chapterIndex="data.index"
@@ -94,7 +107,7 @@
             :fontSize="fontSize"
             :fontFamily="fontFamily"
             @readedLengthChange="onReadedLengthChange"
-            v-if="showContent"
+            v-if="showContent && !data.error"
           />
         </div>
         <div class="loading" ref="loading"></div>
@@ -289,10 +302,25 @@ const toShelf = () => {
 }
 
 // 获取章节内容
-const chapterData = ref<{ index: number; content: string[]; title: string }[]>(
-  [],
-)
+const chapterData = ref<{
+  index: number
+  content: string[]
+  title: string
+  error?: string
+}[]>([])
+const catalogLoadError = ref('')
 const noPoint = ref(true)
+const showChapterError = (index: number, title: string, error: string) => {
+  const chapter = chapterData.value.find(item => item.index === index)
+  if (chapter) {
+    chapter.content = []
+    chapter.error = error
+  } else {
+    chapterData.value.push({ index, content: [], title, error })
+  }
+  noPoint.value = false
+  store.setShowContent(true)
+}
 const getContent = (index: number, reloadChapter = true, chapterPos = 0) => {
   if (reloadChapter) {
     //展示进度条
@@ -306,7 +334,7 @@ const getContent = (index: number, reloadChapter = true, chapterPos = 0) => {
   const bookUrl = store.readingBook.bookUrl
   const { title, index: chapterIndex } = catalog.value[index]
 
-  loadingWrapper(
+  void loadingWrapper(
     API.getBookContent(bookUrl, chapterIndex).then(
       res => {
         if (res.data.isSuccess) {
@@ -315,25 +343,15 @@ const getContent = (index: number, reloadChapter = true, chapterPos = 0) => {
           chapterData.value.push({ index, content, title })
           if (reloadChapter) toChapterPos(chapterPos)
         } else {
-          ElMessage({ message: res.data.errorMsg, type: 'error' })
-          const content = [res.data.errorMsg]
-          chapterData.value.push({ index, content, title })
+          showChapterError(index, title, res.data.errorMsg || '获取章节内容失败，请重试。')
         }
         store.setContentLoading(true)
         noPoint.value = false
         store.setShowContent(true)
-        if (!res.data.isSuccess) {
-          throw res.data
-        }
       },
-      err => {
-        const content = ['获取章节内容失败！']
-        chapterData.value.push({ index, content, title })
-        store.setShowContent(true)
-        throw err
-      },
+      () => showChapterError(index, title, '获取章节内容失败，请检查阅读服务后重试。'),
     ),
-  )
+  ).catch(() => showChapterError(index, title, '章节内容无法读取，请重试。'))
 }
 
 // 章节进度跳转和计算
@@ -422,9 +440,17 @@ const toPreChapter = () => {
 }
 
 let canJump = true
+const catalogTrigger = ref<HTMLButtonElement>()
+const settingsTrigger = ref<HTMLButtonElement>()
+const isInteractiveKeyTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  target.closest(
+    'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="button"], [role="textbox"], [role="combobox"], [role="slider"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"], [role="option"]',
+  ) !== null
+
 // 监听方向键
 const handleKeyPress = (event: KeyboardEvent) => {
-  if (!canJump) return
+  if (!canJump || popCataVisible.value || readSettingsVisible.value || isInteractiveKeyTarget(event.target)) return
   switch (event.key) {
     case 'ArrowLeft':
       event.stopPropagation()
@@ -471,14 +497,73 @@ const handleKeyPress = (event: KeyboardEvent) => {
 
 // 阻止默认滚动事件
 const ignoreKeyPress = (event: KeyboardEvent) => {
-  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+  if (event.defaultPrevented || (event.target instanceof Element && event.target.closest('[role="dialog"]'))) return
+  if (event.key === 'Escape' && (popCataVisible.value || readSettingsVisible.value)) {
+    const trigger = readSettingsVisible.value ? settingsTrigger : catalogTrigger
+    readSettingsVisible.value = false
+    popCataVisible.value = false
+    event.preventDefault()
+    event.stopPropagation()
+    nextTick(() => trigger.value?.focus())
+    return
+  }
+  if (popCataVisible.value || readSettingsVisible.value) return
+  if (
+    !isInteractiveKeyTarget(event.target) &&
+    (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+  ) {
     event.preventDefault()
     event.stopPropagation()
   }
 }
 
-onMounted(async () => {
-  await store.loadWebConfig()
+let readerRequest: {
+  book: typeof store.readingBook
+  chapterIndex: number
+  chapterPos: number
+  name: string
+} | undefined
+
+const prepareReader = async ({ book, chapterIndex, chapterPos, name }: NonNullable<typeof readerRequest>) => {
+  catalogLoadError.value = ''
+  try {
+    let chapterTitle = ''
+    await loadingWrapper(
+      (async () => {
+        await store.loadWebConfig()
+        const chapters = await store.loadWebCatalog(book)
+        const currentChapter = chapters[chapterIndex]
+        if (!currentChapter) throw new Error('章节目录中没有当前章节')
+        chapterTitle = currentChapter.title
+      })(),
+    )
+    await nextTick()
+
+    store.setReadingBook(book)
+    getContent(chapterIndex, true, chapterPos)
+    window.addEventListener('keyup', handleKeyPress)
+    window.addEventListener('keydown', ignoreKeyPress)
+    // 兼容Safari < 14
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    //监听底部加载
+    scrollObserver?.disconnect()
+    scrollObserver = new IntersectionObserver(onReachBottom, {
+      rootMargin: '-100% 0% 20% 0%',
+    })
+    if (infiniteLoading.value === true) scrollObserver.observe(loading.value)
+    //第二次点击同一本书 页面标题不会变化
+    document.title = '...'
+    document.title = name + ' | ' + chapterTitle
+  } catch {
+    catalogLoadError.value = '目录或阅读配置加载失败，请检查阅读服务后重试。'
+  }
+}
+
+const retryLoadReader = () => {
+  if (readerRequest) void prepareReader(readerRequest)
+}
+
+onMounted(() => {
   //获取书籍数据
   const bookUrl = sessionStorage.getItem('bookUrl')
   const name = sessionStorage.getItem('bookName')
@@ -502,24 +587,8 @@ onMounted(async () => {
   }
   onResize()
   window.addEventListener('resize', onResize)
-  loadingWrapper(
-    store.loadWebCatalog(book).then(chapters => {
-      store.setReadingBook(book)
-      getContent(chapterIndex, true, chapterPos)
-      window.addEventListener('keyup', handleKeyPress)
-      window.addEventListener('keydown', ignoreKeyPress)
-      // 兼容Safari < 14
-      document.addEventListener('visibilitychange', onVisibilityChange)
-      //监听底部加载
-      scrollObserver = new IntersectionObserver(onReachBottom, {
-        rootMargin: '-100% 0% 20% 0%',
-      })
-      if (infiniteLoading.value === true) scrollObserver.observe(loading.value)
-      //第二次点击同一本书 页面标题不会变化
-      document.title = '...'
-      document.title = (name as string) + ' | ' + chapters[chapterIndex].title
-    }),
-  )
+  readerRequest = { book, chapterIndex, chapterPos, name: name as string }
+  void prepareReader(readerRequest)
 })
 
 onUnmounted(() => {
@@ -617,7 +686,6 @@ onBeforeRouteLeave(async (to, from, next) => {
         text-align: center;
         padding-top: 12px;
         cursor: pointer;
-        outline: none;
 
         .iconfont {
           font-family: iconfont;
@@ -652,7 +720,6 @@ onBeforeRouteLeave(async (to, from, next) => {
         text-align: center;
         align-items: center;
         cursor: pointer;
-        outline: none;
         margin-top: -1px;
 
         .iconfont {
@@ -792,11 +859,18 @@ onBeforeRouteLeave(async (to, from, next) => {
 .chapter-wrapper .tool-icon .el-icon{font-size:16px}
 .chapter-wrapper .tool-icon:hover:not(:disabled){border-color:var(--app-accent-line);color:var(--app-accent-strong);background:var(--app-accent-soft)}
 .chapter-wrapper .tool-icon:disabled{cursor:not-allowed;opacity:.48}
+.chapter-wrapper .tool-bar .tools .tool-icon,.chapter-wrapper .read-bar .tools .tool-icon{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:3px;padding:8px 6px;line-height:1.2}
+.chapter-wrapper .read-bar .tools .tool-icon{min-width:78px}
 .chapter-wrapper .chapter{color:var(--app-ink);font-family:'Microsoft YaHei',PingFangSC-Regular,HelveticaNeue-Light,'Helvetica Neue Light',sans-serif}
 .chapter-wrapper .chapter .content{color:inherit;font-size:18px;line-height:1.8}
+.chapter-error { margin: 24px 0; border: 1px solid var(--app-danger-line); border-radius: 8px; padding: 14px; color: var(--app-danger); background: var(--app-danger-surface); }
+.chapter-error p { margin: 8px 0 12px; }
+.chapter-error button { min-height: 36px; border: 1px solid var(--app-danger-line); border-radius: 6px; padding: 0 12px; color: var(--app-danger); background: var(--app-panel-raised); font: inherit; cursor: pointer; }
+.chapter-error button:hover { background: var(--app-danger-surface); }
 .day :deep(.tool-icon),.night :deep(.tool-icon){border-color:var(--app-line);color:var(--app-ink-soft)}
 .day :deep(.tool-icon .icon-text),.night :deep(.tool-icon .icon-text){color:var(--app-ink-muted)}
 .day :deep(.chapter),.night :deep(.chapter){border-color:var(--app-line);color:var(--app-ink)}
 .day :deep(.popup),.night :deep(.popup){box-shadow:var(--app-shadow-soft)}
 @media(max-width:776px){.chapter-wrapper .tool-icon{background:transparent}.chapter-wrapper .chapter{padding-bottom:70px}.chapter-wrapper .chapter .content .top-bar{height:24px}.chapter-wrapper .chapter .content .bottom-bar{height:70px}}
+@media(max-width:776px){.chapter-wrapper .tool-bar{padding-top:env(safe-area-inset-top)}.chapter-wrapper .read-bar{padding-bottom:env(safe-area-inset-bottom)}.chapter-wrapper .chapter{padding-bottom:calc(70px + env(safe-area-inset-bottom))}}
 </style>

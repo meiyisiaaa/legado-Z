@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -56,7 +59,7 @@ internal fun ReplaceRuleContent(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("暂无替换规则", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             Button(onClick = onAdd) {
                 Text(stringResource(R.string.add_replace_rule))
@@ -71,6 +74,11 @@ internal fun ReplaceRuleContent(
     ) {
         itemsIndexed(rules, key = { _, rule -> rule.id }) { index, rule ->
             var menuExpanded by remember(rule.id) { mutableStateOf(false) }
+            val ruleName = rule.getDisplayNameGroup()
+            val enableLabel = stringResource(R.string.enable)
+            val enabledState = stringResource(if (rule.isEnabled) R.string.enabled else R.string.disabled)
+            val editLabel = stringResource(R.string.edit)
+            val moreLabel = stringResource(R.string.more_menu)
             Column(Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
@@ -83,10 +91,10 @@ internal fun ReplaceRuleContent(
                     Checkbox(
                         checked = rule.id in selectedIds,
                         onCheckedChange = { onSelect(rule, it) },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp).semantics { contentDescription = ruleName }
                     )
                     Text(
-                        text = rule.getDisplayNameGroup(),
+                        text = ruleName,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge,
                         maxLines = 1,
@@ -94,19 +102,29 @@ internal fun ReplaceRuleContent(
                     )
                     Switch(
                         checked = rule.isEnabled,
-                        onCheckedChange = { onToggle(rule, it) }
+                        onCheckedChange = { onToggle(rule, it) },
+                        modifier = Modifier.semantics {
+                            contentDescription = "$ruleName, $enableLabel"
+                            stateDescription = enabledState
+                        }
                     )
-                    IconButton(onClick = { onEdit(rule) }, modifier = Modifier.size(48.dp)) {
+                    IconButton(
+                        onClick = { onEdit(rule) },
+                        modifier = Modifier.size(48.dp).semantics { contentDescription = "$ruleName, $editLabel" }
+                    ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),
-                            contentDescription = stringResource(R.string.edit)
+                            contentDescription = null
                         )
                     }
                     androidx.compose.foundation.layout.Box {
-                        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(48.dp).semantics { contentDescription = "$ruleName, $moreLabel" }
+                        ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_more_vert),
-                                contentDescription = stringResource(R.string.more_menu)
+                                contentDescription = null
                             )
                         }
                         DropdownMenu(
@@ -114,12 +132,12 @@ internal fun ReplaceRuleContent(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("上移") },
+                                text = { Text(stringResource(R.string.move_up)) },
                                 enabled = index > 0,
                                 onClick = { menuExpanded = false; onMove(rule, -1) }
                             )
                             DropdownMenuItem(
-                                text = { Text("下移") },
+                                text = { Text(stringResource(R.string.move_down)) },
                                 enabled = index < rules.lastIndex,
                                 onClick = { menuExpanded = false; onMove(rule, 1) }
                             )

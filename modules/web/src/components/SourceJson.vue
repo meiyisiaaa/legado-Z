@@ -1,6 +1,7 @@
 <template>
   <el-input
     id="source-json"
+    aria-label="当前源 JSON 草稿"
     v-model="sourceString"
     type="textarea"
     placeholder="这里是当前源的 JSON 草稿，可直接导入“阅读”APP"

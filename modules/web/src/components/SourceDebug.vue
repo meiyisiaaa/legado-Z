@@ -5,6 +5,7 @@
         v-if="isBookSource"
         id="debug-key"
         v-model="searchKey"
+        aria-label="搜索书名和作者"
         placeholder="搜索书名、作者"
         :prefix-icon="Search"
         @keydown.enter="runDebug"
@@ -25,7 +26,13 @@
       </div>
     </div>
 
-    <div class="debug-status" :class="{ 'is-active': store.isDebuging, 'has-error': debugStatus === '连接异常' || debugStatus === '运行失败' }">
+    <div
+      class="debug-status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      :class="{ 'is-active': store.isDebuging, 'has-error': debugStatus === '连接异常' || debugStatus === '运行失败' }"
+    >
       <span class="status-dot"></span>
       <span>{{ debugStatus }}</span>
       <span class="source-name">{{ store.currentSourceUrl || '尚未选择源' }}</span>

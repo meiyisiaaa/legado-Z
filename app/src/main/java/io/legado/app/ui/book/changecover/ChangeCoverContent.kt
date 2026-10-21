@@ -2,7 +2,6 @@ package io.legado.app.ui.book.changecover
 
 import android.widget.ImageView
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +30,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,7 +87,7 @@ internal fun ChangeCoverContent(
             }
             if (covers.isEmpty() && searchState != 1) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("没有找到可用封面", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.change_cover_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyVerticalGrid(
@@ -98,8 +98,7 @@ internal fun ChangeCoverContent(
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { onChoose(book.coverUrl.orEmpty()) }
-                                .focusable()
+                                .clickable(role = Role.Button) { onChoose(book.coverUrl.orEmpty()) }
                                 .padding(12.dp)
                         ) {
                             key(book.bookUrl, book.coverUrl, book.originName) {

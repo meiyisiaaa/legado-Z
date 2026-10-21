@@ -55,6 +55,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -250,6 +255,9 @@ private fun GroupManageRow(
     onShowChange: (Boolean) -> Unit
 ) {
     val displayName = group.getManageName(LocalContext.current)
+    val enableLabel = stringResource(R.string.enable)
+    val showState = stringResource(if (group.show) R.string.enabled else R.string.disabled)
+    val editLabel = stringResource(R.string.edit)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -275,8 +283,18 @@ private fun GroupManageRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = onEdit) { Text(stringResource(R.string.edit)) }
-            Switch(checked = group.show, onCheckedChange = onShowChange)
+            TextButton(
+                onClick = onEdit,
+                modifier = Modifier.semantics { contentDescription = "$displayName, $editLabel" }
+            ) { Text(editLabel) }
+            Switch(
+                checked = group.show,
+                onCheckedChange = onShowChange,
+                modifier = Modifier.semantics {
+                    contentDescription = "$displayName, $enableLabel"
+                    stateDescription = showState
+                }
+            )
         }
     }
 }
@@ -300,9 +318,17 @@ private fun GroupSelectRow(
             Modifier.fillMaxWidth().clickable { onSelected(!selected) }.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = selected, onCheckedChange = onSelected)
+            val editLabel = stringResource(R.string.edit)
+            Checkbox(
+                checked = selected,
+                onCheckedChange = onSelected,
+                modifier = Modifier.semantics { contentDescription = group.groupName }
+            )
             Text(group.groupName, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            TextButton(onClick = onEdit) { Text(stringResource(R.string.edit)) }
+            TextButton(
+                onClick = onEdit,
+                modifier = Modifier.semantics { contentDescription = "${group.groupName}, $editLabel" }
+            ) { Text(editLabel) }
         }
     }
 }
@@ -322,6 +348,8 @@ internal fun GroupEditContent(
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
     val sorts = stringArrayResource(R.array.book_sort)
+    val sortLabel = stringResource(R.string.sort)
+    val selectImageLabel = stringResource(R.string.select_image)
     val safeInitialSort = initialSort.takeIf { it + 1 in sorts.indices } ?: -1
     var sort by remember(initialSort) { mutableIntStateOf(safeInitialSort) }
     var enableRefresh by remember(initialEnableRefresh) { mutableStateOf(initialEnableRefresh) }
@@ -361,7 +389,11 @@ internal fun GroupEditContent(
         ) {
             Box(
                 Modifier.size(width = 90.dp, height = 120.dp)
-                    .clickable(onClick = onCoverClick),
+                    .clickable(onClick = onCoverClick)
+                    .semantics {
+                        contentDescription = selectImageLabel
+                        role = Role.Button
+                    },
                 contentAlignment = Alignment.Center
             ) { coverPreview() }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -374,10 +406,14 @@ internal fun GroupEditContent(
                     shape = RoundedCornerShape(14.dp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.sort), style = MaterialTheme.typography.labelLarge)
+                    Text(sortLabel, style = MaterialTheme.typography.labelLarge)
+                    val selectedSort = sorts.getOrElse(sort + 1) { sorts.first() }
                     Box {
-                        TextButton(onClick = { sortExpanded = true }) {
-                            Text(sorts.getOrElse(sort + 1) { sorts.first() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TextButton(
+                            onClick = { sortExpanded = true },
+                            modifier = Modifier.semantics { contentDescription = "$sortLabel, $selectedSort" }
+                        ) {
+                            Text(selectedSort, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
                             sorts.forEachIndexed { index, label ->
@@ -436,7 +472,11 @@ private fun GroupCheckRow(title: String, checked: Boolean, onCheckedChange: (Boo
         Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable { onCheckedChange(!checked) }.padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics { contentDescription = title }
+        )
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
     }
 }

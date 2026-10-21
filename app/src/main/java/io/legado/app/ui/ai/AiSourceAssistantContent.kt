@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -184,7 +189,8 @@ internal fun AiSourceAssistantContent(
                         Text(stringResource(R.string.ai_debug_trial_action))
                     }
                     debugTrialStatus?.takeIf(String::isNotBlank)?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     AssistantCheck(stringResource(R.string.ai_debug_include_logs), includeLogs) { includeLogs = it }
                     AssistantCheck(stringResource(R.string.ai_debug_include_html), includeHtml) { includeHtml = it }
@@ -205,6 +211,7 @@ internal fun AiSourceAssistantContent(
                     if (batchProgress.total > 0) {
                         Text(
                             stringResource(R.string.ai_batch_progress, batchProgress.completedCount, batchProgress.total, batchProgress.successCount, batchProgress.failedCount),
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                             style = MaterialTheme.typography.labelLarge
                         )
                         batchProgress.tasks.forEach { task ->
@@ -227,8 +234,12 @@ internal fun AiSourceAssistantContent(
                 enabled = !loading && !batchRunning,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (loading || batchRunning) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else Text(
+                if (loading || batchRunning) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(stringResource(R.string.loading))
+                    }
+                } else Text(
                     stringResource(
                         when (mode) {
                             AiSourceAssistantDialog.MODE_DEBUG -> R.string.ai_action_diagnose
@@ -266,8 +277,15 @@ private fun AssistantField(
 
 @Composable
 private fun AssistantCheck(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().toggleable(
+            value = checked,
+            role = Role.Checkbox,
+            onValueChange = onCheckedChange
+        )
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
         Text(label)
     }
 }

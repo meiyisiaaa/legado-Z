@@ -55,9 +55,11 @@ internal fun BookshelfOptionsContent(initial: BookshelfOptions, onChange: (Books
                 }
             }
         }
-        Text("${stringResource(R.string.margin)}  ${options.margin}", style = MaterialTheme.typography.titleSmall)
+        val marginLabel = stringResource(R.string.margin)
+        Text("$marginLabel  ${options.margin}", style = MaterialTheme.typography.titleSmall)
         Slider(options.margin.toFloat(), { update(options.copy(margin = it.toInt())) },
-            modifier = Modifier.semantics { contentDescription = "书架间距" }, valueRange = 0f..60f, steps = 59)
+            modifier = Modifier.semantics { contentDescription = marginLabel },
+            valueRange = 0f..60f, steps = 59)
     }
 }
 

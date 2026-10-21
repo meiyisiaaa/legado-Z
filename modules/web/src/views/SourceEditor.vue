@@ -19,6 +19,7 @@
           type="button"
           :disabled="!themeReady || isSavingTheme"
           :aria-label="isNight ? '切换到浅色主题' : '切换到深色主题'"
+          :aria-pressed="isNight"
           @click="toggleTheme"
         >{{ isNight ? '浅色主题' : '深色主题' }}</button>
         <router-link class="shelf-link" to="/">返回书架</router-link>

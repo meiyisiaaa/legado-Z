@@ -85,11 +85,13 @@ export const useBookStore = defineStore('book', {
             return y - x
           })
         } else {
-          if (errorMsg.includes('还没有添加小说') && this.shelf.length > 0) {
-            ElMessage.info('当前书架上的书籍已经被删除')
+          if (errorMsg.includes('还没有添加小说')) {
+            if (this.shelf.length > 0) ElMessage.info('当前书架上的书籍已经被删除')
             return (this.shelf = [])
           }
-          ElMessage.error(errorMsg ?? '后端返回格式错误！')
+          const message = errorMsg ?? '后端返回格式错误！'
+          if (this.shelf.length > 0) ElMessage.error(message)
+          throw new Error(message)
         }
         console.log('书架数据已更新')
         return this.shelf
@@ -98,6 +100,7 @@ export const useBookStore = defineStore('book', {
       if (this.shelf.length > 0) {
         // bookshelf data fetched before:do not await
         console.log('返回缓存书架数据')
+        void fetchBookshellf_promise.catch(() => {})
         return this.shelf
       } else {
         console.log('从阅读后端获取书架数据...')

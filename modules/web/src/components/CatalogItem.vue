@@ -1,14 +1,16 @@
 <template>
   <div class="wrapper">
-    <div
+    <button
       v-for="cata in catas"
       class="cata-text"
       :key="cata.url"
       :class="{ selected: isSelected(cata.index) }"
+      type="button"
+      :aria-current="isSelected(cata.index) ? 'true' : undefined"
       @click="gotoChapter(cata)"
     >
       {{ cata.title }}
-    </div>
+    </button>
   </div>
 </template>
 <script setup lang="ts">
@@ -42,10 +44,17 @@ const catas = computed(() => {
 
   .cata-text {
     width: 100%;
+    border: 0;
+    padding: 0;
     margin-right: 26px;
     overflow: hidden;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
     white-space: nowrap;
     text-overflow: ellipsis;
+    cursor: pointer;
   }
 }
 </style>

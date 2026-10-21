@@ -1257,4 +1257,24 @@
     <string name="auto_check_new_backup_t">自动检查新备份</string>
     <string name="auto_check_new_backup_s">打开软件时检查是否有新备份，有新备份时提示是否更新</string>
     <string name="sys_image_picker">系统图片选择器</string>
+    <string name="current_source">当前书源</string>
+    <string name="current_chapter">当前章节</string>
+    <string name="read_record_empty">暂无阅读记录</string>
+    <string name="more">更多</string>
+    <string name="move_up">上移</string>
+    <string name="move_down">下移</string>
+    <string name="change_cover_empty">没有找到可用封面</string>
+    <string name="rss_load_more">继续加载</string>
+    <string name="rss_no_more_articles">没有更多文章</string>
+    <string name="rss_articles_empty_title">暂无文章</string>
+    <string name="rss_articles_empty_description">此分组暂时没有文章。</string>
+    <string name="rss_favorites_empty_title">暂无收藏文章</string>
+    <string name="rss_favorites_empty_description">收藏文章后会显示在这里。</string>
+    <string name="rss_articles_load_failed">文章加载失败</string>
+    <string name="rss_favorite_groups_empty_title">暂无收藏分组</string>
+    <string name="rss_favorite_groups_empty_description">收藏文章后会显示在这里。</string>
+    <string name="diagnostics_empty">暂无日志</string>
+    <string name="import_file_in_bookshelf">已在书架</string>
+    <string name="accessibility_expanded">已展开</string>
+    <string name="accessibility_collapsed">已收起</string>
 </resources>

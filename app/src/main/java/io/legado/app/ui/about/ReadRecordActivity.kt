@@ -27,6 +27,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
@@ -45,7 +50,10 @@ import io.legado.app.utils.getInt
 import io.legado.app.utils.putInt
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -56,6 +64,9 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
     private var readRecords by mutableStateOf<List<ReadRecordShow>>(emptyList())
     private var totalReadingTime by mutableStateOf("0秒")
     private var isLoading by mutableStateOf(true)
+    private var loadError by mutableStateOf(false)
+    private var readRecordJob: Job? = null
+    private var totalReadingTimeLoaded = false
     private var sortMode
         get() = LocalConfig.getInt("readRecordSort")
         set(value) {
@@ -69,8 +80,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initView()
-        initAllTime()
-        initData()
+        initData(refreshTotalTime = true)
     }
 
     override fun onCompatCreateOptionsMenu(menu: android.view.Menu): Boolean {
@@ -93,19 +103,19 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             R.id.menu_sort_name -> {
                 sortMode = 0
                 item.isChecked = true
-                initData()
+                initData(searchView.query?.toString())
             }
 
             R.id.menu_sort_read_long -> {
                 sortMode = 1
                 item.isChecked = true
-                initData()
+                initData(searchView.query?.toString())
             }
 
             R.id.menu_sort_read_time -> {
                 sortMode = 2
                 item.isChecked = true
-                initData()
+                initData(searchView.query?.toString())
             }
 
             R.id.menu_enable_record -> {
@@ -126,6 +136,8 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
                     records = readRecords,
                     totalReadingTime = totalReadingTime,
                     loading = isLoading,
+                    loadError = loadError,
+                    onRetry = { initData(searchView.query?.toString(), refreshTotalTime = true) },
                     onClearAll = ::confirmClearAll,
                     onOpen = ::openRecord,
                     onDelete = ::confirmDelete
@@ -151,31 +163,42 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         })
     }
 
-    private fun initAllTime() {
-        lifecycleScope.launch {
-            val allTime = withContext(IO) {
-                appDb.readRecordDao.allTime
-            }
-            totalReadingTime = formatDuring(allTime)
-        }
-    }
-
-    private fun initData(searchKey: String? = null) {
+    private fun initData(searchKey: String? = null, refreshTotalTime: Boolean = false) {
+        readRecordJob?.cancel()
+        if (refreshTotalTime) totalReadingTimeLoaded = false
+        val loadTotalTime = !totalReadingTimeLoaded
         isLoading = true
-        lifecycleScope.launch {
-            val records = withContext(IO) {
-                appDb.readRecordDao.search(searchKey ?: "").let { rows ->
-                    when (sortMode) {
-                        1 -> rows.sortedByDescending { it.readTime }
-                        2 -> rows.sortedByDescending { it.lastRead }
-                        else -> rows.sortedWith { left, right ->
-                            left.bookName.cnCompare(right.bookName)
+        loadError = false
+        val requestedSortMode = sortMode
+        readRecordJob = lifecycleScope.launch {
+            try {
+                val (records, allTime) = withContext(IO) {
+                    val dao = appDb.readRecordDao
+                    val records = dao.search(searchKey.orEmpty()).let { rows ->
+                        when (requestedSortMode) {
+                            1 -> rows.sortedByDescending { it.readTime }
+                            2 -> rows.sortedByDescending { it.lastRead }
+                            else -> rows.sortedWith { left, right ->
+                                left.bookName.cnCompare(right.bookName)
+                            }
                         }
                     }
+                    records to if (loadTotalTime) dao.allTime else null
                 }
+                if (coroutineContext.isActive) {
+                    readRecords = records
+                    allTime?.let {
+                        totalReadingTime = formatDuring(it)
+                        totalReadingTimeLoaded = true
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (coroutineContext.isActive) loadError = true
+            } finally {
+                if (coroutineContext.isActive) isLoading = false
             }
-            readRecords = records
-            isLoading = false
         }
     }
 
@@ -196,8 +219,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         alert(R.string.delete, R.string.sure_del) {
             yesButton {
                 appDb.readRecordDao.clear()
-                initData()
-                initAllTime()
+                initData(refreshTotalTime = true)
             }
             noButton()
         }
@@ -208,8 +230,7 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             setMessage(getString(R.string.sure_del_any, record.bookName))
             yesButton {
                 appDb.readRecordDao.deleteByName(record.bookName)
-                initData(searchView.query?.toString())
-                initAllTime()
+                initData(searchView.query?.toString(), refreshTotalTime = true)
             }
             noButton()
         }
@@ -229,14 +250,17 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
 }
 
 @Composable
-private fun ReadRecordContent(
+internal fun ReadRecordContent(
     records: List<ReadRecordShow>,
     totalReadingTime: String,
     loading: Boolean,
+    loadError: Boolean,
+    onRetry: () -> Unit,
     onClearAll: () -> Unit,
     onOpen: (ReadRecordShow) -> Unit,
     onDelete: (ReadRecordShow) -> Unit
 ) {
+    val loadingDescription = stringResource(R.string.loading)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -269,7 +293,7 @@ private fun ReadRecordContent(
                 }
                 TextButton(
                     onClick = onClearAll,
-                    enabled = records.isNotEmpty(),
+                    enabled = !loading && records.isNotEmpty(),
                     modifier = Modifier.padding(horizontal = 6.dp)
                 ) {
                     Text(stringResource(R.string.clear))
@@ -277,7 +301,26 @@ private fun ReadRecordContent(
             }
         }
         when {
-            loading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            loading -> LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = loadingDescription }
+            )
+            loadError -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.error_get_data),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = onRetry) {
+                    Text(stringResource(R.string.retry))
+                }
+            }
             records.isEmpty() -> Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -286,7 +329,8 @@ private fun ReadRecordContent(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = stringResource(R.string.empty),
+                    text = stringResource(R.string.read_record_empty),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -321,7 +365,7 @@ private fun ReadRecordRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOpen(record) }
+            .clickable(role = Role.Button) { onOpen(record) }
             .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -32,49 +32,75 @@
         <div class="recent-wrapper">
           <div class="recent-title">最近阅读</div>
           <div class="reading-recent">
-            <el-tag
+            <el-button
+              plain
               :type="readingRecent.name === '尚无阅读记录' ? 'warning' : 'primary'"
               class="recent-book"
               size="large"
-              :class="{ 'no-point': !readingRecent.bookUrl }"
+              :disabled="!readingRecent.bookUrl"
+              :aria-label="readingRecent.bookUrl ? `继续阅读《${readingRecent.name}》` : '尚无阅读记录'"
               @click="toDetail(readingRecent.bookUrl, readingRecent.name, readingRecent.author, readingRecent.chapterIndex, readingRecent.chapterPos, readingRecent.isSeachBook, true)"
-            >{{ readingRecent.name }}</el-tag>
+            >{{ readingRecent.name }}</el-button>
           </div>
         </div>
         <div class="setting-wrapper">
           <div class="setting-title">基本设定</div>
           <div class="setting-item">
-            <el-tag
+            <el-button
+              plain
               :type="connectType"
-              size="large"
+              size="small"
               class="setting-connect"
-              :class="{ 'no-point': newConnect }"
+              :disabled="newConnect"
+              :aria-label="`阅读服务连接状态：${connectStatus}。点击修改服务地址`"
               @click="setLegadoRetmoteUrl"
-            >{{ connectStatus }}</el-tag>
+            >{{ connectStatus }}</el-button>
           </div>
-          <button class="setting-theme" type="button" :disabled="!themeReady || isSavingTheme" @click="toggleTheme">
+          <button
+            class="setting-theme"
+            type="button"
+            :disabled="!themeReady || isSavingTheme"
+            :aria-label="isNight ? '切换到浅色主题' : '切换到深色主题'"
+            :aria-pressed="isNight"
+            @click="toggleTheme"
+          >
             {{ isNight ? '浅色主题' : '深色主题' }}
           </button>
         </div>
       </div>
       <div class="bottom-icons">
-        <a href="https://github.com/gedoor/legado_web_bookshelf" target="_blank" rel="noreferrer">
+        <a
+          href="https://github.com/gedoor/legado_web_bookshelf"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="打开 legado Web 书架 GitHub 项目（新标签页）"
+        >
           <div class="bottom-icon"><img :src="githubUrl" alt="" /></div>
         </a>
       </div>
     </aside>
-    <main class="shelf-wrapper" ref="shelfWrapper" aria-live="polite">
+    <main class="shelf-wrapper" ref="shelfWrapper" :aria-busy="isLoading || isSavingBook">
       <header class="shelf-heading">
         <h1>{{ isSearching ? '搜索结果' : '我的书架' }}</h1>
         <span>{{ isSearching ? '在线书源' : books.length + ' 本藏书' }}</span>
       </header>
-      <div v-if="searchError" class="shelf-error" role="alert">
+      <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ shelfStatus }}</span>
+      <div v-if="shelfLoadError" class="shelf-error" role="alert">
+        <span>{{ shelfLoadError }}</span><el-button text @click="loadingWrapper(loadShelf())">重试</el-button>
+      </div>
+      <div v-else-if="searchError" class="shelf-error" role="alert">
         <span>{{ searchError }}</span><el-button text @click="searchBook">重试</el-button>
       </div>
-      <div v-if="!isLoading && books.length === 0 && !searchError" class="shelf-empty">
+      <div v-else-if="!isLoading && books.length === 0" class="shelf-empty" role="status">
         {{ isSearching ? '没有可添加的新书。书架已有的匹配书不会重复显示，可返回书架查看。' : searchWord ? '书架中没有匹配藏书。' : '书架还空着，请搜索一本书开始阅读。' }}
       </div>
-      <book-items v-else :books="books" @bookClick="handleBookClick" :isSearch="isSearching" />
+      <book-items
+        v-else
+        :books="books"
+        :saving-book-url="savingBookUrl"
+        @bookClick="handleBookClick"
+        :isSearch="isSearching"
+      />
     </main>
   </div>
 </template>
@@ -136,8 +162,27 @@ const shelf = computed(() => store.shelf)
 const searchWord = ref('')
 const isSearching = ref(false)
 const searchError = ref('')
+const shelfLoadError = ref('')
+const shelfOperationStarted = ref(false)
+const savingBookUrl = ref('')
+const isSavingBook = computed(() => savingBookUrl.value !== '')
 let activeSearch: SocketTask | undefined
 let searchGeneration = 0
+
+const shelfStatus = computed(() => {
+  if (!shelfOperationStarted.value) return ''
+  if (isLoading.value) {
+    return isSavingBook.value
+      ? '正在将书籍加入书架…'
+      : isSearching.value
+        ? '正在在线搜索书籍…'
+        : '正在加载书架…'
+  }
+  if (searchError.value || shelfLoadError.value) return ''
+  return isSearching.value
+    ? `搜索完成，共找到 ${books.value.length} 本书。`
+    : `书架已加载，共 ${books.value.length} 本书。`
+})
 
 const cancelSearch = (restoreShelf = false) => {
   searchGeneration += 1
@@ -174,6 +219,7 @@ watchEffect(() => {
 const searchBook = () => {
   const query = searchWord.value.trim()
   if (!query) return
+  shelfOperationStarted.value = true
   cancelSearch()
   books.value = []
   store.clearSearchBooks()
@@ -241,7 +287,13 @@ const setLegadoRetmoteUrl = () => {
               } else {
                 localStorage.setItem(baseURL_localStorage_key, url)
               }
-              store.loadBookShelf()
+              shelfOperationStarted.value = true
+              shelfLoadError.value = ''
+              void loadingWrapper(
+                store.loadBookShelf().catch(() => {
+                  shelfLoadError.value = '书架加载失败，请检查阅读服务后重试。'
+                }),
+              )
               done()
             })
             .catch(function (error) {
@@ -267,10 +319,23 @@ const openSourceEditor = (route: 'bookSource' | 'rssSource') => {
 }
 
 const handleBookClick = async (book: SeachBook | Book) => {
+  if (isSavingBook.value) return
   // 判断是否为 searchBook
   const isSeachBook = 'respondTime' in book
   if (isSeachBook) {
-    await API.saveBook(book)
+    savingBookUrl.value = book.bookUrl
+    try {
+      const { data } = await API.saveBook(book)
+      if (!data.isSuccess) {
+        ElMessage.error(data.errorMsg || '加入书架失败，请重试。')
+        return
+      }
+    } catch {
+      ElMessage.error('加入书架失败，请检查阅读服务后重试。')
+      return
+    } finally {
+      savingBookUrl.value = ''
+    }
   }
   const {
     bookUrl,
@@ -324,14 +389,20 @@ const toDetail = (
 }
 
 const loadShelf = async () => {
+  shelfOperationStarted.value = true
+  shelfLoadError.value = ''
   try {
-    await store.loadWebConfig()
-  } finally {
-    markThemeReady()
+    try {
+      await store.loadWebConfig()
+    } finally {
+      markThemeReady()
+    }
+    await store.saveBookProgress()
+    //确保各种网络情况下同步请求先完成
+    await store.loadBookShelf()
+  } catch {
+    shelfLoadError.value = '书架加载失败，请检查阅读服务后重试。'
   }
-  await store.saveBookProgress()
-  //确保各种网络情况下同步请求先完成
-  await store.loadBookShelf()
 }
 
 onMounted(() => {
@@ -407,6 +478,7 @@ onBeforeUnmount(() => cancelSearch())
         margin: 18px 0;
 
         .recent-book {
+          max-width: 100%;
           font-size: 10px;
           /*           // font-weight: 400;
           // margin: 12px 0;
@@ -432,6 +504,7 @@ onBeforeUnmount(() => cancelSearch())
       }
 
       .setting-connect {
+        max-width: 100%;
         font-size: 8px;
         margin-top: 16px;
         /*         // color: #6B7C87; */
@@ -526,9 +599,6 @@ onBeforeUnmount(() => cancelSearch())
       padding: 0;
       flex-grow: 1;
 
-      :deep(.el-loading-spinner) {
-        display: none;
-      }
     }
   }
 }

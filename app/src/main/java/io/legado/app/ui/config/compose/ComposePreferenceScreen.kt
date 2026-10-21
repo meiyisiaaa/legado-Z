@@ -420,7 +420,11 @@ private fun SeekBarPreferenceRow(
                 },
                 valueRange = preference.minValue.toFloat()..preference.maxValue.toFloat(),
                 enabled = preference.isEnabled && preference.maxValue > preference.minValue,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).semantics {
+                    preference.title?.toString()?.takeIf { it.isNotBlank() }?.let {
+                        contentDescription = it
+                    }
+                }
             )
             IconButton(
                 onClick = {

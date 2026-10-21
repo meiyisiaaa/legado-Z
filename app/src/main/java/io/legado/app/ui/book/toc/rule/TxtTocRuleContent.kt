@@ -49,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -310,6 +313,10 @@ private fun TxtTocRuleRow(
     onMoveBottom: () -> Unit
 ) {
     var menuExpanded by remember(rule.id) { mutableStateOf(false) }
+    val enableLabel = stringResource(R.string.enable)
+    val enabledState = stringResource(if (rule.enable) R.string.enabled else R.string.disabled)
+    val editLabel = stringResource(R.string.edit)
+    val moreLabel = stringResource(R.string.more_menu)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -322,9 +329,17 @@ private fun TxtTocRuleRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selectionMode) {
-                Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    modifier = Modifier.semantics { contentDescription = rule.name }
+                )
             } else {
-                RadioButton(selected = checked, onClick = { onCheckedChange(true) })
+                RadioButton(
+                    selected = checked,
+                    onClick = { onCheckedChange(true) },
+                    modifier = Modifier.semantics { contentDescription = rule.name }
+                )
             }
             Column(Modifier.weight(1f).clickable { onCheckedChange(!checked) }.padding(vertical = 4.dp)) {
                 Text(rule.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -332,13 +347,26 @@ private fun TxtTocRuleRow(
                     Text(rule.example.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Switch(checked = rule.enable, onCheckedChange = onToggleEnabled)
-            IconButton(onClick = onEdit) {
-                Icon(painterResource(R.drawable.ic_edit), contentDescription = stringResource(R.string.edit))
+            Switch(
+                checked = rule.enable,
+                onCheckedChange = onToggleEnabled,
+                modifier = Modifier.semantics {
+                    contentDescription = "${rule.name}, $enableLabel"
+                    stateDescription = enabledState
+                }
+            )
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.semantics { contentDescription = "${rule.name}, $editLabel" }
+            ) {
+                Icon(painterResource(R.drawable.ic_edit), contentDescription = null)
             }
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.more_menu))
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.semantics { contentDescription = "${rule.name}, $moreLabel" }
+                ) {
+                    Icon(painterResource(R.drawable.ic_more_vert), contentDescription = null)
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.to_top)) }, onClick = { menuExpanded = false; onMoveTop() })
@@ -378,12 +406,18 @@ private fun RuleSelectionBar(
     onExport: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    val selectAllLabel = stringResource(R.string.select_all)
     Surface(Modifier.fillMaxWidth().navigationBarsPadding(), color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = allSelected, onCheckedChange = onSelectAll, enabled = totalCount > 0)
+            Checkbox(
+                checked = allSelected,
+                onCheckedChange = onSelectAll,
+                enabled = totalCount > 0,
+                modifier = Modifier.semantics { contentDescription = selectAllLabel }
+            )
             Text(
                 text = stringResource(if (allSelected) R.string.select_cancel_count else R.string.select_all_count, selectedCount, totalCount),
                 modifier = Modifier.weight(1f).clickable(enabled = totalCount > 0) { onSelectAll(!allSelected) },

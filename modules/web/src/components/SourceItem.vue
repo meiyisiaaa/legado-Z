@@ -1,24 +1,29 @@
 <template>
-  <el-checkbox
+  <div
     class="source-choice"
-    size="large"
-    border
-    :value="sourceUrl"
     :class="{
       error: isSaveError,
       edit: sourceUrl == currentSourceUrl,
     }"
   >
-    <span class="source-indicator" :class="{ 'is-error': isSaveError, 'is-current': sourceUrl == currentSourceUrl }" aria-hidden="true"></span>
-    <span class="source-name">{{ getSourceName(source) }}</span>
-    <el-tag v-if="isSaveError" size="small" type="danger" effect="plain">未推送</el-tag>
+    <el-checkbox
+      class="source-selection"
+      size="large"
+      :value="sourceUrl"
+      :aria-current="sourceUrl == currentSourceUrl ? 'true' : undefined"
+    >
+      <span class="source-indicator" :class="{ 'is-error': isSaveError, 'is-current': sourceUrl == currentSourceUrl }" aria-hidden="true"></span>
+      <span class="source-name">{{ getSourceName(source) }}</span>
+      <el-tag v-if="isSaveError" size="small" type="danger" effect="plain">未推送</el-tag>
+    </el-checkbox>
     <el-button
       text
       :icon="Edit"
       :aria-label="`编辑${getSourceName(source)}`"
+      :aria-current="sourceUrl == currentSourceUrl ? 'true' : undefined"
       @click.stop="handleSourceClick(source)"
     />
-  </el-checkbox>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -45,22 +50,43 @@ const isSaveError = computed(() => {
 })
 </script>
 <style lang="scss" scoped>
-:deep(.el-checkbox__label) {
-  flex: 1;
+.source-choice {
+  width: 100%;
+  min-height: 44px;
   display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  padding: 0 8px;
+  background: var(--app-panel-raised);
+}
+
+.source-choice:focus-within {
+  border-color: var(--app-accent-line);
+  box-shadow: 0 0 0 3px var(--app-focus-ring);
+}
+
+.source-choice :deep(.source-selection) {
+  min-height: 44px;
   min-width: 0;
+  display: flex;
+  flex: 1;
+  margin: 0;
+}
+
+.source-choice :deep(.el-checkbox__input) {
+  flex: none;
+}
+
+.source-choice :deep(.el-checkbox__label) {
+  min-width: 0;
+  display: flex;
+  flex: 1;
   align-items: center;
   gap: 8px;
   color: var(--app-ink-soft);
   font-size: 12px;
-}
-
-.source-choice {
-  width: 100%;
-  min-height: 42px;
-  border-color: var(--app-line);
-  border-radius: 9px;
-  background: var(--app-panel-raised);
 }
 
 .source-name {
@@ -96,8 +122,10 @@ const isSaveError = computed(() => {
 }
 
 .source-choice :deep(.el-button) {
+  min-width: 44px;
+  min-height: 44px;
   flex: none;
-  margin-left: auto;
+  margin: 0;
 }
 
 .source-choice:hover {

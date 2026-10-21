@@ -93,7 +93,8 @@ internal fun LegadoDetailSlider(
                     onValueChangeFinished()
                 }
             },
-            modifier = Modifier.size(36.dp)
+            enabled = clampedValue > 0,
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_reduce),
@@ -118,7 +119,8 @@ internal fun LegadoDetailSlider(
                     onValueChangeFinished()
                 }
             },
-            modifier = Modifier.size(36.dp)
+            enabled = clampedValue < max,
+            modifier = Modifier.size(48.dp)
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_add),

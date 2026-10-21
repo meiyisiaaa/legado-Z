@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -89,16 +91,24 @@ class GroupManageDialog : BaseDialogFragment(R.layout.dialog_recycler_view) {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(groups, key = { it }) { group ->
+                                val editLabel = stringResource(R.string.edit)
+                                val deleteLabel = stringResource(R.string.delete)
                                 Column(Modifier.fillMaxWidth()) {
                                     Row(
                                         Modifier.fillMaxWidth().padding(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(group, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                                        TextButton(onClick = { input = group; editingGroup = group }) {
+                                        TextButton(
+                                            onClick = { input = group; editingGroup = group },
+                                            modifier = Modifier.semantics { contentDescription = "$group, $editLabel" }
+                                        ) {
                                             Text(stringResource(R.string.edit))
                                         }
-                                        TextButton(onClick = { viewModel.delGroup(group) }) {
+                                        TextButton(
+                                            onClick = { viewModel.delGroup(group) },
+                                            modifier = Modifier.semantics { contentDescription = "$group, $deleteLabel" }
+                                        ) {
                                             Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                                         }
                                     }

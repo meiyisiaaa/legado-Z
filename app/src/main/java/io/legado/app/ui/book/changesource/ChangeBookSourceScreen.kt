@@ -30,6 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,10 +109,13 @@ internal fun ChangeSourceCard(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(
-            onClick = onClick,
-            onLongClick = { menuExpanded = true }
-        ),
+        modifier = Modifier.fillMaxWidth()
+            .semantics { this.selected = selected }
+            .combinedClickable(
+                role = Role.RadioButton,
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            ),
         shape = RoundedCornerShape(17.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -127,7 +133,7 @@ internal fun ChangeSourceCard(
                 )
                 if (selected) {
                     Text(
-                        "Current source",
+                        stringResource(R.string.current_source),
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.labelMedium
                     )
@@ -158,14 +164,20 @@ internal fun ChangeSourceCard(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onSetScore(if (score > 0) 0 else 1) }) {
-                    Text(if (score > 0) "Recommended ✓" else "Recommend")
+                TextButton(
+                    onClick = { onSetScore(if (score > 0) 0 else 1) },
+                    modifier = Modifier.semantics { this.selected = score > 0 }
+                ) {
+                    Text(stringResource(R.string.like_source) + if (score > 0) " ✓" else "")
                 }
-                TextButton(onClick = { onSetScore(if (score < 0) 0 else -1) }) {
-                    Text(if (score < 0) "Not recommended ✓" else "Not recommended")
+                TextButton(
+                    onClick = { onSetScore(if (score < 0) 0 else -1) },
+                    modifier = Modifier.semantics { this.selected = score < 0 }
+                ) {
+                    Text(stringResource(R.string.not_like_source) + if (score < 0) " ✓" else "")
                 }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { menuExpanded = true }) { Text("More") }
+                TextButton(onClick = { menuExpanded = true }) { Text(stringResource(R.string.more)) }
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.to_top)) }, onClick = { menuExpanded = false; onTop() })

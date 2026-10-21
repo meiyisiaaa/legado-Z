@@ -58,6 +58,7 @@ class SourcePickerDialog : BaseDialogFragment(R.layout.dialog_source_picker_comp
                             initData(it)
                         },
                         onChangeDelay = ::showChangeDelay,
+                        onRetry = { initData(query) },
                         onSourceClick = ::chooseSource
                     )
                 }

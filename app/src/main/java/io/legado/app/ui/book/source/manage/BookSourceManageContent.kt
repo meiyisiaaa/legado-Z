@@ -43,8 +43,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -95,7 +98,7 @@ internal fun BookSourceManageContent(
     remember(selectionVersion) { selectedUrls.size }
     val listState = rememberLazyListState()
     val allSelected = sources.isNotEmpty() && selectedUrls.size >= sources.size
-    val enableLabel = stringResource(R.string.enable)
+    val selectAllLabel = stringResource(R.string.select_all)
 
     Scaffold(
         topBar = {
@@ -206,13 +209,14 @@ internal fun BookSourceManageContent(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(
-                    modifier = Modifier.weight(1f).semantics { contentDescription = enableLabel },
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
                         checked = allSelected,
                         onCheckedChange = { if (it) onSelectAll() else onRevertSelection() },
-                        enabled = sources.isNotEmpty()
+                        enabled = sources.isNotEmpty(),
+                        modifier = Modifier.semantics { contentDescription = selectAllLabel }
                     )
                     Text(
                         text = stringResource(
@@ -396,6 +400,10 @@ private fun BookSourceRow(
 ) {
     val loginLabel = stringResource(R.string.login)
     val enableLabel = stringResource(R.string.enable)
+    val enabledState = stringResource(if (source.enabled) R.string.enabled else R.string.disabled)
+    val sourceName = source.getDisPlayNameGroup()
+    val editLabel = stringResource(R.string.edit)
+    val moreLabel = stringResource(R.string.more_menu)
     val enableExploreLabel = stringResource(if (source.enabledExplore) R.string.disable_explore else R.string.enable_explore)
     val finalCheckMessage = debugMessage?.contains(Regex("成功|失败")) == true
     val moveModifier = if (canMove) {
@@ -441,9 +449,13 @@ private fun BookSourceRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp).then(moveModifier),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = selected, onCheckedChange = onSelected)
+            Checkbox(
+                checked = selected,
+                onCheckedChange = onSelected,
+                modifier = Modifier.semantics { contentDescription = sourceName }
+            )
             Text(
-                text = source.getDisPlayNameGroup(),
+                text = sourceName,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
@@ -452,14 +464,23 @@ private fun BookSourceRow(
             Switch(
                 checked = source.enabled,
                 onCheckedChange = onEnabled,
-                modifier = Modifier.semantics { contentDescription = enableLabel }
+                modifier = Modifier.semantics {
+                    contentDescription = "$sourceName, $enableLabel"
+                    stateDescription = enabledState
+                }
             )
-            IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
-                Icon(painterResource(R.drawable.ic_edit), contentDescription = stringResource(R.string.edit))
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(40.dp).semantics { contentDescription = "$sourceName, $editLabel" }
+            ) {
+                Icon(painterResource(R.drawable.ic_edit), contentDescription = null)
             }
             Box {
-                IconButton(onClick = onMenu, modifier = Modifier.size(40.dp)) {
-                    Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.more_menu))
+                IconButton(
+                    onClick = onMenu,
+                    modifier = Modifier.size(40.dp).semantics { contentDescription = "$sourceName, $moreLabel" }
+                ) {
+                    Icon(painterResource(R.drawable.ic_more_vert), contentDescription = null)
                 }
                 if (source.hasExploreUrl) {
                     Box(
@@ -502,7 +523,13 @@ private fun BookSourceRow(
             ) {
                 Text(
                     text = debugMessage,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).semantics {
+                        liveRegion = if (finalCheckMessage && debugMessage.contains("失败")) {
+                            LiveRegionMode.Assertive
+                        } else {
+                            LiveRegionMode.Polite
+                        }
+                    },
                     color = if (finalCheckMessage && debugMessage.contains("失败")) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,

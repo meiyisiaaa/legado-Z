@@ -48,10 +48,13 @@ const getReadConfig = async (http_url = legado_http_entry_point) => {
     baseURL: http_url.toString(),
     timeout: 3000,
   })
-  if (data.isSuccess) {
-    try {
-      return JSON.parse(data.data) as webReadConfig
-    } catch {}
+  if (!data.isSuccess) {
+    throw new Error(data.errorMsg || '阅读配置加载失败')
+  }
+  try {
+    return JSON.parse(data.data) as webReadConfig
+  } catch {
+    throw new Error('阅读配置数据格式错误')
   }
 }
 const saveReadConfig = (config: webReadConfig) =>

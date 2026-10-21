@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -91,14 +94,18 @@ internal fun RssFavoritesContent(
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (groups.size > 1) {
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).selectableGroup(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     groups.forEachIndexed { index, group ->
                         val selected = index == selectedIndex
                         Surface(
-                            onClick = { onSelectGroup(index) },
+                            modifier = Modifier.selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { onSelectGroup(index) }
+                            ),
                             shape = RoundedCornerShape(20.dp),
                             color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                             contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -117,8 +124,9 @@ internal fun RssFavoritesContent(
             }
             if (groups.isEmpty()) {
                 Column(Modifier.fillMaxSize().padding(28.dp)) {
-                    Text("暂无收藏分组", style = MaterialTheme.typography.titleMedium)
-                    Text("收藏文章后会显示在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.rss_favorite_groups_empty_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.rss_favorite_groups_empty_description),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 AndroidView(factory = { pager }, modifier = Modifier.weight(1f).fillMaxWidth())

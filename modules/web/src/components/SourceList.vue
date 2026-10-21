@@ -9,7 +9,9 @@
         aria-label="筛选源列表"
         clearable
       />
-      <span class="source-count">{{ sourcesFiltered.length }} / {{ sources.length }}</span>
+      <span class="source-count" role="status" aria-live="polite" aria-atomic="true">
+        {{ sourcesFiltered.length }} / {{ sources.length }}
+      </span>
     </div>
     <div class="tool">
       <el-button @click="importSourceFile" :icon="Folder">导入</el-button>
@@ -28,7 +30,8 @@
         type="danger"
         :icon="Delete"
         @click="deleteSelectSources"
-        :disabled="sourceSelect.length === 0"
+        :disabled="sourceSelect.length === 0 || isDeleting"
+        :loading="isDeleting"
       >删除所选 {{ sourceSelect.length ? `(${sourceSelect.length})` : '' }}</el-button>
       <el-button
         type="danger"
@@ -38,7 +41,7 @@
         :disabled="sources.length === 0"
       >清空暂存</el-button>
     </div>
-    <div v-if="sourcesFiltered.length === 0" class="list-empty">
+    <div v-if="sourcesFiltered.length === 0" class="list-empty" role="status">
       <el-icon><Search /></el-icon>
       <span>{{ sources.length ? '没有匹配的源' : '还没有加载源' }}</span>
       <small>{{ sources.length ? '试试缩短筛选词。' : '使用“拉取源”加载服务中的书源或订阅源。' }}</small>
@@ -71,6 +74,7 @@ import type { Source } from '@/source'
 const store = useSourceStore()
 const sourceUrlSelect = ref<string[]>([])
 const searchKey = ref('')
+const isDeleting = ref(false)
 const sources = computed(() => store.sources)
 const isBookSource = /bookSource/i.test(window.location.href)
 
@@ -114,9 +118,24 @@ const sourceSelect = computed<Source[]>(() => {
   }, [] as Source[])
 })
 
-const deleteSelectSources = () => {
+const deleteSelectSources = async () => {
+  if (isDeleting.value) return
   const sourceSelectValue = sourceSelect.value
-  API.deleteSource(sourceSelectValue).then(({ data }) => {
+  if (sourceSelectValue.length === 0) return
+  isDeleting.value = true
+  try {
+    await ElMessageBox.confirm(
+      `确定从阅读服务删除 ${sourceSelectValue.length} 个源吗？`,
+      '删除源',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    isDeleting.value = false
+    return
+  }
+
+  try {
+    const { data } = await API.deleteSource(sourceSelectValue)
     if (!data.isSuccess) return ElMessage.error(data.errorMsg)
     store.deleteSources(sourceSelectValue)
     const sourceUrlSelectRawValue = toRaw(sourceUrlSelect.value)
@@ -125,7 +144,11 @@ const deleteSelectSources = () => {
       if (index > -1) sourceUrlSelectRawValue.splice(index, 1)
     })
     sourceUrlSelect.value = sourceUrlSelectRawValue
-  })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '删除源失败，请重试。')
+  } finally {
+    isDeleting.value = false
+  }
 }
 const clearAllSources = () => {
   store.clearAllSource()

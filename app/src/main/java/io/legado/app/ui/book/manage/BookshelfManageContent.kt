@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,6 +107,8 @@ internal fun BookshelfManageContent(
                 groups.filter { it.groupId > 0 && it.groupId and book.group > 0 }
                     .joinToString(", ") { it.groupName }
             }
+            val groupLabel = stringResource(R.string.group)
+            val deleteLabel = stringResource(R.string.delete)
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp)
                     .clickable { onToggleSelection(book) },
@@ -116,7 +120,11 @@ internal fun BookshelfManageContent(
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = book.bookUrl in selected, onCheckedChange = { onToggleSelection(book) })
+                        Checkbox(
+                            checked = book.bookUrl in selected,
+                            onCheckedChange = { onToggleSelection(book) },
+                            modifier = Modifier.semantics { contentDescription = book.name }
+                        )
                         Column(modifier = Modifier.weight(1f).padding(start = 6.dp)) {
                             Text(
                                 text = book.name,
@@ -161,10 +169,16 @@ internal fun BookshelfManageContent(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        TextButton(onClick = { onSelectGroup(book) }) {
+                        TextButton(
+                            onClick = { onSelectGroup(book) },
+                            modifier = Modifier.semantics { contentDescription = "${book.name}, $groupLabel" }
+                        ) {
                             Text(androidx.compose.ui.res.stringResource(R.string.group))
                         }
-                        TextButton(onClick = { onDeleteBook(book) }) {
+                        TextButton(
+                            onClick = { onDeleteBook(book) },
+                            modifier = Modifier.semantics { contentDescription = "${book.name}, $deleteLabel" }
+                        ) {
                             Text(androidx.compose.ui.res.stringResource(R.string.delete))
                         }
                     }

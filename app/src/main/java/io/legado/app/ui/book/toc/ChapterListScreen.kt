@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -96,6 +101,16 @@ internal fun ChapterListScreen(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
+            if (state.chapters.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        stringResource(R.string.empty),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             itemsIndexed(state.chapters, key = { _, chapter -> chapter.index }) { _, chapter ->
                 ChapterRow(
                     chapter = chapter,
@@ -125,8 +140,10 @@ internal fun ChapterListScreen(
             ) {
                 Text(
                     text = state.currentChapterInfo,
-                    modifier = Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(12.dp))
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
                     .combinedClickable(
+                        enabled = state.chapters.isNotEmpty(),
+                        role = Role.Button,
                         onClick = {
                             val index = state.chapters.indexOfFirst { it.index == state.currentChapterIndex }
                                 .takeIf { it >= 0 }
@@ -146,10 +163,10 @@ internal fun ChapterListScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                IconButton(onClick = { scrollToItem(0) }) {
+                IconButton(onClick = { scrollToItem(0) }, enabled = state.chapters.isNotEmpty()) {
                     Icon(painterResource(R.drawable.ic_arrow_drop_up), contentDescription = "回到目录顶部")
                 }
-                IconButton(onClick = { scrollToItem(state.chapters.lastIndex) }) {
+                IconButton(onClick = { scrollToItem(state.chapters.lastIndex) }, enabled = state.chapters.isNotEmpty()) {
                     Icon(painterResource(R.drawable.ic_arrow_drop_down), contentDescription = "跳到目录底部")
                 }
             }
@@ -193,8 +210,10 @@ private fun ChapterRow(
     }
     Row(
         modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp)
             .background(if (chapter.isVolume) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f) else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = { onLongClick(displayTitle) })
+            .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = { onLongClick(displayTitle) })
+            .semantics { selected = isCurrent }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

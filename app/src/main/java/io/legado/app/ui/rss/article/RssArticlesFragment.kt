@@ -44,7 +44,7 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
     override val viewModel by viewModels<RssArticlesViewModel>()
     private val isPreload by lazy { activityViewModel.rssSource?.preload ?: false }
     private val articles = mutableStateListOf<RssArticle>()
-    private var refreshing by mutableStateOf(false)
+    private var refreshing by mutableStateOf(true)
     private var loadingMore by mutableStateOf(false)
     private var hasMore by mutableStateOf(false)
     private var loadError by mutableStateOf<String?>(null)

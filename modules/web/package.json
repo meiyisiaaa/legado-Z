@@ -16,6 +16,7 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
     "test": "node --test scripts/*.test.js",
+    "test:states": "node scripts/state-a11y.cjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write src/"
   },

@@ -28,6 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
@@ -50,7 +53,7 @@ internal fun DictRuleContent(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("暂无字典规则", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -61,6 +64,11 @@ internal fun DictRuleContent(
     ) {
         itemsIndexed(rules, key = { _, rule -> rule.name }) { index, rule ->
             var menuExpanded by remember(rule.name) { mutableStateOf(false) }
+            val enableLabel = stringResource(R.string.enable)
+            val enabledState = stringResource(if (rule.enabled) R.string.enabled else R.string.disabled)
+            val editLabel = stringResource(R.string.edit)
+            val deleteLabel = stringResource(R.string.delete)
+            val moreLabel = stringResource(R.string.more_menu)
             Column(Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
@@ -73,7 +81,7 @@ internal fun DictRuleContent(
                     Checkbox(
                         checked = rule.name in selectedNames,
                         onCheckedChange = { onSelect(rule, it) },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(48.dp).semantics { contentDescription = rule.name }
                     )
                     Text(
                         text = rule.name,
@@ -84,28 +92,44 @@ internal fun DictRuleContent(
                     )
                     Switch(
                         checked = rule.enabled,
-                        onCheckedChange = { onToggle(rule, it) }
+                        onCheckedChange = { onToggle(rule, it) },
+                        modifier = Modifier.semantics {
+                            contentDescription = "${rule.name}, $enableLabel"
+                            stateDescription = enabledState
+                        }
                     )
-                    IconButton(onClick = { onEdit(rule) }, modifier = Modifier.size(48.dp)) {
+                    IconButton(
+                        onClick = { onEdit(rule) },
+                        modifier = Modifier.size(48.dp).semantics {
+                            contentDescription = "${rule.name}, $editLabel"
+                        }
+                    ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_edit),
-                            contentDescription = stringResource(R.string.edit)
+                            contentDescription = null
                         )
                     }
-                    IconButton(onClick = { onDelete(rule) }, modifier = Modifier.size(48.dp)) {
+                    IconButton(
+                        onClick = { onDelete(rule) },
+                        modifier = Modifier.size(48.dp).semantics {
+                            contentDescription = "${rule.name}, $deleteLabel"
+                        }
+                    ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_outline_delete),
-                            contentDescription = stringResource(R.string.delete)
+                            contentDescription = null
                         )
                     }
                     androidx.compose.foundation.layout.Box {
                         IconButton(
                             onClick = { menuExpanded = true },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(48.dp).semantics {
+                                contentDescription = "${rule.name}, $moreLabel"
+                            }
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_more_vert),
-                                contentDescription = stringResource(R.string.more_menu)
+                                contentDescription = null
                             )
                         }
                         DropdownMenu(
@@ -113,12 +137,12 @@ internal fun DictRuleContent(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("上移") },
+                                text = { Text(stringResource(R.string.move_up)) },
                                 enabled = index > 0,
                                 onClick = { menuExpanded = false; onMove(rule, -1) }
                             )
                             DropdownMenuItem(
-                                text = { Text("下移") },
+                                text = { Text(stringResource(R.string.move_down)) },
                                 enabled = index < rules.lastIndex,
                                 onClick = { menuExpanded = false; onMove(rule, 1) }
                             )

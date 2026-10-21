@@ -10,6 +10,7 @@
       class="full"
       v-if="/^\s*<img[^>]*src[^>]+>$/.test(String(para))"
       :src="getImageSrc(para)"
+      :alt="`${title} 插图`"
       @error.once="proxyImage"
       loading="lazy"
     />
@@ -44,6 +45,9 @@ const imgDataUrlPattern = lazyRegex('data:image[^;]+;base64,[^,]{39,}')
 
 const replaceImage = (content: string) => {
   return content.replace(imgPatternAll(), (match, src) => {
+    const image = /\balt\s*=/i.test(match)
+      ? match
+      : match.replace(/<img\b/i, '<img alt="章节插图"')
     const dataUrl = src.match(imgDataUrlPattern())
     if (dataUrl) {
       return dataUrl[0]
@@ -54,9 +58,9 @@ const replaceImage = (content: string) => {
         src,
         lineImgWidth.value,
       )
-      return match.replace(src, proxySrc)
+      return image.replace(src, proxySrc)
     }
-    return match
+    return image
   })
 }
 

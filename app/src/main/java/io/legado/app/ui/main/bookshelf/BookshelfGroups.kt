@@ -30,15 +30,17 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.legado.app.R
 import io.legado.app.data.entities.BookGroup
-import io.legado.app.ui.widget.compose.LocalLegadoMotion
 import io.legado.app.lib.theme.ThemeStore
+import io.legado.app.ui.widget.compose.LocalLegadoMotion
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -59,9 +61,9 @@ internal fun BookshelfGroups(groups: List<BookGroup>, selectedIndex: Int,
                     tween(motion.state), label = "group underline")
                 Column(
                     modifier = Modifier.widthIn(min = 56.dp, max = 144.dp).width(IntrinsicSize.Max).heightIn(min = 48.dp)
-                        .semantics { this.selected = selected }
                         .combinedClickable(role = Role.Tab, onClick = { onSelect(index) },
-                            onLongClick = { onEdit(group) }, onLongClickLabel = "编辑分组")
+                            onLongClick = { onEdit(group) }, onLongClickLabel = stringResource(R.string.group_edit))
+                        .semantics { this.selected = selected }
                 ) {
                     Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                         Text(group.groupName, style = MaterialTheme.typography.labelLarge,

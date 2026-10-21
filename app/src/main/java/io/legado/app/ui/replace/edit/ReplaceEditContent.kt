@@ -26,6 +26,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -55,6 +57,9 @@ internal fun ReplaceEditContent(
     onHelp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val regexLabel = stringResource(R.string.use_regex)
+    val scopeTitleLabel = stringResource(R.string.scope_title)
+    val scopeContentLabel = stringResource(R.string.scope_content)
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -85,7 +90,7 @@ internal fun ReplaceEditContent(
             Checkbox(
                 checked = draft.isRegex,
                 onCheckedChange = { onDraftChange(draft.copy(isRegex = it)) },
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp).semantics { contentDescription = regexLabel }
             )
             Text(
                 text = stringResource(R.string.use_regex),
@@ -115,7 +120,7 @@ internal fun ReplaceEditContent(
             Checkbox(
                 checked = draft.scopeTitle,
                 onCheckedChange = { onDraftChange(draft.copy(scopeTitle = it)) },
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp).semantics { contentDescription = scopeTitleLabel }
             )
             Text(
                 stringResource(R.string.scope_title),
@@ -127,7 +132,7 @@ internal fun ReplaceEditContent(
             Checkbox(
                 checked = draft.scopeContent,
                 onCheckedChange = { onDraftChange(draft.copy(scopeContent = it)) },
-                modifier = Modifier.padding(start = 6.dp).size(48.dp)
+                modifier = Modifier.padding(start = 6.dp).size(48.dp).semantics { contentDescription = scopeContentLabel }
             )
             Text(
                 stringResource(R.string.scope_content),

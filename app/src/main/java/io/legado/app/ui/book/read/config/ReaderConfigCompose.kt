@@ -27,7 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +51,7 @@ internal fun ReaderConfigSection(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 8.dp)
+            modifier = Modifier.padding(start = 8.dp).semantics { heading() }
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -153,8 +156,7 @@ internal fun ReaderConfigSlider(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .semantics { contentDescription = title },
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(
@@ -170,6 +172,10 @@ internal fun ReaderConfigSlider(
             )
         }
         Slider(
+            modifier = Modifier.semantics {
+                contentDescription = title
+                stateDescription = valueText
+            },
             value = value.coerceIn(valueRange),
             valueRange = valueRange,
             steps = steps,
@@ -196,6 +202,9 @@ internal fun ReaderConfigChoiceDialog(
                 itemsIndexed(options) { index, option ->
                     ReaderConfigRow(
                         title = option,
+                        modifier = Modifier.semantics {
+                            if (selectedIndex != null) selected = selectedIndex == index
+                        },
                         trailing = if (selectedIndex == index) {
                             {
                                 Icon(

@@ -1,23 +1,31 @@
 package io.legado.app.ui.main
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
 import androidx.test.platform.app.InstrumentationRegistry
 import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
-import io.legado.app.ui.main.bookshelf.BookshelfContent
 import io.legado.app.ui.main.bookshelf.BookshelfAppearance
+import io.legado.app.ui.main.bookshelf.BookshelfContent
+import io.legado.app.ui.main.bookshelf.BookshelfGroups
 import io.legado.app.ui.main.bookshelf.BookshelfOptions
 import io.legado.app.ui.main.bookshelf.BookshelfOptionsContent
-import io.legado.app.utils.toTimeAgo
 import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.utils.toTimeAgo
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -52,22 +60,24 @@ class ComposeMainUiTest {
 
     @Test
     fun mainNavigationSelectsTheTappedPageAndShowsBookshelfUpdateBadge() {
-        var selectedPage: Int? = null
+        val selectedPage = mutableIntStateOf(0)
         composeRule.setContent {
             LegadoTheme {
                 MainNavigation(
                     pages = listOf(0, 1, 2, 3),
-                    selected = 0,
+                    selected = selectedPage.intValue,
                     updating = 3,
-                    onSelect = { selectedPage = it }
+                    onSelect = { selectedPage.intValue = it }
                 )
             }
         }
 
         composeRule.onNodeWithContentDescription(context.getString(R.string.my)).performClick()
         composeRule.onNodeWithText("3").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.my)).assertIsSelected()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.bookshelf)).assertIsNotSelected()
 
-        assertEquals(3, selectedPage)
+        assertEquals(3, selectedPage.intValue)
     }
 
     @Test
@@ -115,6 +125,9 @@ class ComposeMainUiTest {
             }
         }
 
+        composeRule.onNodeWithText(book.name).assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
+        )
         composeRule.onNodeWithText(book.name).performClick()
 
         assertEquals(book, opened)
@@ -143,6 +156,32 @@ class ComposeMainUiTest {
         composeRule.onNodeWithText(group.groupName).performTouchInput { longClick() }
 
         assertEquals(group, details)
+    }
+
+    @Test
+    fun bookshelfGroupTabsExposeRoleAndUpdateSelectedState() {
+        val groups = listOf(
+            BookGroup(groupId = 51L, groupName = "分组一"),
+            BookGroup(groupId = 52L, groupName = "分组二")
+        )
+        val selectedIndex = mutableIntStateOf(0)
+        composeRule.setContent {
+            LegadoTheme {
+                BookshelfGroups(
+                    groups = groups,
+                    selectedIndex = selectedIndex.intValue,
+                    onSelect = { selectedIndex.intValue = it },
+                    onEdit = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("分组一")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
+            .assertIsSelected()
+        composeRule.onNodeWithText("分组二").assertIsNotSelected().performClick()
+        composeRule.onNodeWithText("分组二").assertIsSelected()
+        composeRule.onNodeWithText("分组一").assertIsNotSelected()
     }
 
     @Test
@@ -198,6 +237,7 @@ class ComposeMainUiTest {
         composeRule.onNodeWithText(context.getString(R.string.layout_grid3)).performScrollTo().performClick()
         composeRule.onNodeWithText(context.getString(R.string.bookshelf_px_2)).performScrollTo().performClick()
         composeRule.onNodeWithText(context.getString(R.string.overlay)).performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription(context.getString(R.string.margin)).assertExists()
         assertEquals(initial.copy(layout = 3, sort = 2, bookName = 2), draft)
     }
 }

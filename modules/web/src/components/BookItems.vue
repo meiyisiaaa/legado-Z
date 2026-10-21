@@ -6,7 +6,9 @@
         v-for="book in books"
         :key="book.bookUrl"
         type="button"
-        :aria-label="`打开《${book.name}》${book.author ? `，作者${book.author}` : ''}`"
+        :disabled="savingBookUrl !== ''"
+        :aria-busy="book.bookUrl === savingBookUrl"
+        :aria-label="book.bookUrl === savingBookUrl ? `正在将《${book.name}》加入书架` : `打开《${book.name}》${book.author ? `，作者${book.author}` : ''}`"
         @click="handleClick(book)"
       >
         <span class="cover-frame">
@@ -61,6 +63,7 @@ import API from '@api'
 const props = defineProps<{
   books: Array<Book | SeachBook>
   isSearch: boolean
+  savingBookUrl: string
 }>()
 
 const emit = defineEmits(['bookClick'])

@@ -1,5 +1,5 @@
 <template>
-  <div class="menu" role="toolbar" aria-label="源管理操作">
+  <div class="menu" role="group" aria-label="源管理操作">
     <el-button
       v-for="button in buttons"
       size="default"
@@ -7,6 +7,9 @@
       :type="button.type"
       :icon="button.icon"
       :aria-label="button.name"
+      :aria-busy="button.name === '保存源' && isSavingSource"
+      :disabled="button.name === '保存源' && isSavingSource"
+      :loading="button.name === '保存源' && isSavingSource"
       @click="button.action"
     >
       <span>{{ button.name }}</span>
@@ -141,7 +144,7 @@ const push = () => {
           } 条\n成功: ${okData.length} 条\n失败: ${
             sources.length - okData.length
           } 条${failMsg}`,
-          type: 'success',
+          type: sources.length > okData.length ? 'warning' : 'success',
         })
       }
     } else {
@@ -182,12 +185,16 @@ const redo = () => {
   })
 }
 
-const saveSource = () => {
+const isSavingSource = ref(false)
+const saveSource = async () => {
+  if (isSavingSource.value) return
   const source = store.currentSource
   if (isInvaildSource(source)) {
     normalizeSource(source)
-    API.saveSource(source).then(({ data }) => {
-      const sourceName = getSourceName(source)
+    const sourceName = getSourceName(source)
+    isSavingSource.value = true
+    try {
+      const { data } = await API.saveSource(source)
       if (data.isSuccess) {
         ElMessage({
           message: `源《${sourceName}》已成功保存到「阅读3.0APP」`,
@@ -201,7 +208,14 @@ const saveSource = () => {
           type: 'error',
         })
       }
-    })
+    } catch (error) {
+      ElMessage({
+        message: `源《${sourceName}》保存失败!\nErrorMsg: ${error instanceof Error ? error.message : '请求失败'}`,
+        type: 'error',
+      })
+    } finally {
+      isSavingSource.value = false
+    }
   } else {
     ElMessage({
       message: `请检查<必填>项是否全部填写`,

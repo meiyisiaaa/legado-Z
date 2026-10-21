@@ -45,6 +45,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -155,11 +160,19 @@ internal fun SearchContentScreen(
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.replace)) },
+                                modifier = Modifier.semantics {
+                                    role = Role.Checkbox
+                                    toggleableState = ToggleableState(state.replaceEnabled)
+                                },
                                 trailingIcon = { Checkbox(state.replaceEnabled, onCheckedChange = null) },
                                 onClick = { menuExpanded = false; onToggleReplace() }
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.regex)) },
+                                modifier = Modifier.semantics {
+                                    role = Role.Checkbox
+                                    toggleableState = ToggleableState(state.regexEnabled)
+                                },
                                 trailingIcon = { Checkbox(state.regexEnabled, onCheckedChange = null) },
                                 onClick = { menuExpanded = false; onToggleRegex() }
                             )

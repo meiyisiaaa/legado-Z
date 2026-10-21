@@ -26,6 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,7 +47,9 @@ internal fun CacheScreen(
     onDownload: (Book) -> Unit,
     onExport: (Int) -> Unit,
     exportProgress: (String) -> Int?,
-    exportMessage: (String) -> String?
+    exportMessage: (String) -> String?,
+    loadError: String? = null,
+    onRetry: () -> Unit = {}
 ) {
     if (books.isEmpty()) {
         Column(
@@ -51,8 +57,11 @@ internal fun CacheScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (isLoading) CircularProgressIndicator()
-            else Text(stringResource(R.string.no_book), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            when {
+                loadError != null -> CacheLoadError(loadError, onRetry)
+                isLoading -> CacheLoadingIndicator()
+                else -> Text(stringResource(R.string.no_book), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         return
     }
@@ -61,6 +70,24 @@ internal fun CacheScreen(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        when {
+            loadError != null -> item(key = "cache-error") {
+                CacheLoadError(
+                    error = loadError,
+                    onRetry = onRetry,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                )
+            }
+            isLoading -> item(key = "cache-loading") {
+                val loadingDescription = stringResource(R.string.data_loading)
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().semantics {
+                        contentDescription = loadingDescription
+                        liveRegion = LiveRegionMode.Polite
+                    }
+                )
+            }
+        }
         items(books, key = Book::bookUrl) { book ->
             key(revision, book.bookUrl) {
                 CacheBookCard(
@@ -73,6 +100,29 @@ internal fun CacheScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CacheLoadingIndicator() {
+    val loadingDescription = stringResource(R.string.data_loading)
+    CircularProgressIndicator(
+        modifier = Modifier.semantics {
+            contentDescription = loadingDescription
+            liveRegion = LiveRegionMode.Polite
+        }
+    )
+}
+
+@Composable
+private fun CacheLoadError(error: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = MaterialTheme.colorScheme.error
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
     }
 }
 

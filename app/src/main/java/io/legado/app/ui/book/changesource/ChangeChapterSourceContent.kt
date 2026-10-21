@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -20,6 +22,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,15 +91,18 @@ internal fun ChangeChapterTocContent(
 ) {
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().selectableGroup(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         itemsIndexed(chapters, key = { index, chapter -> chapter.url.ifBlank { index.toString() } }) { index, chapter ->
             val selected = chapter.index == currentIndex
             Card(
-                onClick = { onSelect(chapter, chapters.getOrNull(index + 1)?.url) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                    onClick = { onSelect(chapter, chapters.getOrNull(index + 1)?.url) }
+                ),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -128,7 +134,8 @@ internal fun ChangeChapterTocContent(
                         }
                     }
                     if (selected) {
-                        Text("Current", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.current_chapter), color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

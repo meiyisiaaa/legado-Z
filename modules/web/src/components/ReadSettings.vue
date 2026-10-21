@@ -25,13 +25,15 @@
         </li>
         <li class="font-list">
           <i>正文字体</i>
-          <span
+          <button
             class="font-item"
             v-for="(font, index) in fonts"
             :key="index"
+            type="button"
             :class="{ selected: selectedFont == index }"
+            :aria-pressed="selectedFont === index"
             @click="setFont(index)"
-            >{{ font }}</span
+            >{{ font }}</button
           >
         </li>
         <li class="font-list">
@@ -42,15 +44,21 @@
               class="font-item font-item-input"
               v-model="customFontName"
               placeholder="请输入自定义的字体名称"
+              aria-label="自定义字体名称"
             />
           </el-tooltip>
 
           <el-popover
             placement="top"
             width="270"
+            role="dialog"
+            aria-labelledby="custom-font-dialog-label"
             trigger="click"
             v-model:visible="customFontSavePopVisible"
+            @before-enter="focusCustomFontDialog"
           >
+            <div ref="customFontDialogContent" tabindex="-1" @keydown.esc.stop.prevent="closeCustomFontDialog">
+            <span id="custom-font-dialog-label" class="sr-only">保存自定义字体</span>
             <p>
               已经安装在您的设备上的字体请确认输入的字体名称完整无误，或者从网络下载字体。
             </p>
@@ -58,7 +66,7 @@
               <el-button
                 size="small"
                 plain
-                @click="customFontSavePopVisible = false"
+                @click="closeCustomFontDialog"
                 >取消</el-button
               >
               <el-button type="primary" size="small" @click="setCustomFont()"
@@ -68,21 +76,28 @@
                 >网络下载</el-button
               >
             </div>
+            </div>
             <template #reference>
-              <span type="text" class="font-item">保存</span>
+              <button
+                ref="customFontTrigger"
+                type="button"
+                class="font-item"
+                :aria-expanded="customFontSavePopVisible"
+                aria-haspopup="dialog"
+              >保存</button>
             </template>
           </el-popover>
         </li>
         <li class="font-size">
           <i>字体大小</i>
           <div class="resize">
-            <button class="less" type="button" aria-label="减小字体" @click="lessFontSize">
+            <button class="less" type="button" aria-label="减小字体" :disabled="fontSize <= 12" @click="lessFontSize">
               <em class="iconfont" aria-hidden="true">&#58966;</em>
             </button>
             <b aria-hidden="true"></b>
             <span class="lang">{{ fontSize }}</span>
             <b aria-hidden="true"></b>
-            <button class="more" type="button" aria-label="增大字体" @click="moreFontSize">
+            <button class="more" type="button" aria-label="增大字体" :disabled="fontSize >= 48" @click="moreFontSize">
               <em class="iconfont" aria-hidden="true">&#58976;</em>
             </button>
           </div>
@@ -132,13 +147,13 @@
         <li class="read-width" v-if="!store.miniInterface">
           <i>页面宽度</i>
           <div class="resize">
-            <button class="less" type="button" aria-label="缩小页面宽度" @click="lessReadWidth">
+            <button class="less" type="button" aria-label="缩小页面宽度" :disabled="readWidth <= 640" @click="lessReadWidth">
               <em class="iconfont" aria-hidden="true">&#58965;</em>
             </button>
             <b aria-hidden="true"></b>
             <span class="lang">{{ readWidth }}</span>
             <b aria-hidden="true"></b>
-            <button class="more" type="button" aria-label="增大页面宽度" @click="moreReadWidth">
+            <button class="more" type="button" aria-label="增大页面宽度" :disabled="!canIncreaseReadWidth" @click="moreReadWidth">
               <em class="iconfont" aria-hidden="true">&#58975;</em>
             </button>
           </div>
@@ -146,7 +161,7 @@
         <li class="paragraph-spacing">
           <i>翻页速度</i>
           <div class="resize">
-            <button class="less" type="button" aria-label="缩短翻页时间" @click="lessJumpDuration">
+            <button class="less" type="button" aria-label="缩短翻页时间" :disabled="jumpDuration === 0" @click="lessJumpDuration">
               <em class="iconfont" aria-hidden="true">&#xe625;</em>
             </button>
             <b aria-hidden="true"></b>
@@ -159,19 +174,23 @@
         </li>
         <li class="infinite-loading">
           <i>无限加载</i>
-          <span
+          <button
+            type="button"
             class="infinite-loading-item"
             :key="0"
             :class="{ selected: infiniteLoading == false }"
+            :aria-pressed="infiniteLoading === false"
             @click="setInfiniteLoading(false)"
-            >关闭</span
+            >关闭</button
           >
-          <span
+          <button
+            type="button"
             class="infinite-loading-item"
             :key="1"
             :class="{ selected: infiniteLoading == true }"
+            :aria-pressed="infiniteLoading === true"
             @click="setInfiniteLoading(true)"
-            >开启</span
+            >开启</button
           >
         </li>
       </ul>
@@ -188,15 +207,16 @@ import API from '@api'
 import { useDebounceFn } from '@vueuse/shared'
 
 const store = useBookStore()
-const saveConfigDebounce = useDebounceFn(
-  () => API.saveReadConfig(store.config),
-  500,
-)
+const saveConfigDebounce = useDebounceFn(async () => {
+  const { data } = await API.saveReadConfig(store.config)
+  if (!data.isSuccess) ElMessage.error(data.errorMsg || '阅读设置保存失败')
+}, 500)
 //阅读界面设置改变时保存同步配置
 watch(
   () => store.config,
   () => {
-    saveConfigDebounce()
+    // axios reports request failures globally; prevent the debounced promise from becoming unhandled.
+    void saveConfigDebounce().catch(() => {})
   },
   {
     deep: 2, //深度为2
@@ -238,9 +258,11 @@ const popupTheme = computed(() => {
 const visibleViewportHeight = ref(
   window.visualViewport?.height ?? window.innerHeight,
 )
+const viewportWidth = ref(window.innerWidth)
 const updateVisibleViewportHeight = () => {
   visibleViewportHeight.value =
     window.visualViewport?.height ?? window.innerHeight
+  viewportWidth.value = window.innerWidth
 }
 onMounted(() => {
   updateVisibleViewportHeight()
@@ -273,8 +295,18 @@ const selectedFont = computed(() => {
 //自定义字体
 const customFontName = ref(store.config.customFontName)
 const customFontSavePopVisible = ref(false)
-const setCustomFont = () => {
+const customFontTrigger = ref<HTMLButtonElement>()
+const customFontDialogContent = ref<HTMLDivElement>()
+const focusCustomFontDialog = () => nextTick(() => customFontDialogContent.value?.focus())
+const closeCustomFontDialog = () => {
   customFontSavePopVisible.value = false
+  nextTick(() => customFontTrigger.value?.focus())
+}
+watch(() => store.readSettingsVisible, visible => {
+  if (!visible) customFontSavePopVisible.value = false
+})
+const setCustomFont = () => {
+  closeCustomFontDialog()
   store.config.font = -1
   store.config.customFontName = customFontName.value
 }
@@ -307,11 +339,10 @@ const loadFontFromURL = () => {
             setCustomFont()
             done()
           })
-          .catch(function (error) {
+          .catch(function () {
             instance.confirmButtonLoading = false
             instance.confirmButtonText = '确定'
             ElMessage.error('下载失败，请检查您输入的 url')
-            throw error
           })
       } else {
         done()
@@ -358,6 +389,9 @@ const moreParagraphSpacing = () => {
 const readWidth = computed(() => {
   return store.config.readWidth
 })
+const canIncreaseReadWidth = computed(
+  () => readWidth.value + 160 + 136 <= viewportWidth.value,
+)
 const moreReadWidth = () => {
   // 此时会截断页面
   if (store.config.readWidth + 160 + 2 * 68 > window.innerWidth) return
@@ -489,9 +523,19 @@ const setInfiniteLoading = (loading: boolean) => {
           font-family: inherit;
           line-height: 34px;
         }
+        button.font-item,
+        button.infinite-loading-item {
+          color: var(--app-ink-soft);
+          font: inherit;
+          font-size: 14px;
+          line-height: 34px;
+          cursor: pointer;
+          appearance: none;
+        }
         .font-item-input {
           width: 168px;
           color: var(--app-ink);
+          cursor: text;
         }
         .selected {
           color: #ed4259;
@@ -541,6 +585,11 @@ const setInfiniteLoading = (loading: boolean) => {
             appearance: none;
           }
 
+          > button:disabled {
+            cursor: not-allowed;
+            opacity: .48;
+          }
+
           > button em {
             font-style: normal;
           }
@@ -553,8 +602,8 @@ const setInfiniteLoading = (loading: boolean) => {
             white-space: nowrap;
           }
 
-          .less:hover,
-          .more:hover {
+          .less:hover:not(:disabled),
+          .more:hover:not(:disabled) {
             color: #ed4259;
           }
 
