@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-20T12:21:08Z",
+  "title": "Design System: Legado",
+  "extensions": {
+    "colorMeta": {
+      "web-light-canvas": {
+        "role": "neutral",
+        "displayName": "Web Light Canvas",
+        "canonical": "#e8efee",
+        "tonalRamp": ["oklch(15% 0.008 186.9)", "oklch(26% 0.008 186.9)", "oklch(37% 0.008 186.9)", "oklch(48% 0.008 186.9)", "oklch(59% 0.008 186.9)", "oklch(70% 0.008 186.9)", "oklch(81% 0.008 186.9)", "oklch(92% 0.008 186.9)"]
+      },
+      "web-light-panel": {
+        "role": "neutral",
+        "displayName": "Web Light Panel",
+        "canonical": "#f7fbfa",
+        "tonalRamp": ["oklch(15% 0.004 179.7)", "oklch(26% 0.004 179.7)", "oklch(37% 0.004 179.7)", "oklch(48% 0.004 179.7)", "oklch(59% 0.004 179.7)", "oklch(70% 0.004 179.7)", "oklch(81% 0.004 179.7)", "oklch(92% 0.004 179.7)"]
+      },
+      "web-light-ink": {
+        "role": "neutral",
+        "displayName": "Web Light Ink",
+        "canonical": "#172729",
+        "tonalRamp": ["oklch(15% 0.022 205.8)", "oklch(26% 0.022 205.8)", "oklch(37% 0.022 205.8)", "oklch(48% 0.022 205.8)", "oklch(59% 0.022 205.8)", "oklch(70% 0.022 205.8)", "oklch(81% 0.022 205.8)", "oklch(92% 0.022 205.8)"]
+      },
+      "web-light-accent": {
+        "role": "primary",
+        "displayName": "Web Light Reading Teal",
+        "canonical": "#007f82",
+        "tonalRamp": ["oklch(15% 0.092 197.7)", "oklch(26% 0.092 197.7)", "oklch(37% 0.092 197.7)", "oklch(48% 0.092 197.7)", "oklch(59% 0.092 197.7)", "oklch(70% 0.092 197.7)", "oklch(81% 0.092 197.7)", "oklch(92% 0.092 197.7)"]
+      },
+      "web-dark-canvas": {
+        "role": "neutral",
+        "displayName": "Web Dark Canvas",
+        "canonical": "#10191b",
+        "tonalRamp": ["oklch(15% 0.014 212.9)", "oklch(26% 0.014 212.9)", "oklch(37% 0.014 212.9)", "oklch(48% 0.014 212.9)", "oklch(59% 0.014 212.9)", "oklch(70% 0.014 212.9)", "oklch(81% 0.014 212.9)", "oklch(92% 0.014 212.9)"]
+      },
+      "web-dark-panel": {
+        "role": "neutral",
+        "displayName": "Web Dark Panel",
+        "canonical": "#172326",
+        "tonalRamp": ["oklch(15% 0.018 214.9)", "oklch(26% 0.018 214.9)", "oklch(37% 0.018 214.9)", "oklch(48% 0.018 214.9)", "oklch(59% 0.018 214.9)", "oklch(70% 0.018 214.9)", "oklch(81% 0.018 214.9)", "oklch(92% 0.018 214.9)"]
+      },
+      "web-dark-ink": {
+        "role": "neutral",
+        "displayName": "Web Dark Ink",
+        "canonical": "#e5f0ef",
+        "tonalRamp": ["oklch(15% 0.012 190.4)", "oklch(26% 0.012 190.4)", "oklch(37% 0.012 190.4)", "oklch(48% 0.012 190.4)", "oklch(59% 0.012 190.4)", "oklch(70% 0.012 190.4)", "oklch(81% 0.012 190.4)", "oklch(92% 0.012 190.4)"]
+      },
+      "web-dark-accent": {
+        "role": "primary",
+        "displayName": "Web Dark Reading Teal",
+        "canonical": "#53d4c9",
+        "tonalRamp": ["oklch(15% 0.114 187.3)", "oklch(26% 0.114 187.3)", "oklch(37% 0.114 187.3)", "oklch(48% 0.114 187.3)", "oklch(59% 0.114 187.3)", "oklch(70% 0.114 187.3)", "oklch(81% 0.114 187.3)", "oklch(92% 0.114 187.3)"]
+      }
+    },
+    "typographyMeta": {
+      "web-interface": {
+        "displayName": "Web Interface Stack",
+        "purpose": "The shared Web management-interface font stack declared in app.css."
+      }
+    },
+    "shadows": [
+      {
+        "name": "web-light-dialog",
+        "value": "0 18px 42px rgba(21, 48, 50, 0.08)",
+        "purpose": "Light-theme dialog elevation."
+      },
+      {
+        "name": "web-light-soft",
+        "value": "0 8px 22px rgba(21, 48, 50, 0.06)",
+        "purpose": "Light-theme hover elevation for interactive book cards."
+      },
+      {
+        "name": "web-dark-dialog",
+        "value": "0 20px 46px rgba(0, 0, 0, 0.24)",
+        "purpose": "Dark-theme dialog elevation."
+      },
+      {
+        "name": "web-dark-soft",
+        "value": "0 8px 24px rgba(0, 0, 0, 0.2)",
+        "purpose": "Dark-theme hover elevation for interactive book cards."
+      }
+    ],
+    "motion": [
+      {
+        "name": "android-press",
+        "value": "120ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "Short press feedback exposed through LocalLegadoMotion."
+      },
+      {
+        "name": "android-state",
+        "value": "240ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "Selection and state changes in Compose."
+      },
+      {
+        "name": "android-container",
+        "value": "360ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "Container changes in Compose."
+      },
+      {
+        "name": "web-state",
+        "value": "240ms",
+        "purpose": "Web global color, border, shadow, and opacity transitions."
+      },
+      {
+        "name": "web-panel",
+        "value": "360ms",
+        "purpose": "Web panel transition duration."
+      },
+      {
+        "name": "web-reduced-motion",
+        "value": "0.01ms with one animation iteration",
+        "purpose": "prefers-reduced-motion: reduce behavior."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "web-source-editor-narrow",
+        "value": "980px",
+        "purpose": "Switch the source editor to its two-panel mobile tab layout at or below this width."
+      },
+      {
+        "name": "web-bookshelf-single-column",
+        "value": "540px",
+        "purpose": "Collapse the book card grid to one column at or below this width."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Source Editor Utility Button",
+      "kind": "button",
+      "refersTo": "web-source-utility-button",
+      "description": "Secondary source-type and theme actions in the Web source editor.",
+      "html": "<button class=\"ds-source-utility\">切换为订阅源</button>",
+      "css": ".ds-source-utility { min-height: 38px; border: 1px solid var(--app-line); border-radius: 6px; padding: 0 8px; color: var(--app-ink-soft); background: var(--app-panel); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: color var(--app-duration-state) ease-out, background-color var(--app-duration-state) ease-out, border-color var(--app-duration-state) ease-out; } .ds-source-utility:hover { border-color: var(--app-accent-line); color: var(--app-accent-strong); background: var(--app-accent-soft); } .ds-source-utility:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }"
+    },
+    {
+      "name": "Book Search Field",
+      "kind": "input",
+      "refersTo": "web-search-field",
+      "description": "Text field using the Web panel, text, border, placeholder, and focus tokens.",
+      "html": "<input class=\"ds-search-field\" type=\"search\" placeholder=\"搜索书名或作者\" aria-label=\"搜索书名或作者\" />",
+      "css": ".ds-search-field { border: 1px solid var(--app-line); border-radius: 12px; padding: 8px 10px; color: var(--el-text-color-primary); background: var(--el-fill-color-blank); font: inherit; } .ds-search-field::placeholder { color: var(--app-ink-muted); opacity: 1; } .ds-search-field:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }"
+    },
+    {
+      "name": "Source Editor Panel Tabs",
+      "kind": "nav",
+      "refersTo": "web-source-panel-tab",
+      "description": "Narrow-screen tabs switch between rule fields and source tools.",
+      "html": "<nav class=\"ds-panel-tabs\" role=\"tablist\" aria-label=\"源编辑面板\"><button role=\"tab\" aria-selected=\"true\">规则字段</button><button role=\"tab\" aria-selected=\"false\">源工具</button></nav>",
+      "css": ".ds-panel-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; border-bottom: 1px solid var(--app-line); padding-bottom: 7px; } .ds-panel-tabs button { min-height: 40px; border: 1px solid var(--app-line); border-radius: 6px; color: var(--app-ink-muted); background: var(--app-panel); font: inherit; font-size: 12px; font-weight: 620; cursor: pointer; } .ds-panel-tabs button[aria-selected='true'] { border-color: var(--app-accent-line); color: var(--app-accent-strong); background: var(--app-accent-soft); } .ds-panel-tabs button:focus-visible { outline: 2px solid var(--app-focus-ring); outline-offset: 2px; }"
+    },
+    {
+      "name": "Book Card",
+      "kind": "card",
+      "refersTo": "web-book-card",
+      "description": "Whole-card book target with cover, title, author, reading progress, and latest chapter.",
+      "html": "<button class=\"ds-book-card\" type=\"button\" aria-label=\"打开《示例书》\"><span class=\"ds-cover-frame\" aria-hidden=\"true\"></span><span class=\"ds-book-info\"><strong>示例书</strong><span class=\"ds-author\">作者名</span><span class=\"ds-chapter\"><b>读到</b> 第十二章</span><span class=\"ds-chapter\"><b>最新</b> 第二十章</span></span><span class=\"ds-card-arrow\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\"><path d=\"m9 18 6-6-6-6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span></button>",
+      "css": ".ds-book-card { min-width: 0; min-height: 158px; position: relative; display: flex; align-items: flex-start; gap: 15px; border: 1px solid var(--app-line); border-radius: 15px; padding: 15px 34px 15px 15px; color: var(--app-ink); background: var(--app-panel); box-shadow: none; font: inherit; text-align: left; cursor: pointer; transition: background-color var(--app-duration-state) ease-out, border-color var(--app-duration-state) ease-out, box-shadow var(--app-duration-state) ease-out; } .ds-book-card:hover, .ds-book-card:focus-visible { z-index: 1; border-color: var(--app-accent-line); background: var(--app-panel-raised); box-shadow: var(--app-shadow-soft); } .ds-book-card:active { background: var(--app-panel-muted); } .ds-cover-frame { width: 82px; height: 118px; flex: none; border: 1px solid var(--app-line); border-radius: 9px; background: var(--app-panel-muted); } .ds-book-info { min-width: 0; min-height: 118px; display: flex; flex: 1; flex-direction: column; justify-content: space-between; gap: 7px; } .ds-book-info strong { color: var(--app-ink); font-size: 15px; font-weight: 730; line-height: 1.4; } .ds-author, .ds-chapter { overflow: hidden; color: var(--app-ink-muted); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; } .ds-chapter b { margin-right: 5px; color: var(--app-ink-soft); font-weight: 650; } .ds-card-arrow { position: absolute; top: 50%; right: 13px; color: var(--app-ink-muted); opacity: 0; transform: translate(-3px, -50%); transition: opacity var(--app-duration-state) ease-out, transform var(--app-duration-state) ease-out; } .ds-book-card:hover .ds-card-arrow, .ds-book-card:focus-visible .ds-card-arrow { opacity: 1; transform: translate(0, -50%); }"
+    },
+    {
+      "name": "Book Source Tag",
+      "kind": "chip",
+      "refersTo": "web-book-source-tag",
+      "description": "Plain tag used for source labels in book search cards.",
+      "html": "<span class=\"ds-source-tag\">玄幻</span>",
+      "css": ".ds-source-tag { display: inline-flex; border-radius: 6px; padding-inline: 5px; color: var(--app-accent-strong); background: var(--app-accent-soft); line-height: 18px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "沿用原版 Legado 页面布局与信息层级，在此基础上深度优化",
+    "overview": "Legado 的视觉优化从熟悉的页面组织、操作位置和阅读信息关系出发。Android 主界面仍以书架、发现、RSS、我的为底部导航；书架围绕分组、书籍列表或网格和原有工具入口组织。阅读内容继续由现有阅读引擎负责，Compose 用于普通页面与配置界面，专用编辑器和阅读引擎按需保留 Android View 互操作。\n\nAndroid 与 Web 各自保留当前主题来源。Android 使用 ThemeStore 和 Material 3 语义角色响应用户主题、夜间模式和墨水屏设置；Web 由 app.css 的浅色与深色 CSS 变量驱动，阅读页另有可选纸张主题和字体。两套颜色不能互相覆盖，也不构成统一的固定品牌色板。\n\n本规范记录可从当前实现确认的视觉规则，不代表页面迁移、设备渲染或交互验收已经通过。运行与验收证据单独记录在 docs/ui-redesign-acceptance.md。",
+    "keyCharacteristics": [
+      "Android 主导航维持四个原有目的地的图标式底栏，并按设置隐藏发现或 RSS。",
+      "书架保留分组、列表或多列网格、书籍元数据、刷新和原有菜单操作。",
+      "Android 阅读页保留专用阅读引擎，阅读设置与朗读配置使用对应的普通配置界面。",
+      "Web 书架、章节阅读、书源编辑和订阅源编辑保持独立的 hash 路由分区。",
+      "Android 主题服从 ThemeStore、夜间模式和墨水屏设置；Web 主题服从自身的浅色、深色和阅读主题配置。"
+    ],
+    "rules": [
+      {
+        "name": "The Familiar Hierarchy Rule",
+        "body": "在既有页面层级和操作入口内深化排版、密度、反馈与可读性，不以新的首页概念替换 Legado 的阅读流程。",
+        "section": "overview"
+      },
+      {
+        "name": "The Runtime Theme Rule",
+        "body": "Android Compose 页面始终读取现有 ThemeStore 与 AppConfig 主题状态；Web 的 CSS 色板只服务 Web，不作为 Android 回退色板。",
+        "section": "colors"
+      },
+      {
+        "name": "The Role Scale Rule",
+        "body": "Android 文字优先通过 Material 3 类型角色表达；Web 阅读正文继续服从阅读设置，不将管理界面的字号层级强加给正文。",
+        "section": "typography"
+      },
+      {
+        "name": "The Existing Destination Rule",
+        "body": "保持 Android 底部目的地顺序、书架分组与书籍条目关系，以及 Web 的书架、章节和源编辑路由；响应式变化只调整空间分配和面板呈现。",
+        "section": "layout"
+      },
+      {
+        "name": "The Semantic Surface Rule",
+        "body": "Android 的层级来自 Material 表面角色；Web 的阴影只强化有明确浮层或交互提升语义的内容。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do：沿用 Legado 原有页面层级与熟悉的操作入口，优化间距、信息密度、可读性与反馈。",
+      "Do：保留 Android 目的地顺序、图标式底部导航、发现/RSS 可隐藏设置和书架更新徽标。",
+      "Do：使用 Android ThemeStore 与 Material 3 语义角色，并保留夜间和墨水屏行为。",
+      "Do：保留用户设置的阅读字体、字号、页面颜色、源规则及专用阅读或脚本引擎。",
+      "Do：遵守 Android 系统动画设置、墨水屏动效抑制、Web 减少动态效果偏好、系统 inset 和键盘焦点状态。"
+    ],
+    "donts": [
+      "Don't：不要把熟悉的书架流程改成营销仪表盘、超大继续阅读主卡片或固定继续阅读条。",
+      "Don't：不要在没有对应原有入口的情况下，把书架、编辑器或阅读操作移到新的菜单位置。",
+      "Don't：不要用通用 Compose 内容替换原生阅读引擎或脚本引擎。",
+      "Don't：不要把 Web 书架、章节阅读、书源编辑和订阅源编辑合并成同一页面或路由。"
+    ]
+  }
+}
