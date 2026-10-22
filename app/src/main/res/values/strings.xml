@@ -56,6 +56,9 @@
     <string name="last_read">Last reading</string>
     <string name="update_log">What\'s new</string>
     <string name="bookshelf_empty">The bookshelf is still empty. Search for books or add them from discovery!</string>
+    <string name="bookshelf_empty_title">No books here</string>
+    <string name="bookshelf_reading_chapter">Read</string>
+    <string name="bookshelf_latest_chapter">Latest</string>
     <string name="bookshelf_loading">Loading bookshelf</string>
     <string name="bookshelf_load_failed">Failed to load bookshelf</string>
     <string name="bookshelf_fast_scroll_accessibility">Quickly scroll the bookshelf</string>

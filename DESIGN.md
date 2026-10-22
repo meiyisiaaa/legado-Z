@@ -48,6 +48,8 @@ Android 与 Web 各自保留当前主题来源。Android 使用 ThemeStore 和 M
 
 本规范记录可从当前实现确认的视觉规则，不代表页面迁移、设备渲染或交互验收已经通过。运行与验收证据单独记录在 docs/ui-redesign-acceptance.md。
 
+本轮书架的原创“书页边注”规格见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) 与 [SCREEN_SPEC_BOOKSHELF.md](docs/ui/SCREEN_SPEC_BOOKSHELF.md)，本轮实际证据见 [VISUAL_REVIEW.md](VISUAL_REVIEW.md)。MD3 分支只作参考，现有列表、紧凑和多列选项不作为原创方案。以下全局规则继续适用；普通书架书名采用下述局部排版例外。
+
 **The Familiar Hierarchy Rule.** 在既有页面层级和操作入口内深化排版、密度、反馈与可读性，不以新的首页概念替换 Legado 的阅读流程。
 
 **Key Characteristics:**
@@ -75,7 +77,7 @@ Legado 有两套并行的颜色来源。Android 的颜色是运行时主题值�
 
 ## Typography
 
-**Android 字体：** Compose 使用 FontFamily.Default，并将 Material 3 的 display、headline、title、body、label 映射到 Legado 的字号与行高。Web 使用前置 web-interface 字体栈。
+**Android 字体：** Compose 常规角色使用 FontFamily.Default，并将 Material 3 的 display、headline、title、body、label 映射到 Legado 的字号与行高。普通书架书名局部使用系统 Serif 18/26sp、Medium，最多两行；API26 中文采用系统回退字形，紧凑书名仍沿用原角色。Web 使用前置 web-interface 字体栈。
 
 ### Hierarchy
 - **Display**：32/40、28/36、26/34 sp，SemiBold；保留给 display 语义。

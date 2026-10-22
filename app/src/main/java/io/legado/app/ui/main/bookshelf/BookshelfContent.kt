@@ -9,6 +9,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,8 +36,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
 import io.legado.app.data.entities.Book
@@ -74,11 +79,15 @@ internal fun BookshelfContent(
                 modifier = Modifier.fillMaxSize(),
                 state = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()) {
                 if (isLoading) {
-                    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Text(stringResource(R.string.bookshelf_loading), style = MaterialTheme.typography.titleMedium)
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Text(stringResource(R.string.bookshelf_loading),
+                            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         repeat(4) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Surface(Modifier.size(64.dp, 86.dp), shape = MaterialTheme.shapes.small,
+                            Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Surface(Modifier.size(66.dp, 88.dp), shape = MaterialTheme.shapes.extraSmall,
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Surface(Modifier.fillMaxWidth(0.75f).height(20.dp), shape = MaterialTheme.shapes.extraSmall,
@@ -89,42 +98,47 @@ internal fun BookshelfContent(
                             }
                         }
                     }
-                } else if (error != null) {
-                    Column(Modifier.align(Alignment.Center).padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.bookshelf_load_failed), style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(12.dp))
-                        Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-                    }
-                } else if (entries.isEmpty()) {
-                    Column(Modifier.align(Alignment.Center).padding(32.dp),
+                } else if (error != null || entries.isEmpty()) {
+                    Column(Modifier.align(Alignment.Center).widthIn(max = 360.dp).fillMaxWidth()
+                        .verticalScroll(rememberScrollState()).padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(painterResource(R.drawable.ic_bottom_books_e), null,
-                            Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                            Modifier.size(48.dp), tint = if (error != null) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(20.dp))
-                        Text(stringResource(R.string.bookshelf_empty), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(if (error != null) R.string.bookshelf_load_failed
+                            else R.string.bookshelf_empty_title), style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(12.dp))
+                        Text(error ?: stringResource(R.string.bookshelf_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        if (error != null) TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
                     }
                 } else if (layout >= 2) {
-                    val state = rememberLazyGridState()
-                    LaunchedEffect(scrollRequest) {
-                        if (scrollRequest > 0) {
-                            if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val minimumCell = 48.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+                        val columns = minOf(layout, ((maxWidth - 16.dp + margin) / (minimumCell + margin)).toInt().coerceAtLeast(1))
+                        val state = rememberLazyGridState()
+                        LaunchedEffect(scrollRequest) {
+                            if (scrollRequest > 0) {
+                                if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
+                            }
                         }
-                    }
-                    LazyVerticalGrid(GridCells.Fixed(layout), state = state,
-                        modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(margin), verticalArrangement = Arrangement.spacedBy(margin)) {
-                        items(entries, key = ::shelfKey) { entry ->
-                            ShelfEntry(entry, true, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
-                                fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
-                                placementSpec = tween(motion.state)), appearance, layout == 1)
+                        LazyVerticalGrid(GridCells.Fixed(columns), state = state,
+                            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(margin), verticalArrangement = Arrangement.spacedBy(margin)) {
+                            items(entries, key = ::shelfKey) { entry ->
+                                ShelfEntry(entry, true, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
+                                    fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
+                                    placementSpec = tween(motion.state)), appearance, layout == 1)
+                            }
                         }
-                    }
-                    if (appearance.fastScroll && entries.size > 12) {
-                        ShelfFastScroller(state.firstVisibleItemIndex, entries.size,
-                            Modifier.align(Alignment.CenterEnd)) { fraction ->
-                            scope.launch { state.scrollToItem((fraction * entries.lastIndex).toInt()) }
+                        if (appearance.fastScroll && entries.size > 12) {
+                            ShelfFastScroller(state.firstVisibleItemIndex, entries.size,
+                                Modifier.align(Alignment.CenterEnd)) { fraction ->
+                                scope.launch { state.scrollToItem((fraction * entries.lastIndex).toInt()) }
+                            }
                         }
                     }
                 } else {
@@ -214,14 +228,16 @@ private fun ShelfEntry(entry: Any, grid: Boolean, updating: (Book) -> Boolean,
                     BookUpdateBadge(entry, isUpdating, appearance, Modifier.align(Alignment.TopEnd))
                 }
                 if (appearance.bookName == 0) GridTitle(entry.name)
-            } else Row(bookModifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            } else Row(bookModifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 BookCover(entry, Modifier.width(if (compactList) 48.dp else 66.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(entry.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(entry.name, Modifier.weight(1f), style = if (compactList)
+                            MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = FontFamily.Serif, fontSize = 18.sp, lineHeight = 26.sp),
+                            maxLines = if (compactList) 1 else 2, overflow = TextOverflow.Ellipsis)
                         BookUpdateBadge(entry, isUpdating, appearance, Modifier.padding(start = 8.dp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -245,8 +261,8 @@ private fun ShelfEntry(entry: Any, grid: Boolean, updating: (Book) -> Boolean,
                             color = if (entry.isUpError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (!compactList) BookMetadataLine(R.drawable.ic_history, entry.durChapterTitle.orEmpty())
-                    BookMetadataLine(R.drawable.ic_book_last, entry.latestChapterTitle.orEmpty())
+                    if (compactList) BookMetadataLine(R.drawable.ic_book_last, entry.latestChapterTitle.orEmpty())
+                    else BookChapterNotes(entry.durChapterTitle.orEmpty(), entry.latestChapterTitle.orEmpty())
                 }
             }
         }
@@ -286,6 +302,32 @@ private fun CoverTitle(name: String, modifier: Modifier) {
 }
 
 @Composable
+private fun BookChapterNotes(current: String, latest: String) {
+    if (current.isBlank() && latest.isBlank()) return
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 5.dp)) {
+        VerticalDivider(Modifier.fillMaxHeight().padding(vertical = 2.dp),
+            color = MaterialTheme.colorScheme.outlineVariant)
+        Column(Modifier.weight(1f).padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (current.isNotBlank()) BookChapterLine(R.string.bookshelf_reading_chapter, current, false)
+            if (latest.isNotBlank()) BookChapterLine(R.string.bookshelf_latest_chapter, latest, true)
+        }
+    }
+}
+
+@Composable
+private fun BookChapterLine(label: Int, text: String, latest: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(label), Modifier.widthIn(min = 28.dp).width(IntrinsicSize.Max),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+            color = if (latest) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
 private fun BookMetadataLine(icon: Int, text: String) {
     if (text.isBlank()) return
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -314,11 +356,12 @@ private fun BookUpdateBadge(book: Book, updating: Boolean, appearance: Bookshelf
     } else {
         stringResource(R.string.bookshelf_unread_chapters, unread)
     }
-    Surface(modifier.semantics { contentDescription = description }, shape = MaterialTheme.shapes.extraSmall,
+    Surface(modifier.defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+        .semantics { contentDescription = description }, shape = MaterialTheme.shapes.extraSmall,
         color = if (fresh) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = if (fresh) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) {
-        Text(unread.toString(), Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
+        Text(unread.toString(), Modifier.padding(horizontal = 5.dp, vertical = 2.dp), textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             fontWeight = if (fresh) FontWeight.Bold else FontWeight.Normal)
     }
 }
