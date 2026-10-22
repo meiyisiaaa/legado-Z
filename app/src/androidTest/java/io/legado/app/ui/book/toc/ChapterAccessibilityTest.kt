@@ -30,8 +30,8 @@ class ChapterAccessibilityTest {
             }
         }
         compose.onNodeWithText(context.getString(R.string.chapter_list_empty)).assertIsDisplayed()
-        compose.onNodeWithContentDescription("回到目录顶部").assertIsNotEnabled()
-        compose.onNodeWithContentDescription("跳到目录底部").assertIsNotEnabled()
+        compose.onNodeWithContentDescription(context.getString(R.string.toc_first_chapter)).assertIsNotEnabled()
+        compose.onNodeWithContentDescription(context.getString(R.string.toc_last_chapter)).assertIsNotEnabled()
     }
 
     @Test fun loadingCatalogDoesNotShowEitherEmptyMessage() {

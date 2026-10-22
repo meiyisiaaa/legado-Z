@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="toc_first_chapter">Go to the top of the chapter list</string>
+    <string name="toc_last_chapter">Go to the bottom of the chapter list</string>
+    <string name="toc_locate_current">Locate the current chapter</string>
+    <string name="toc_vip_chapter">VIP chapter</string>
+    <string name="toc_not_cached">Not cached</string>
+    <string name="toc_show_full_title">Show the full chapter title</string>
+</resources>

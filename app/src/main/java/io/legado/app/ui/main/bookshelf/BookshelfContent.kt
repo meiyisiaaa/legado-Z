@@ -10,6 +10,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -36,11 +39,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.legado.app.R
 import io.legado.app.data.entities.Book
@@ -48,6 +49,7 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isUpError
 import io.legado.app.ui.widget.compose.LocalLegadoMotion
+import io.legado.app.ui.widget.compose.bookTitle
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.toTimeAgo
 import kotlinx.coroutines.delay
@@ -75,96 +77,140 @@ internal fun BookshelfContent(
     }
     Surface(Modifier.fillMaxSize()) {
         holder.SaveableStateProvider(groupId) {
+            var readingStatus by rememberSaveable { mutableStateOf(ReadingStatus.ALL) }
+            val showFilters = !isLoading && error == null && entries.isNotEmpty() &&
+                groupId != BookGroup.IdRoot && entries.all { it is Book }
+            val visibleEntries = if (showFilters && readingStatus != ReadingStatus.ALL) {
+                entries.filter { readingStatus.includes(it as Book) }
+            } else entries
             PullToRefreshBox(isRefreshing = false, onRefresh = { if (refreshEnabled) onRefresh() },
                 modifier = Modifier.fillMaxSize(),
                 state = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()) {
-                if (isLoading) {
-                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Text(stringResource(R.string.bookshelf_loading),
-                            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        repeat(4) {
-                            Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Surface(Modifier.size(66.dp, 88.dp), shape = MaterialTheme.shapes.extraSmall,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Surface(Modifier.fillMaxWidth(0.75f).height(20.dp), shape = MaterialTheme.shapes.extraSmall,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
-                                    Surface(Modifier.fillMaxWidth(0.5f).height(14.dp), shape = MaterialTheme.shapes.extraSmall,
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
+                Column(Modifier.fillMaxSize()) {
+                    if (showFilters) ReadingStatusFilters(readingStatus, { readingStatus = it })
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (isLoading) {
+                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                Text(stringResource(R.string.bookshelf_loading),
+                                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                repeat(4) {
+                                    Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Surface(Modifier.size(66.dp, 88.dp), shape = MaterialTheme.shapes.extraSmall,
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Surface(Modifier.fillMaxWidth(0.75f).height(20.dp), shape = MaterialTheme.shapes.extraSmall,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
+                                            Surface(Modifier.fillMaxWidth(0.5f).height(14.dp), shape = MaterialTheme.shapes.extraSmall,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (error != null || entries.isEmpty()) {
+                            Column(Modifier.align(Alignment.Center).widthIn(max = 360.dp).fillMaxWidth()
+                                .verticalScroll(rememberScrollState()).padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(painterResource(R.drawable.ic_bottom_books_e), null,
+                                    Modifier.size(48.dp), tint = if (error != null) MaterialTheme.colorScheme.error
+                                        else MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(20.dp))
+                                Text(stringResource(if (error != null) R.string.bookshelf_load_failed
+                                    else R.string.bookshelf_empty_title), style = MaterialTheme.typography.titleLarge,
+                                    textAlign = TextAlign.Center)
+                                Spacer(Modifier.height(12.dp))
+                                Text(error ?: stringResource(R.string.bookshelf_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                                if (error != null) TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                            }
+                        } else if (visibleEntries.isEmpty()) {
+                            Column(Modifier.align(Alignment.Center).widthIn(max = 360.dp).fillMaxWidth()
+                                .verticalScroll(rememberScrollState()).padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.reading_filter_empty),
+                                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                    style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                Spacer(Modifier.height(12.dp))
+                                TextButton(onClick = { readingStatus = ReadingStatus.ALL }) {
+                                    Text(stringResource(R.string.reading_filter_clear))
+                                }
+                            }
+                        } else if (layout >= 2) {
+                            BoxWithConstraints(Modifier.fillMaxSize()) {
+                                val minimumCell = 48.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+                                val columns = minOf(layout, ((maxWidth - 16.dp + margin) / (minimumCell + margin)).toInt().coerceAtLeast(1))
+                                val state = rememberLazyGridState()
+                                LaunchedEffect(scrollRequest) {
+                                    if (scrollRequest > 0) {
+                                        if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
+                                    }
+                                }
+                                LazyVerticalGrid(GridCells.Fixed(columns), state = state,
+                                    modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(margin), verticalArrangement = Arrangement.spacedBy(margin)) {
+                                    items(visibleEntries, key = ::shelfKey) { entry ->
+                                        ShelfEntry(entry, true, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
+                                            fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
+                                            placementSpec = tween(motion.state)), appearance, layout == 1)
+                                    }
+                                }
+                                if (appearance.fastScroll && visibleEntries.size > 12) {
+                                    ShelfFastScroller(state.firstVisibleItemIndex, visibleEntries.size,
+                                        Modifier.align(Alignment.CenterEnd)) { fraction ->
+                                        scope.launch { state.scrollToItem((fraction * visibleEntries.lastIndex).toInt()) }
+                                    }
+                                }
+                            }
+                        } else {
+                            val state = rememberLazyListState()
+                            LaunchedEffect(scrollRequest) {
+                                if (scrollRequest > 0) {
+                                    if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
+                                }
+                            }
+                            LazyColumn(state = state, modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(margin)) {
+                                items(visibleEntries, key = ::shelfKey) { entry ->
+                                    ShelfEntry(entry, false, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
+                                        fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
+                                        placementSpec = tween(motion.state)), appearance, layout == 1)
+                                }
+                            }
+                            if (appearance.fastScroll && visibleEntries.size > 12) {
+                                ShelfFastScroller(state.firstVisibleItemIndex, visibleEntries.size,
+                                    Modifier.align(Alignment.CenterEnd)) { fraction ->
+                                    scope.launch { state.scrollToItem((fraction * visibleEntries.lastIndex).toInt()) }
                                 }
                             }
                         }
                     }
-                } else if (error != null || entries.isEmpty()) {
-                    Column(Modifier.align(Alignment.Center).widthIn(max = 360.dp).fillMaxWidth()
-                        .verticalScroll(rememberScrollState()).padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(painterResource(R.drawable.ic_bottom_books_e), null,
-                            Modifier.size(48.dp), tint = if (error != null) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(20.dp))
-                        Text(stringResource(if (error != null) R.string.bookshelf_load_failed
-                            else R.string.bookshelf_empty_title), style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(12.dp))
-                        Text(error ?: stringResource(R.string.bookshelf_empty),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                        if (error != null) TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-                    }
-                } else if (layout >= 2) {
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
-                        val minimumCell = 48.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
-                        val columns = minOf(layout, ((maxWidth - 16.dp + margin) / (minimumCell + margin)).toInt().coerceAtLeast(1))
-                        val state = rememberLazyGridState()
-                        LaunchedEffect(scrollRequest) {
-                            if (scrollRequest > 0) {
-                                if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
-                            }
-                        }
-                        LazyVerticalGrid(GridCells.Fixed(columns), state = state,
-                            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(margin), verticalArrangement = Arrangement.spacedBy(margin)) {
-                            items(entries, key = ::shelfKey) { entry ->
-                                ShelfEntry(entry, true, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
-                                    fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
-                                    placementSpec = tween(motion.state)), appearance, layout == 1)
-                            }
-                        }
-                        if (appearance.fastScroll && entries.size > 12) {
-                            ShelfFastScroller(state.firstVisibleItemIndex, entries.size,
-                                Modifier.align(Alignment.CenterEnd)) { fraction ->
-                                scope.launch { state.scrollToItem((fraction * entries.lastIndex).toInt()) }
-                            }
-                        }
-                    }
-                } else {
-                    val state = rememberLazyListState()
-                    LaunchedEffect(scrollRequest) {
-                        if (scrollRequest > 0) {
-                            if (motion.enabled) state.animateScrollToItem(0) else state.scrollToItem(0)
-                        }
-                    }
-                    LazyColumn(state = state, modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(margin)) {
-                        items(entries, key = ::shelfKey) { entry ->
-                            ShelfEntry(entry, false, updating, onOpen, onDetails, revision + clock, Modifier.animateItem(
-                                fadeInSpec = tween(motion.state), fadeOutSpec = tween(motion.state),
-                                placementSpec = tween(motion.state)), appearance, layout == 1)
-                        }
-                    }
-                    if (appearance.fastScroll && entries.size > 12) {
-                        ShelfFastScroller(state.firstVisibleItemIndex, entries.size,
-                            Modifier.align(Alignment.CenterEnd)) { fraction ->
-                            scope.launch { state.scrollToItem((fraction * entries.lastIndex).toInt()) }
-                        }
-                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReadingStatusFilters(selected: ReadingStatus, onSelect: (ReadingStatus) -> Unit) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup()
+        .padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReadingStatus.entries.forEach { status ->
+            FilterChip(selected = selected == status, onClick = { onSelect(status) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                label = {
+                    Text(stringResource(when (status) {
+                        ReadingStatus.ALL -> R.string.reading_filter_all
+                        ReadingStatus.NOT_STARTED -> R.string.reading_filter_not_started
+                        ReadingStatus.READING -> R.string.reading_filter_reading
+                        ReadingStatus.AT_LAST_CHAPTER -> R.string.reading_filter_last_chapter
+                    }), maxLines = 1)
+                }, leadingIcon = if (selected == status) {
+                    { Icon(painterResource(R.drawable.ic_check), null, Modifier.size(18.dp)) }
+                } else null)
         }
     }
 }
@@ -235,8 +281,7 @@ private fun ShelfEntry(entry: Any, grid: Boolean, updating: (Book) -> Boolean,
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(entry.name, Modifier.weight(1f), style = if (compactList)
-                            MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = FontFamily.Serif, fontSize = 18.sp, lineHeight = 26.sp),
+                            MaterialTheme.typography.titleMedium else MaterialTheme.typography.bookTitle,
                             maxLines = if (compactList) 1 else 2, overflow = TextOverflow.Ellipsis)
                         BookUpdateBadge(entry, isUpdating, appearance, Modifier.padding(start = 8.dp))
                     }

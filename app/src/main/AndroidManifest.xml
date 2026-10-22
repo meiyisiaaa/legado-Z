@@ -179,6 +179,7 @@
         <!-- 书籍信息编辑 -->
         <activity
             android:name=".ui.book.info.edit.BookInfoEditActivity"
+            android:windowSoftInputMode="adjustResize|stateHidden"
             android:launchMode="singleTask" />
         <!-- 音频播放界面 -->
         <activity

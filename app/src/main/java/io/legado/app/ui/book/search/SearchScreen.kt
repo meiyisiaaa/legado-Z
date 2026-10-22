@@ -33,6 +33,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,6 +55,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
@@ -76,7 +81,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.res.colorResource
 import io.legado.app.R
 import io.legado.app.ui.book.info.bookCoverTransitionName
 import io.legado.app.ui.book.info.isBookCoverTransitionEnabled
@@ -86,6 +90,8 @@ import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.utils.ColorUtils
 import io.legado.app.ui.widget.compose.LocalLegadoMotion
 import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.compose.LegadoPageState
+import io.legado.app.ui.widget.compose.bookTitle
 import io.legado.app.ui.widget.image.CoverImageView
 import androidx.core.view.ViewCompat
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -177,14 +183,15 @@ internal fun SearchScreen(
             enter = if (motionEnabled) androidx.compose.animation.expandVertically() + fadeIn() else EnterTransition.None,
             exit = if (motionEnabled) androidx.compose.animation.shrinkVertically() + fadeOut() else ExitTransition.None
             ) {
-                LinearProgressIndicator(
+                if (motionEnabled) LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(2.dp)
                         .clip(CircleShape),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                ) else Box(Modifier.fillMaxWidth().height(2.dp)
+                    .background(MaterialTheme.colorScheme.primary))
             }
 
             AnimatedContent(
@@ -215,7 +222,8 @@ internal fun SearchScreen(
                         state = state,
                         listState = listState,
                         onBookClick = onBookClick,
-                        onListEndReached = onListEndReached
+                        onListEndReached = onListEndReached,
+                        onContinueSearch = onContinueSearch
                     )
                 }
             }
@@ -425,8 +433,21 @@ private fun SearchResults(
     state: SearchUiState,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onBookClick: (SearchBookUi, View?) -> Unit,
-    onListEndReached: () -> Unit
+    onListEndReached: () -> Unit,
+    onContinueSearch: () -> Unit
 ) {
+    if (state.results.isEmpty() && !state.isSearching && (state.manuallyStopped || !state.hasMore)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            LegadoPageState(R.drawable.ic_search,
+                stringResource(if (state.manuallyStopped) R.string.search_paused else R.string.search_no_results),
+                message = stringResource(if (state.manuallyStopped) R.string.search_paused_hint else R.string.search_no_results_hint)) {
+                if (state.manuallyStopped) TextButton(onClick = onContinueSearch) {
+                    Text(stringResource(R.string.search_resume))
+                }
+            }
+        }
+        return
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -446,18 +467,21 @@ private fun SearchResults(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    if (LocalLegadoMotion.current.enabled) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else Icon(painterResource(R.drawable.ic_refresh_black_24dp),
+                        contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("正在扫描书源…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.search_scanning_sources), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else if (state.hasMore && state.results.isNotEmpty()) {
             item(key = "load-more") {
                 TextButton(
-                    onClick = onListEndReached,
+                    onClick = if (state.manuallyStopped) onContinueSearch else onListEndReached,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("继续加载更多结果")
+                    Text(if (state.manuallyStopped) stringResource(R.string.search_resume) else "继续加载更多结果")
                 }
             }
         }
@@ -471,7 +495,7 @@ private fun SectionHeading(
 ) {
     Text(
         text = title,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold
     )
@@ -507,12 +531,13 @@ private fun HistoryChip(word: String, onClick: () -> Unit, onDelete: () -> Unit)
         ) {
             Text(
                 text = word,
-                modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onDelete)
-                    .padding(vertical = 8.dp),
+                modifier = Modifier.weight(1f, fill = false).heightIn(min = 48.dp)
+                    .combinedClickable(onClick = onClick, onLongClick = onDelete)
+                    .wrapContentHeight(Alignment.CenterVertically).padding(vertical = 8.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                 Icon(
                     painterResource(R.drawable.ic_outline_delete),
                     contentDescription = "删除搜索记录",
@@ -527,97 +552,59 @@ private fun HistoryChip(word: String, onClick: () -> Unit, onDelete: () -> Unit)
 @Composable
 private fun SearchBookCard(book: SearchBookUi, onClick: (View?) -> Unit) {
     val coverRef = remember(book.bookUrl) { arrayOfNulls<View>(1) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { onClick(coverRef[0]) }
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            BookCover(
-                book = book,
-                modifier = Modifier.width(80.dp).height(110.dp),
-                onViewCreated = { coverRef[0] = it }
-            )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (book.inBookshelf) {
-                        Box(
-                            Modifier.padding(end = 5.dp).size(8.dp).clip(CircleShape)
-                                .background(colorResource(R.color.md_green_600))
-                        )
-                    }
-                    Text(
-                        text = book.name,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            text = "${book.originCount}",
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraSmall)
+            .clickable { onClick(coverRef[0]) }.padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BookCover(book, Modifier.width(66.dp).aspectRatio(0.75f),
+                onViewCreated = { coverRef[0] = it })
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(book.name, Modifier.weight(1f), style = MaterialTheme.typography.bookTitle,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (book.inBookshelf) Icon(painterResource(R.drawable.ic_check),
+                        stringResource(R.string.search_already_on_shelf),
+                        Modifier.padding(start = 8.dp).size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 }
-                Text(
-                    text = book.author,
-                    style = MaterialTheme.typography.bodySmall,
+                Text(book.author, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (book.kinds.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        book.kinds.forEach { kind ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Text(
-                                    text = kind,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    maxLines = 1
-                                )
-                            }
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(R.string.search_result_sources, book.originCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    book.kinds.forEach { kind ->
+                        Surface(shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                            Text(kind, Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
                 book.latestChapter?.takeIf(String::isNotBlank)?.let { latest ->
-                    Text(
-                        text = latest,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(Modifier.height(IntrinsicSize.Min).padding(top = 4.dp)) {
+                        VerticalDivider(Modifier.fillMaxHeight().padding(vertical = 2.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(Modifier.width(10.dp))
+                        Text(stringResource(R.string.bookshelf_latest_chapter),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(8.dp))
+                        Text(latest, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                if (book.intro.isNotBlank()) {
-                    Text(
-                        text = book.intro,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                if (book.intro.isNotBlank()) Text(book.intro,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -631,7 +618,8 @@ private fun BookCover(
         AndroidView(
             factory = { context ->
                 CoverImageView(context).apply {
-                    contentDescription = context.getString(R.string.img_cover)
+                    contentDescription = null
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     if (isBookCoverTransitionEnabled()) {
                         ViewCompat.setTransitionName(this, bookCoverTransitionName(book.bookUrl))
                     }
@@ -645,7 +633,7 @@ private fun BookCover(
                     onViewCreated(this)
                 }
             },
-            modifier = modifier.clip(RoundedCornerShape(12.dp))
+            modifier = modifier.clip(MaterialTheme.shapes.extraSmall)
         )
     }
 }

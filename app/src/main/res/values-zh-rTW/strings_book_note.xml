@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="book_note_label">書目備註</string>
+    <string name="book_note_backup_scope">隨完整備份儲存，不包含在書架分享清單中。</string>
+    <string name="book_note_saving">儲存中…</string>
+    <string name="book_note_book_missing">這本書已不在書庫中。</string>
+</resources>

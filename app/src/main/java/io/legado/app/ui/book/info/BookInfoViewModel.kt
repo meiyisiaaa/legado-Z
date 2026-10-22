@@ -383,14 +383,14 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             bookSource = source.also {
                 hasCustomBtn = it.customButton
             }
-            bookData.value?.migrateTo(book, toc)
+            val oldBook = bookData.value
+            oldBook?.migrateTo(book, toc)
             if (book.isWebFile) {
                 loadWebFile(book)
             }
             if (inBookshelf) {
                 book.removeType(BookType.updateError)
-                bookData.value?.delete()
-                appDb.bookDao.insert(book)
+                if (oldBook != null) oldBook.replaceWith(book) else appDb.bookDao.insert(book)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
             }
             bookData.postValue(book)
@@ -421,6 +421,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 book.durChapterIndex = it.durChapterIndex
                 book.durChapterPos = it.durChapterPos
                 book.durChapterTitle = it.durChapterTitle
+                book.userNote = it.userNote
             }
             book.save()
             if (ReadBook.book?.isSameNameAuthor(book) == true) {
@@ -454,6 +455,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                     book.durChapterIndex = it.durChapterIndex
                     book.durChapterPos = it.durChapterPos
                     book.durChapterTitle = it.durChapterTitle
+                    book.userNote = it.userNote
                 }
                 if (ReadBook.book?.isSameNameAuthor(book) == true) {
                     ReadBook.book = book

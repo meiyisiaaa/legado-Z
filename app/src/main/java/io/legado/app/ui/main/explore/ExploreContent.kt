@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,6 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -63,6 +68,7 @@ import io.legado.app.R
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.ui.widget.compose.LocalLegadoMotion
+import io.legado.app.ui.widget.compose.LegadoPageState
 import kotlinx.coroutines.launch
 
 internal data class ExploreUiState(
@@ -138,11 +144,12 @@ internal fun ExploreContent(
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val motionDuration = LocalLegadoMotion.current.state
+    val motion = LocalLegadoMotion.current
+    val motionDuration = motion.state
 
     LaunchedEffect(state.scrollToTopRequest) {
         if (state.scrollToTopRequest > 0 && state.sources.isNotEmpty()) {
-            listState.animateScrollToItem(0)
+            if (motion.enabled) listState.animateScrollToItem(0) else listState.scrollToItem(0)
         }
     }
 
@@ -165,12 +172,15 @@ internal fun ExploreContent(
             .background(MaterialTheme.colorScheme.background)
     ) {
         when {
-            state.isLoadingGroups -> LinearProgressIndicator(
+            state.isLoadingGroups -> if (motion.enabled) LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth().semantics {
                     contentDescription = loadingDescription
                     liveRegion = LiveRegionMode.Polite
                 }
-            )
+            ) else Icon(painterResource(R.drawable.ic_refresh_black_24dp),
+                contentDescription = loadingDescription,
+                modifier = Modifier.padding(16.dp).size(20.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite })
             state.groupsError != null -> Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -186,37 +196,37 @@ internal fun ExploreContent(
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.isLoadingSources -> CircularProgressIndicator(
+                state.isLoadingSources -> if (motion.enabled) CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center).size(30.dp).semantics {
                         contentDescription = loadingDescription
                         liveRegion = LiveRegionMode.Polite
                     },
                     strokeWidth = 2.dp
-                )
-                state.sourcesError != null -> Column(
-                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                ) else Icon(painterResource(R.drawable.ic_refresh_black_24dp),
+                    contentDescription = loadingDescription,
+                    modifier = Modifier.align(Alignment.Center).size(30.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite })
+                state.sourcesError != null -> LegadoPageState(
+                    icon = R.drawable.ic_bottom_explore_e,
+                    title = stringResource(R.string.error_get_data),
+                    message = state.sourcesError,
+                    iconTint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.align(Alignment.Center)
                 ) {
-                    Text(
-                        text = state.sourcesError.orEmpty(),
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
                     TextButton(onClick = onRetrySources) { Text(retryLabel) }
                 }
-                state.sources.isEmpty() -> Text(
-                    text = stringResource(
+                state.sources.isEmpty() -> LegadoPageState(
+                    icon = R.drawable.ic_bottom_explore_e,
+                    title = stringResource(if (state.query.isBlank() && state.selectedGroup == null)
+                        R.string.discovery else R.string.search_no_results),
+                    message = stringResource(
                         if (state.query.isBlank() && state.selectedGroup == null) {
                             R.string.explore_empty
                         } else {
                             R.string.empty
                         }
                     ),
-                    modifier = Modifier.align(Alignment.Center).padding(16.dp)
-                        .semantics { liveRegion = LiveRegionMode.Polite },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.align(Alignment.Center)
                 )
                 else -> LazyColumn(
                     state = listState,
@@ -242,7 +252,10 @@ internal fun ExploreContent(
                             onToggle = {
                                 onToggleSource(source)
                                 if (!expanded) {
-                                    scope.launch { listState.animateScrollToItem(state.sources.indexOf(source)) }
+                                    scope.launch {
+                                        if (motion.enabled) listState.animateScrollToItem(state.sources.indexOf(source))
+                                        else listState.scrollToItem(state.sources.indexOf(source))
+                                    }
                                 }
                             },
                             onSourceAction = { action -> onSourceAction(source, action) },
@@ -274,6 +287,8 @@ private fun ExploreSourceCard(
     kindContent: @Composable (BookSourcePart, List<ExploreKind>, Int, Boolean) -> Unit
 ) {
     var menuExpanded by remember(source.bookSourceUrl) { mutableStateOf(false) }
+    val arrowRotation by animateFloatAsState(if (expanded) 90f else 0f,
+        tween(motionDuration), label = "source expansion")
     val loadingDescription = stringResource(R.string.data_loading)
     val expansionDescription = stringResource(
         if (expanded) R.string.accessibility_expanded else R.string.accessibility_collapsed
@@ -289,7 +304,7 @@ private fun ExploreSourceCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .heightIn(min = 56.dp)
                     .combinedClickable(
                         role = Role.Button,
                         onClick = onToggle,
@@ -301,32 +316,41 @@ private fun ExploreSourceCard(
                         if (expanded) collapse { onToggle(); true }
                         else expand { onToggle(); true }
                     }
-                    .padding(start = 10.dp, top = 6.dp, bottom = 6.dp, end = 10.dp),
+                    .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                  Text(
                     text = source.bookSourceName,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                  source.bookSourceGroup?.takeIf(String::isNotBlank)?.let { group ->
+                    Text(group, style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  }
+                }
                 if (isLoading) {
-                    CircularProgressIndicator(
+                    if (LocalLegadoMotion.current.enabled) CircularProgressIndicator(
                         modifier = Modifier.padding(end = 8.dp).size(18.dp).semantics {
                             contentDescription = loadingDescription
                             liveRegion = LiveRegionMode.Polite
                         },
                         strokeWidth = 2.dp
-                    )
+                    ) else Icon(painterResource(R.drawable.ic_refresh_black_24dp),
+                        contentDescription = loadingDescription,
+                        modifier = Modifier.padding(end = 8.dp).size(18.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite })
                 }
                 Icon(
-                    painter = painterResource(if (expanded) R.drawable.ic_arrow_down else R.drawable.ic_arrow_right),
+                    painter = painterResource(R.drawable.ic_arrow_right),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp).rotate(arrowRotation)
                 )
             }
 
@@ -342,12 +366,18 @@ private fun ExploreSourceCard(
             }
         }
 
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
         AnimatedVisibility(
             visible = expanded && isResumed,
             enter = expandVertically(animationSpec = tween(motionDuration)) + fadeIn(animationSpec = tween(motionDuration)),
             exit = shrinkVertically(animationSpec = tween(motionDuration)) + fadeOut(animationSpec = tween(motionDuration)),
             label = "explore-source-controls"
         ) {
+            val ruleColor = MaterialTheme.colorScheme.outlineVariant
+            Box(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp)
+                .drawBehind { drawLine(ruleColor, Offset.Zero, Offset(0f, size.height), 1.dp.toPx()) }
+                .padding(start = 12.dp)) {
             when {
                 isLoading -> Unit
                 kindError != null -> Column(
@@ -363,7 +393,6 @@ private fun ExploreSourceCard(
                         Text(stringResource(R.string.retry))
                     }
                     if (kinds.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)) {
                             kindContent(source, kinds, renderRevision, isResumed)
                         }
@@ -375,11 +404,11 @@ private fun ExploreSourceCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 kinds.isNotEmpty() -> Column {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Box(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp)) {
                         kindContent(source, kinds, renderRevision, isResumed)
                     }
                 }
+            }
             }
         }
     }

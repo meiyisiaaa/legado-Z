@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_no_results">No search results</string>
+    <string name="search_no_results_hint">Try another keyword or check the enabled book sources.</string>
+    <string name="search_paused">Search paused</string>
+    <string name="search_paused_hint">Continue scanning the remaining book sources.</string>
+    <string name="search_resume">Continue search</string>
+    <string name="search_scanning_sources">Scanning book sources…</string>
+    <string name="search_already_on_shelf">Already in bookshelf</string>
+    <string name="search_result_sources">%1$d sources</string>
+</resources>

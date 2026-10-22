@@ -229,7 +229,8 @@ object BookController {
         val returnData = ReturnData()
         GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
             AppWebDav.uploadBookProgress(book)
-            book.save()
+            // The legacy whole-book endpoint does not edit private book notes.
+            appDb.bookDao.saveBookPreservingUserNote(book)
             return returnData.setData("")
         }
         return returnData.setErrorMsg("格式不对")

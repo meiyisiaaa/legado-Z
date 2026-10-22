@@ -57,6 +57,7 @@ class BookInfoEditActivity :
     override val binding by viewBinding(ActivityBookInfoEditBinding::inflate)
     override val viewModel by viewModels<BookInfoEditViewModel>()
     private var uiState by mutableStateOf(BookInfoEditUiState())
+    private var draftInitialized = false
     private val coverImageView by lazy {
         CoverImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -65,14 +66,25 @@ class BookInfoEditActivity :
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        @Suppress("DEPRECATION")
+        savedInstanceState?.getParcelable<BookInfoEditUiState>("bookInfoEditDraft")?.let {
+            uiState = it.copy(saving = false)
+            draftInitialized = true
+        }
         installComposeContent()
         initView()
         viewModel.bookData.observe(this) { upView(it) }
+        viewModel.saving.observe(this) { uiState = uiState.copy(saving = it) }
         if (viewModel.bookData.value == null) {
             intent.getStringExtra("bookUrl")?.let {
                 viewModel.loadBook(it)
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (draftInitialized) outState.putParcelable("bookInfoEditDraft", uiState)
+        super.onSaveInstanceState(outState)
     }
 
     private fun installComposeContent() {
@@ -123,7 +135,7 @@ class BookInfoEditActivity :
 
     private fun initView() {
         binding.root.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
-            val typeMask = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            val typeMask = WindowInsetsCompat.Type.systemBars()
             val insets = windowInsets.getInsets(typeMask)
             view.bottomPadding = insets.bottom
             windowInsets
@@ -131,7 +143,7 @@ class BookInfoEditActivity :
     }
 
     private fun upView(book: Book) {
-        uiState = uiState.copy(
+        if (!draftInitialized) uiState = uiState.copy(
             name = book.name,
             author = book.author,
             type = when {
@@ -141,8 +153,10 @@ class BookInfoEditActivity :
                 else -> 0
             },
             coverUrl = book.getDisplayCover().orEmpty(),
-            intro = book.getDisplayIntro().orEmpty()
+            intro = book.getDisplayIntro().orEmpty(),
+            userNote = book.userNote.orEmpty()
         )
+        draftInitialized = true
         upCover()
     }
 
@@ -153,7 +167,8 @@ class BookInfoEditActivity :
     }
 
     private fun saveData() {
-        val book = viewModel.book ?: return
+        if (viewModel.saving.value == true) return
+        val book = viewModel.book?.copy() ?: return
         val oldBook = book.copy()
         book.name = uiState.name
         book.author = uiState.author
@@ -171,7 +186,7 @@ class BookInfoEditActivity :
         val customIntro = uiState.intro
         book.customIntro = if (customIntro == book.intro) null else customIntro
         BookHelp.updateCacheFolder(oldBook, book)
-        viewModel.saveBook(book) {
+        viewModel.saveBook(book, uiState.userNote) {
             setResult(RESULT_OK)
             finish()
         }

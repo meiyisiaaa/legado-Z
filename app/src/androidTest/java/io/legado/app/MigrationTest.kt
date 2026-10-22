@@ -28,6 +28,36 @@ class MigrationTest {
     )
 
     @Test
+    fun migrate90To91AddsNullableBookNoteWithoutChangingProgressOrReadConfig() {
+        helper.createDatabase(TEST_DB, 90).apply {
+            execSQL(
+                """INSERT INTO books (bookUrl, name, author, intro, durChapterIndex, durChapterPos, readConfig)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                arrayOf<Any?>("note-migration", "Migration book", "Author", "Source intro", 12, 321,
+                    """{"reverseToc":true,"roleTtsEnabled":true}""")
+            )
+            close()
+        }
+        val database = Room.databaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            AppDatabase::class.java, TEST_DB
+        ).addMigrations(*DatabaseMigrations.migrations).build()
+        try {
+            val book = database.bookDao.getBook("note-migration")!!
+            assertNull(book.userNote)
+            assertEquals("Source intro", book.intro)
+            assertEquals(12, book.durChapterIndex)
+            assertEquals(321, book.durChapterPos)
+            assertTrue(book.config.reverseToc)
+            assertTrue(book.config.roleTtsEnabled)
+            database.bookDao.updateUserNote(book.bookUrl, "New note")
+            assertEquals("New note", database.bookDao.getBook(book.bookUrl)?.userNote)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     @Throws(IOException::class)
     fun migrateAll() {
         // Create earliest version of the database.

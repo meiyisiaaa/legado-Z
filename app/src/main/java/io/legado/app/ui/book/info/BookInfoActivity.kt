@@ -92,7 +92,6 @@ import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.FileDoc
-import io.legado.app.utils.GSON
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.dpToPx
@@ -387,7 +386,7 @@ class BookInfoActivity :
 
             R.id.menu_share_it -> {
                 viewModel.getBook()?.let {
-                    val bookJson = GSON.toJson(it)
+                    val bookJson = it.toShareJson()
                     val shareStr = "${it.bookUrl}#$bookJson"
                     SourceCallBack.callBackBtn(
                         this,
@@ -575,6 +574,7 @@ class BookInfoActivity :
             inBookshelf = viewModel.inBookshelf,
             isWebFile = book.isWebFile,
             hasIntro = !book.getDisplayIntro().isNullOrBlank(),
+            userNote = book.userNote.orEmpty(),
             loading = true
         )
         showCover(book)

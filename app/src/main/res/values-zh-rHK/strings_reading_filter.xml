@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reading_filter_all">全部</string>
+    <string name="reading_filter_not_started">未開始</string>
+    <string name="reading_filter_reading">閱讀中</string>
+    <string name="reading_filter_last_chapter">已到末章</string>
+    <string name="reading_filter_empty">沒有符合條件的書籍</string>
+    <string name="reading_filter_clear">顯示全部</string>
+</resources>

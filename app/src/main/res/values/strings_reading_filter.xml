@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reading_filter_all">All</string>
+    <string name="reading_filter_not_started">Not started</string>
+    <string name="reading_filter_reading">Reading</string>
+    <string name="reading_filter_last_chapter">At last chapter</string>
+    <string name="reading_filter_empty">No books match this filter</string>
+    <string name="reading_filter_clear">Show all books</string>
+</resources>

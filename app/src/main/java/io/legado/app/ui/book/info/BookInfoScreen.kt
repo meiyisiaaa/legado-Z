@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -59,6 +60,7 @@ internal data class BookInfoUiState(
     val inBookshelf: Boolean = false,
     val isWebFile: Boolean = false,
     val hasIntro: Boolean = false,
+    val userNote: String = "",
     val loading: Boolean = true
 )
 
@@ -230,6 +232,23 @@ internal fun BookInfoScreen(
                             textAlign = TextAlign.Start,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)
                         )
+                    }
+                }
+            }
+            if (state.userNote.isNotBlank()) {
+                item(key = "user-note") {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(stringResource(R.string.book_note_label),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary)
+                        SelectionContainer {
+                            Text(state.userNote, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
             }

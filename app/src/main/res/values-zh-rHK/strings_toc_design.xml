@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="toc_first_chapter">回到目錄頂部</string>
+    <string name="toc_last_chapter">跳到目錄底部</string>
+    <string name="toc_locate_current">定位目前章節</string>
+    <string name="toc_vip_chapter">VIP 章節</string>
+    <string name="toc_not_cached">尚未快取</string>
+    <string name="toc_show_full_title">查看完整章節名稱</string>
+</resources>

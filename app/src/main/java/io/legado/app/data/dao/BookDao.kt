@@ -147,10 +147,57 @@ interface BookDao {
     fun hasFile(fileName: String): Boolean
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(vararg book: Book)
+    fun insertEntities(vararg book: Book)
+
+    @Transaction
+    fun insert(vararg book: Book) {
+        book.forEach {
+            val existing = getBook(it.bookUrl) ?: getBook(it.name, it.author)
+            if (existing != null) it.userNote = existing.userNote
+        }
+        insertEntities(*book)
+    }
 
     @Update
-    fun update(vararg book: Book)
+    fun updateEntities(vararg book: Book)
+
+    @Transaction
+    fun update(vararg book: Book) {
+        // Whole-book snapshots cannot overwrite notes edited after they were loaded.
+        val notes = book.asList().chunked(900).flatMap { chunk ->
+            getUserNotes(chunk.map { it.bookUrl })
+        }.associate { it.bookUrl to it.userNote }
+        book.forEach { it.userNote = notes[it.bookUrl] }
+        updateEntities(*book)
+    }
+
+    @Query("SELECT bookUrl, userNote FROM books WHERE bookUrl IN (:bookUrls)")
+    fun getUserNotes(bookUrls: List<String>): List<UserNote>
+
+    data class UserNote(val bookUrl: String, val userNote: String?)
+
+    @Query("UPDATE books SET userNote = :note WHERE bookUrl = :bookUrl")
+    fun updateUserNote(bookUrl: String, note: String?): Int
+
+    @Query("""UPDATE books SET name = :name, author = :author, type = :type,
+        customCoverUrl = :cover, customIntro = :intro WHERE bookUrl = :bookUrl""")
+    fun updateBookInfoColumns(bookUrl: String, name: String, author: String, type: Int,
+        cover: String?, intro: String?): Int
+
+    @Transaction
+    fun updateBookInfo(book: Book, note: String?): Boolean {
+        if (updateBookInfoColumns(book.bookUrl, book.name, book.author, book.type,
+                book.customCoverUrl, book.customIntro) == 0) return false
+        updateUserNote(book.bookUrl, note?.takeUnless { it.isBlank() })
+        return true
+    }
+
+    @Transaction
+    fun saveBookPreservingUserNote(book: Book) {
+        val existing = getBook(book.bookUrl) ?: getBook(book.name, book.author)
+        book.userNote = existing?.userNote
+        if (has(book.bookUrl)) update(book) else insert(book)
+    }
 
     @Transaction
     fun updateRoleTtsConfig(bookUrl: String, roleTtsConfigJson: String?) {
@@ -174,6 +221,7 @@ interface BookDao {
 
     @Transaction
     fun replace(oldBook: Book, newBook: Book) {
+        newBook.userNote = (getBook(oldBook.bookUrl) ?: oldBook).userNote
         delete(oldBook)
         insert(newBook)
     }

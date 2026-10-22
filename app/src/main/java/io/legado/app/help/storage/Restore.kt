@@ -117,15 +117,16 @@ object Restore {
                 }
                 if (appDb.bookDao.has(book.bookUrl)) {
                     try {
-                        appDb.bookDao.update(book)
+                        // A full restore deliberately restores the backed-up private note too.
+                        appDb.bookDao.updateEntities(book)
                     } catch (_: SQLiteConstraintException) {
-                        appDb.bookDao.insert(book)
+                        appDb.bookDao.insertEntities(book)
                     }
                 } else {
                     newBooks.add(book)
                 }
             }
-            appDb.bookDao.insert(*newBooks.toTypedArray())
+            appDb.bookDao.insertEntities(*newBooks.toTypedArray())
         }
         fileToListT<Bookmark>(path, "bookmark.json")?.let {
             appDb.bookmarkDao.insert(*it.toTypedArray())
