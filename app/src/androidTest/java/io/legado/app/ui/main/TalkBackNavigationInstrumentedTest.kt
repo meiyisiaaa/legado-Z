@@ -10,6 +10,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.viewpager.widget.ViewPager
 import io.legado.app.R
+import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.help.config.LocalConfig
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,7 +25,13 @@ class TalkBackNavigationInstrumentedTest {
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         val privacyWasPresent = LocalConfig.contains("privacyPolicyOk")
         val privacyWasAccepted = LocalConfig.privacyPolicyOk
+        val previousPassword = LocalConfig.password
+        val previousVersion = LocalConfig.all["appVersionCode"] as? Long
+        val previousUpdateCheck = LocalConfig.all["lastCheckUpdate"] as? Long
         LocalConfig.privacyPolicyOk = true
+        LocalConfig.password = previousPassword ?: ""
+        LocalConfig.versionCode = appInfo.versionCode
+        LocalConfig.lastCheckUpdate = System.currentTimeMillis()
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 val scrollStates = mutableListOf<Int>()
@@ -59,6 +66,11 @@ class TalkBackNavigationInstrumentedTest {
         } finally {
             if (privacyWasPresent) LocalConfig.privacyPolicyOk = privacyWasAccepted
             else LocalConfig.edit().remove("privacyPolicyOk").apply()
+            LocalConfig.password = previousPassword
+            LocalConfig.edit().apply {
+                if (previousVersion == null) remove("appVersionCode") else putLong("appVersionCode", previousVersion)
+                if (previousUpdateCheck == null) remove("lastCheckUpdate") else putLong("lastCheckUpdate", previousUpdateCheck)
+            }.apply()
         }
     }
 
