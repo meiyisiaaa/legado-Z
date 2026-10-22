@@ -3,7 +3,6 @@
 package io.legado.app.ui.main
 
 import android.os.Bundle
-import android.animation.ValueAnimator
 import android.text.format.DateUtils
 import android.view.MenuItem
 import android.view.ViewGroup
@@ -51,7 +50,6 @@ import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.compose.LegadoComposeView
-import io.legado.app.ui.widget.compose.LocalLegadoMotion
 import io.legado.app.utils.isCreated
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
@@ -108,7 +106,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         upHomePage()
         onBackPressedDispatcher.addCallback(this) {
             if (pagePosition != 0) {
-                binding.viewPagerMain.setCurrentItem(0, !AppConfig.isEInkMode && ValueAnimator.areAnimatorsEnabled())
+                binding.viewPagerMain.setCurrentItem(0, false)
                 return@addCallback
             }
             (fragmentMap[getFragmentId(0)] as? BookshelfFragment2)?.let {
@@ -191,11 +189,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         bottomNavigationView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         bottomNavigationView.setContent {
             LegadoTheme {
-                val motion = LocalLegadoMotion.current
                 MainNavigation(visiblePages, realPositions[pagePosition], updatingBooks) { page ->
                     val position = visiblePages.indexOf(page)
                     if (position == pagePosition) onDestinationReselected(page)
-                    else if (position >= 0) viewPagerMain.setCurrentItem(position, motion.enabled)
+                    else if (position >= 0) viewPagerMain.setCurrentItem(position, false)
                 }
             }
         }

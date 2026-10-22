@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.viewpager.widget.ViewPager
 import io.legado.app.R
 import io.legado.app.help.config.LocalConfig
 import org.junit.Assert.assertFalse
@@ -17,6 +18,50 @@ import org.junit.Test
 
 /** Run with TalkBack enabled; ordinary semantics tests do not prove the platform bridge. */
 class TalkBackNavigationInstrumentedTest {
+    @Test fun mainDestinationsSwitchDirectlyWithoutTalkBack() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val privacyWasPresent = LocalConfig.contains("privacyPolicyOk")
+        val privacyWasAccepted = LocalConfig.privacyPolicyOk
+        LocalConfig.privacyPolicyOk = true
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                val scrollStates = mutableListOf<Int>()
+                scenario.onActivity { activity ->
+                    activity.findViewById<ViewPager>(R.id.view_pager_main).addOnPageChangeListener(
+                        object : ViewPager.SimpleOnPageChangeListener() {
+                            override fun onPageScrollStateChanged(state: Int) {
+                                scrollStates += state
+                            }
+                        }
+                    )
+                }
+                val labels = listOf(R.string.bookshelf, R.string.discovery, R.string.rss, R.string.my)
+                    .map(context::getString)
+                val selectedIndex = labels.indexOfFirst { controlGroup(awaitNode(automation, it))?.isSelected == true }
+                assertTrue("No selected main destination", selectedIndex >= 0)
+                val destinations = labels.drop(selectedIndex + 1) + labels.take(selectedIndex + 1)
+                for (label in destinations) {
+                    val target = requireNotNull(controlGroup(awaitNode(automation, label)))
+                    assertFalse("Destination must be unselected before activation: $label", target.isSelected)
+                    scenario.onActivity { scrollStates.clear() }
+                    assertTrue("Cannot activate $label", target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                    await("Selected state was not exposed for $label") {
+                        controlGroup(findNode(automation.rootInActiveWindow, label))?.isSelected == true
+                    }
+                    scenario.onActivity {
+                        assertFalse("Tab activation must not scroll across intermediate pages: $label",
+                            scrollStates.contains(ViewPager.SCROLL_STATE_SETTLING))
+                    }
+                }
+            }
+        } finally {
+            if (privacyWasPresent) LocalConfig.privacyPolicyOk = privacyWasAccepted
+            else LocalConfig.edit().remove("privacyPolicyOk").apply()
+        }
+    }
+
     @Test fun realServiceCanFocusAndActivateEachMainDestination() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -30,7 +75,17 @@ class TalkBackNavigationInstrumentedTest {
         val privacyWasAccepted = LocalConfig.privacyPolicyOk
         LocalConfig.privacyPolicyOk = true
         try {
-            ActivityScenario.launch(MainActivity::class.java).use {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                val scrollStates = mutableListOf<Int>()
+                scenario.onActivity { activity ->
+                    activity.findViewById<ViewPager>(R.id.view_pager_main).addOnPageChangeListener(
+                        object : ViewPager.SimpleOnPageChangeListener() {
+                            override fun onPageScrollStateChanged(state: Int) {
+                                scrollStates += state
+                            }
+                        }
+                    )
+                }
                 assertTrue("TalkBack was suppressed while launching the Activity", manager
                     .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_SPOKEN)
                     .any { it.resolveInfo.serviceInfo.packageName == "com.google.android.marvin.talkback" })
@@ -49,9 +104,14 @@ class TalkBackNavigationInstrumentedTest {
                     await("Accessibility focus did not reach $label") {
                         findNode(automation.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY), label) != null
                     }
+                    scenario.onActivity { scrollStates.clear() }
                     assertTrue("Cannot activate $label", target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
                     await("Selected state was not exposed for $label") {
                         controlGroup(findNode(automation.rootInActiveWindow, label))?.isSelected == true
+                    }
+                    scenario.onActivity {
+                        assertFalse("Tab activation must not scroll across intermediate pages: $label",
+                            scrollStates.contains(ViewPager.SCROLL_STATE_SETTLING))
                     }
                 }
             }
