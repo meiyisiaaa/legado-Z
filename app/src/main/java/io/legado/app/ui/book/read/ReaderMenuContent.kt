@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,8 +49,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -93,6 +101,11 @@ internal enum class ReaderMenuAction {
     ToggleBrightnessAuto, ChangeBrightnessPosition, PreviewPage, SeekPage, SeekChapter, Dismiss
 }
 
+private fun Modifier.dismissOnTap(onDismiss: () -> Unit): Modifier =
+    pointerInput(onDismiss) {
+        detectTapGestures(onTap = { onDismiss() })
+    }
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ReadMenuContent(
@@ -106,6 +119,22 @@ internal fun ReadMenuContent(
     onOpenUrlPreference: () -> Unit
 ) {
     val duration = if (state.animate) LocalLegadoMotion.current.container else 0
+    val maxProgress = state.maxProgress.coerceAtLeast(0)
+    var selectedProgress by remember(
+        state.title,
+        state.progress,
+        state.maxProgress,
+        state.chapterProgress
+    ) { mutableIntStateOf(state.progress) }
+    val currentProgress = selectedProgress.coerceIn(0, maxProgress)
+    val menuLabel = stringResource(R.string.menu)
+    val closeLabel = stringResource(R.string.close)
+    val progressDescription = stringResource(
+        R.string.progress_show,
+        state.title,
+        currentProgress + 1,
+        maxProgress + 1
+    )
     var hasOpened by remember { mutableStateOf(false) }
     LaunchedEffect(visible, duration) {
         if (visible) {
@@ -123,11 +152,21 @@ internal fun ReadMenuContent(
         enter = fadeIn(tween(duration)) + slideInVertically(tween(duration)) { it / 8 },
         exit = fadeOut(tween(duration)) + slideOutVertically(tween(duration)) { it / 8 }
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize().semantics {
+                paneTitle = menuLabel
+                customActions = listOf(
+                    CustomAccessibilityAction(closeLabel) {
+                        onAction(ReaderMenuAction.Dismiss, 0)
+                        true
+                    }
+                )
+            }
+        ) {
             Box(
                 Modifier.fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.28f))
-                    .combinedClickable(onClick = { onAction(ReaderMenuAction.Dismiss, 0) })
+                    .dismissOnTap { onAction(ReaderMenuAction.Dismiss, 0) }
             )
             Column(
                 modifier = Modifier.align(Alignment.TopCenter)
@@ -257,7 +296,7 @@ internal fun ReadMenuContent(
                         accent = state.accent,
                         foreground = state.foreground,
                         onValueChange = onBrightnessChange,
-                        onValueChangeFinished = { onBrightnessFinished(state.brightness) }
+                        onValueChangeFinished = onBrightnessFinished
                     )
                     IconAction(
                         painter = painterResource(R.drawable.ic_swap_horiz),
@@ -313,14 +352,23 @@ internal fun ReadMenuContent(
                             enabled = state.canGoPrevious
                         ) { Text(stringResource(R.string.previous_chapter), color = state.foreground) }
                         Slider(
-                            value = state.progress.toFloat().coerceIn(0f, state.maxProgress.coerceAtLeast(1).toFloat()),
-                            onValueChange = { onAction(ReaderMenuAction.PreviewPage, it.toInt()) },
-                            onValueChangeFinished = {
-                                if (state.chapterProgress) onAction(ReaderMenuAction.SeekChapter, state.progress)
-                                else onAction(ReaderMenuAction.SeekPage, state.progress)
+                            value = currentProgress.toFloat(),
+                            onValueChange = {
+                                selectedProgress = it.toInt()
+                                onAction(ReaderMenuAction.PreviewPage, selectedProgress)
                             },
-                            valueRange = 0f..state.maxProgress.coerceAtLeast(1).toFloat(),
-                            modifier = Modifier.weight(1f),
+                            onValueChangeFinished = {
+                                if (state.chapterProgress) {
+                                    onAction(ReaderMenuAction.SeekChapter, selectedProgress)
+                                } else {
+                                    onAction(ReaderMenuAction.SeekPage, selectedProgress)
+                                }
+                            },
+                            valueRange = 0f..maxProgress.toFloat(),
+                            enabled = maxProgress > 0,
+                            modifier = Modifier.weight(1f).semantics {
+                                contentDescription = progressDescription
+                            },
                             colors = SliderDefaults.colors(
                                 thumbColor = state.accent,
                                 activeTrackColor = state.accent,
@@ -381,6 +429,7 @@ internal fun SearchMenuContent(
     onClosed: () -> Unit
 ) {
     val duration = LocalLegadoMotion.current.container
+    val paneLabel = stringResource(R.string.search_content)
     var hasOpened by remember { mutableStateOf(false) }
     LaunchedEffect(visible, duration) {
         if (visible) hasOpened = true
@@ -395,10 +444,10 @@ internal fun SearchMenuContent(
         enter = fadeIn(tween(duration)) + slideInVertically(tween(duration)) { it / 8 },
         exit = fadeOut(tween(duration)) + slideOutVertically(tween(duration)) { it / 8 }
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().semantics { paneTitle = paneLabel }) {
             Box(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.24f))
-                    .combinedClickable(onClick = onExit)
+                    .dismissOnTap(onExit)
             )
             Column(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -460,6 +509,18 @@ internal fun MangaMenuContent(
     onClosed: () -> Unit
 ) {
     val duration = if (animate) LocalLegadoMotion.current.container else 0
+    var selectedPage by remember(title, progress, pageCount) { mutableIntStateOf(progress) }
+    val menuLabel = stringResource(R.string.menu)
+    val closeLabel = stringResource(R.string.close)
+    val safePageCount = pageCount.coerceAtLeast(0)
+    val maxPageIndex = (safePageCount - 1).coerceAtLeast(0)
+    val currentPageIndex = selectedPage.coerceIn(0, maxPageIndex)
+    val progressDescription = stringResource(
+        R.string.progress_show,
+        title,
+        if (safePageCount > 0) currentPageIndex + 1 else 0,
+        safePageCount
+    )
     var hasOpened by remember { mutableStateOf(false) }
     LaunchedEffect(visible, duration) {
         if (visible) hasOpened = true
@@ -474,10 +535,20 @@ internal fun MangaMenuContent(
         enter = fadeIn(tween(duration)) + slideInVertically(tween(duration)) { it / 8 },
         exit = fadeOut(tween(duration)) + slideOutVertically(tween(duration)) { it / 8 }
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier.fillMaxSize().semantics {
+                paneTitle = menuLabel
+                customActions = listOf(
+                    CustomAccessibilityAction(closeLabel) {
+                        onAction(ReaderMenuAction.Dismiss, 0)
+                        true
+                    }
+                )
+            }
+        ) {
             Box(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f))
-                    .combinedClickable(onClick = { onAction(ReaderMenuAction.Dismiss, 0) })
+                    .dismissOnTap { onAction(ReaderMenuAction.Dismiss, 0) }
             )
             Column(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding()
@@ -548,11 +619,16 @@ internal fun MangaMenuContent(
                     Text(stringResource(R.string.previous_chapter))
                 }
                 Slider(
-                    value = progress.toFloat().coerceIn(0f, pageCount.coerceAtLeast(1).toFloat()),
-                    onValueChange = { onAction(ReaderMenuAction.SeekPage, it.toInt()) },
-                    onValueChangeFinished = { onAction(ReaderMenuAction.SeekPage, progress) },
-                    valueRange = 0f..pageCount.coerceAtLeast(1).toFloat(),
-                    modifier = Modifier.weight(1f)
+                    value = currentPageIndex.toFloat(),
+                    onValueChange = {
+                        selectedPage = it.toInt()
+                        onAction(ReaderMenuAction.SeekPage, selectedPage)
+                    },
+                    valueRange = 0f..maxPageIndex.toFloat(),
+                    enabled = safePageCount > 1,
+                    modifier = Modifier.weight(1f).semantics {
+                        contentDescription = progressDescription
+                    }
                 )
                 TextButton(onClick = { onAction(ReaderMenuAction.NextChapter, 0) }) {
                     Text(stringResource(R.string.next_chapter))
@@ -700,16 +776,24 @@ private fun VerticalBrightnessSlider(
     accent: Color,
     foreground: Color,
     onValueChange: (Int) -> Unit,
-    onValueChangeFinished: () -> Unit
+    onValueChangeFinished: (Int) -> Unit
 ) {
+    val brightnessLabel = stringResource(R.string.brightness)
+    var selectedBrightness by remember(value) { mutableStateOf(value.toInt()) }
     Layout(
         content = {
             Slider(
-                value = value,
-                onValueChange = { onValueChange(it.toInt()) },
-                onValueChangeFinished = onValueChangeFinished,
+                value = selectedBrightness.toFloat(),
+                onValueChange = {
+                    selectedBrightness = it.toInt()
+                    onValueChange(selectedBrightness)
+                },
+                onValueChangeFinished = { onValueChangeFinished(selectedBrightness) },
                 valueRange = 0f..255f,
                 enabled = enabled,
+                modifier = Modifier.semantics {
+                    contentDescription = brightnessLabel
+                },
                 colors = SliderDefaults.colors(
                     thumbColor = accent,
                     activeTrackColor = accent,
