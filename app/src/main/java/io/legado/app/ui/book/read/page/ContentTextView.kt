@@ -3,9 +3,16 @@ package io.legado.app.ui.book.read.page
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.os.Bundle
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.customview.widget.ExploreByTouchHelper
 import io.legado.app.R
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.help.book.isOnLineTxt
@@ -67,6 +74,86 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     private val renderRunnable by lazy { Runnable { preRenderPage() } }
     private var lastClickTime = 0L
     private var doubleClick = false
+    private var accessibilityTargetsDirty = true
+    private var accessibilityTargets = emptyList<AccessibilityTarget>()
+    private var nextAccessibilityTargetId = 1
+    private var accessibilityChangePosted = false
+    private val notifyAccessibilityChange = Runnable {
+        accessibilityChangePosted = false
+        accessibilityHelper.invalidateRoot()
+    }
+
+    private val accessibilityHelper = object : ExploreByTouchHelper(this) {
+        override fun getVirtualViewAt(x: Float, y: Float): Int {
+            return currentAccessibilityTargets().firstOrNull { it.bounds.contains(x.toInt(), y.toInt()) }
+                ?.id ?: INVALID_ID
+        }
+
+        override fun getVisibleVirtualViews(virtualViewIds: MutableList<Int>) {
+            currentAccessibilityTargets().forEach { virtualViewIds.add(it.id) }
+        }
+
+        override fun onPopulateNodeForVirtualView(
+            virtualViewId: Int,
+            node: AccessibilityNodeInfoCompat
+        ) {
+            val target = currentAccessibilityTargets().firstOrNull { it.id == virtualViewId }
+            if (target == null) {
+                // ExploreByTouchHelper requires every requested virtual node to have text or a
+                // content description and bounds. A provider can still receive an old ID after
+                // page content changes, so return a harmless, hidden placeholder for that race.
+                node.setBoundsInParent(Rect())
+                node.className = "android.view.View"
+                node.contentDescription = " "
+                node.isEnabled = false
+                node.isFocusable = false
+                node.isClickable = false
+                node.isVisibleToUser = false
+                return
+            }
+            node.setBoundsInParent(target.bounds)
+            node.className = when (target.kind) {
+                ACCESSIBILITY_LINK -> "android.widget.TextView"
+                ACCESSIBILITY_IMAGE -> "android.widget.ImageView"
+                else -> "android.widget.Button"
+            }
+            if (target.kind == ACCESSIBILITY_LINK) {
+                node.text = target.label
+            } else {
+                node.contentDescription = target.label
+            }
+            node.isFocusable = true
+            node.isClickable = true
+            node.isVisibleToUser = true
+            node.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
+        }
+
+        override fun onPerformActionForVirtualView(
+            virtualViewId: Int,
+            action: Int,
+            arguments: Bundle?
+        ): Boolean {
+            if (virtualViewId == HOST_ID) {
+                return performReaderAction(action)
+            }
+            if (action != AccessibilityNodeInfoCompat.ACTION_CLICK) return false
+            val target = currentAccessibilityTargets().firstOrNull { it.id == virtualViewId }
+                ?: return false
+            return performAccessibilityClick(target.column)
+        }
+
+        override fun onPopulateNodeForHost(node: AccessibilityNodeInfoCompat) {
+            super.onPopulateNodeForHost(node)
+            if (!isMainView) return
+            if (pageFactory.hasPrev()) {
+                node.addAction(action(ACTION_PREVIOUS_PAGE, R.string.prev_page))
+            }
+            if (pageFactory.hasNext()) {
+                node.addAction(action(ACTION_NEXT_PAGE, R.string.next_page))
+            }
+            node.addAction(action(ACTION_OPEN_MENU, R.string.menu))
+        }
+    }
 
     //绘制图片的paint
     val imagePaint by lazy {
@@ -77,6 +164,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
 
     init {
         callBack = activity as CallBack
+        ViewCompat.setAccessibilityDelegate(this, accessibilityHelper)
     }
 
     /**
@@ -84,6 +172,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      */
     fun setContent(textPage: TextPage) {
         this.textPage = textPage
+        invalidateAccessibilityTree(discardTargets = true)
         // 非滑动翻页动画需要同步重绘，不然翻页可能会出现闪烁
         if (isScroll) {
             postInvalidate()
@@ -97,6 +186,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         if (!isMainView) return
         ChapterProvider.upViewSize(w, h)
         textPage.format()
+        invalidateAccessibilityTree()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -173,6 +263,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
                 pageDelegate?.abortAnim()
             }
         }
+        invalidateAccessibilityTree()
         postInvalidate()
     }
 
@@ -210,6 +301,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
      */
     fun resetPageOffset() {
         pageOffset = 0
+        invalidateAccessibilityTree()
     }
 
     /**
@@ -739,6 +831,270 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
 
     fun setIsScroll(value: Boolean) {
         isScroll = value
+        invalidateAccessibilityTree()
+    }
+
+    fun invalidateAccessibilityTree() {
+        invalidateAccessibilityTree(discardTargets = false)
+    }
+
+    private fun invalidateAccessibilityTree(discardTargets: Boolean) {
+        if (discardTargets) {
+            clearAccessibilityFocus()
+            accessibilityTargets = emptyList()
+        }
+        accessibilityTargetsDirty = true
+        if (discardTargets) {
+            removeCallbacks(notifyAccessibilityChange)
+            accessibilityChangePosted = false
+            accessibilityHelper.invalidateRoot()
+        } else if (!accessibilityChangePosted) {
+            // Scroll geometry stays current without sending a subtree event on every frame.
+            accessibilityChangePosted = true
+            postDelayed(notifyAccessibilityChange, 100L)
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(notifyAccessibilityChange)
+        accessibilityChangePosted = false
+        super.onDetachedFromWindow()
+    }
+
+    private fun clearAccessibilityFocus() {
+        val focusedId = accessibilityHelper.accessibilityFocusedVirtualViewId
+        if (focusedId != ExploreByTouchHelper.INVALID_ID) {
+            accessibilityHelper.getAccessibilityNodeProvider(this)?.performAction(
+                focusedId,
+                AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS,
+                null
+            )
+        }
+    }
+
+    fun requestContentAccessibilityFocus(): Boolean {
+        clearAccessibilityFocus()
+        return performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+    }
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (performReaderAction(action)) return true
+        return super.performAccessibilityAction(action, arguments)
+    }
+
+    private fun performReaderAction(action: Int): Boolean {
+        if (!isMainView) return false
+        return when (action) {
+            ACTION_PREVIOUS_PAGE -> {
+                if (!pageFactory.hasPrev()) return false
+                val delegate = pageDelegate ?: return false
+                val reader = activity?.findViewById<ReadView>(R.id.read_view) ?: return false
+                delegate.prevPageByAnim(reader.defaultAnimationSpeed)
+                true
+            }
+
+            ACTION_NEXT_PAGE -> {
+                if (!pageFactory.hasNext()) return false
+                val delegate = pageDelegate ?: return false
+                val reader = activity?.findViewById<ReadView>(R.id.read_view) ?: return false
+                delegate.nextPageByAnim(reader.defaultAnimationSpeed)
+                true
+            }
+
+            ACTION_OPEN_MENU -> {
+                val reader = activity as? ReadView.CallBack ?: return false
+                reader.showActionMenu()
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+        return accessibilityHelper.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
+    }
+
+    private fun action(id: Int, labelRes: Int) = AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+        id,
+        context.getString(labelRes)
+    )
+
+    private fun currentAccessibilityTargets(): List<AccessibilityTarget> {
+        if (!accessibilityTargetsDirty) return accessibilityTargets
+
+        val previousIds = accessibilityTargets.associateBy { it.key }
+        val clip = RectF(
+            max(0f, visibleRect.left),
+            max(0f, visibleRect.top),
+            min(width.toFloat(), visibleRect.right),
+            min(height.toFloat(), visibleRect.bottom)
+        )
+        val targets = ArrayList<AccessibilityTarget>()
+        if (!clip.isEmpty) {
+            for (relativePagePos in 0..2) {
+                val offset = relativeOffset(relativePagePos)
+                if (relativePagePos > 0) {
+                    if (!callBack.isScroll || offset >= ChapterProvider.visibleHeight) break
+                    if (relativePagePos == 1 && !pageFactory.hasNext()) break
+                    if (relativePagePos == 2 && !pageFactory.hasNextPlus()) break
+                }
+                val page = relativePage(relativePagePos)
+                for ((lineIndex, line) in page.lines.withIndex()) {
+                    val top = line.lineTop + offset
+                    val bottom = line.lineBottom + offset
+                    if (bottom <= clip.top || top >= clip.bottom) continue
+                    val columns = line.columns
+                    var columnIndex = 0
+                    while (columnIndex < columns.size) {
+                        val column = columns[columnIndex]
+                        when {
+                            column is TextHtmlColumn && !column.linkUrl.isNullOrBlank() -> {
+                                val firstColumn = columnIndex
+                                val linkUrl = column.linkUrl
+                                val label = StringBuilder()
+                                var left = column.start
+                                var right = column.end
+                                while (columnIndex < columns.size) {
+                                    val linkedColumn = columns[columnIndex] as? TextHtmlColumn
+                                    if (linkedColumn?.linkUrl != linkUrl) break
+                                    val currentColumn = linkedColumn ?: break
+                                    label.append(currentColumn.charData)
+                                    left = min(left, currentColumn.start)
+                                    right = max(right, currentColumn.end)
+                                    columnIndex++
+                                }
+                                if (label.isNotBlank()) {
+                                    addAccessibilityTarget(
+                                        targets, previousIds, page, relativePagePos, lineIndex,
+                                        firstColumn, columnIndex - 1, ACCESSIBILITY_LINK,
+                                        label.toString(), column, left, right, line, offset, clip
+                                    )
+                                }
+                            }
+
+                            column is ImageColumn && isImageAccessibilityClickable(column) -> {
+                                addAccessibilityTarget(
+                                    targets, previousIds, page, relativePagePos, lineIndex,
+                                    columnIndex, columnIndex, ACCESSIBILITY_IMAGE,
+                                    context.getString(R.string.preview_image_by_click), column,
+                                    column.start, column.end, line, offset, clip
+                                )
+                                columnIndex++
+                            }
+
+                            column is ButtonColumn -> {
+                                addAccessibilityTarget(
+                                    targets, previousIds, page, relativePagePos, lineIndex,
+                                    columnIndex, columnIndex, ACCESSIBILITY_BUTTON,
+                                    context.getString(R.string.custom_button), column,
+                                    column.start, column.end, line, offset, clip
+                                )
+                                columnIndex++
+                            }
+
+                            column is ReviewColumn && column.count > 0 -> {
+                                addAccessibilityTarget(
+                                    targets, previousIds, page, relativePagePos, lineIndex,
+                                    columnIndex, columnIndex, ACCESSIBILITY_BUTTON,
+                                    context.getString(R.string.review), column,
+                                    column.start, column.end, line, offset, clip
+                                )
+                                columnIndex++
+                            }
+
+                            else -> columnIndex++
+                        }
+                    }
+                }
+            }
+        }
+        accessibilityTargets = targets
+        accessibilityTargetsDirty = false
+        val focusedId = accessibilityHelper.accessibilityFocusedVirtualViewId
+        if (focusedId != ExploreByTouchHelper.INVALID_ID && targets.none { it.id == focusedId }) {
+            clearAccessibilityFocus()
+        }
+        return targets
+    }
+
+    private fun addAccessibilityTarget(
+        targets: MutableList<AccessibilityTarget>,
+        previousIds: Map<AccessibilityTargetKey, AccessibilityTarget>,
+        page: TextPage,
+        relativePagePos: Int,
+        lineIndex: Int,
+        firstColumn: Int,
+        lastColumn: Int,
+        kind: Int,
+        label: String,
+        column: BaseColumn,
+        left: Float,
+        right: Float,
+        line: TextLine,
+        offset: Float,
+        clip: RectF
+    ) {
+        val targetBounds = RectF(left, line.lineTop + offset, right, line.lineBottom + offset)
+        if (!targetBounds.intersect(clip)) return
+        val bounds = Rect()
+        targetBounds.roundOut(bounds)
+        if (bounds.isEmpty) return
+        val key = AccessibilityTargetKey(page, relativePagePos, lineIndex, firstColumn, lastColumn, kind)
+        val id = previousIds[key]?.id ?: allocateAccessibilityTargetId()
+        targets.add(AccessibilityTarget(id, key, bounds, kind, label, column))
+    }
+
+    private fun allocateAccessibilityTargetId(): Int {
+        val id = nextAccessibilityTargetId
+        nextAccessibilityTargetId = if (id == Int.MAX_VALUE) 1 else id + 1
+        return id
+    }
+
+    private fun isImageAccessibilityClickable(column: ImageColumn): Boolean = when (AppConfig.clickImgWay) {
+        "1" -> true
+        "2" -> ReadBook.book?.isOnLineTxt == true
+        "3" -> false
+        else -> !column.click.isNullOrBlank()
+    }
+
+    private fun performAccessibilityClick(column: BaseColumn): Boolean = when (column) {
+        is ButtonColumn, is ReviewColumn -> {
+            context.toastOnUi("Button Pressed!")
+            true
+        }
+
+        is TextHtmlColumn -> column.linkUrl?.let { url ->
+            activity?.startActivity<OpenUrlConfirmActivity> { putExtra("uri", url) }
+            true
+        } ?: false
+
+        is ImageColumn -> when (AppConfig.clickImgWay) {
+            "1" -> {
+                activity?.showDialogFragment(PhotoDialog(column.src, isBook = true))
+                true
+            }
+
+            "2" -> if (ReadBook.book?.isOnLineTxt == true) {
+                val click = column.click
+                if (!click.isNullOrBlank()) {
+                    callBack.clickImg(click, column.src)
+                    true
+                } else {
+                    callBack.oldClickImg(column.src)
+                }
+            } else {
+                false
+            }
+
+            "3" -> false
+            else -> column.click?.takeIf(String::isNotBlank)?.let {
+                callBack.clickImg(it, column.src)
+                true
+            } ?: false
+        }
+
+        else -> false
     }
 
     override fun canScrollVertically(direction: Int): Boolean {
@@ -760,7 +1116,45 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         return callBack.onLongScreenshotTouchEvent(event)
     }
 
+    private data class AccessibilityTarget(
+        val id: Int,
+        val key: AccessibilityTargetKey,
+        val bounds: Rect,
+        val kind: Int,
+        val label: String,
+        val column: BaseColumn
+    )
+
+    private class AccessibilityTargetKey(
+        private val page: TextPage,
+        private val relativePagePos: Int,
+        private val lineIndex: Int,
+        private val firstColumn: Int,
+        private val lastColumn: Int,
+        private val kind: Int
+    ) {
+        override fun equals(other: Any?): Boolean = other is AccessibilityTargetKey &&
+            page === other.page && relativePagePos == other.relativePagePos &&
+            lineIndex == other.lineIndex && firstColumn == other.firstColumn &&
+            lastColumn == other.lastColumn && kind == other.kind
+
+        override fun hashCode(): Int {
+            var result = System.identityHashCode(page)
+            result = 31 * result + relativePagePos
+            result = 31 * result + lineIndex
+            result = 31 * result + firstColumn
+            result = 31 * result + lastColumn
+            return 31 * result + kind
+        }
+    }
+
     companion object {
+        private const val ACCESSIBILITY_LINK = 1
+        private const val ACCESSIBILITY_IMAGE = 2
+        private const val ACCESSIBILITY_BUTTON = 3
+        private const val ACTION_PREVIOUS_PAGE = 0x00F00001
+        private const val ACTION_NEXT_PAGE = 0x00F00002
+        private const val ACTION_OPEN_MENU = 0x00F00003
         private val renderThread by lazy {
             Executors.newSingleThreadExecutor {
                 Thread(it, "TextPageRender")

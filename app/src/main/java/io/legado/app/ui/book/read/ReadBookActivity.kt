@@ -1086,6 +1086,23 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun upSystemUiVisibility() {
         upSystemUiVisibility(isInMultiWindow, !menuLayoutIsVisible, bottomDialog > 0)
         upNavigationBarColor()
+        val reader = binding.readView
+        val overlayVisible = binding.readMenu.visibility == View.VISIBLE ||
+            binding.searchMenu.visibility == View.VISIBLE
+        val wasHidden = reader.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        reader.importantForAccessibility = if (overlayVisible) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        }
+        if (wasHidden && !overlayVisible) {
+            reader.post {
+                if (hasWindowFocus() && binding.readMenu.visibility != View.VISIBLE &&
+                    binding.searchMenu.visibility != View.VISIBLE) {
+                    reader.curPage.requestContentAccessibilityFocus()
+                }
+            }
+        }
     }
 
     // 退出全文搜索
@@ -1094,6 +1111,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             isShowingSearchResult = false
             binding.searchMenu.invalidate()
             binding.searchMenu.invisible()
+            upSystemUiVisibility()
             ReadBook.clearSearchResult()
             binding.readView.cancelSelect(true)
         }

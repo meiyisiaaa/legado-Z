@@ -337,6 +337,7 @@ class PageView(context: Context) : FrameLayout(context) {
     }
 
     fun invalidateContentView() {
+        binding.contentTextView.invalidateAccessibilityTree()
         binding.contentTextView.invalidate()
     }
 
@@ -345,6 +346,11 @@ class PageView(context: Context) : FrameLayout(context) {
      */
     fun setContentDescription(content: String) {
         binding.contentTextView.contentDescription = content
+        binding.contentTextView.invalidateAccessibilityTree()
+    }
+
+    fun requestContentAccessibilityFocus(): Boolean {
+        return binding.contentTextView.requestContentAccessibilityFocus()
     }
 
     /**
