@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_product_name">Legado-Z</string>
+    <string name="about_project_summary">Android reading app for custom sources, local TXT and EPUB, subscriptions and audiobooks, AI reading assistance, single-file JavaScript sources, MCP source maintenance, and role-based speech.</string>
+    <string name="about_project_import_note">Books and sources are not bundled; import your own.</string>
+    <string name="about_project_section">Project</string>
+    <string name="about_diagnostics_section">Diagnostics and logs</string>
+    <string name="about_legal_section">Privacy and legal</string>
+    <string name="about_repository">Project repository</string>
+    <string name="about_repository_summary">Source code and project information on GitHub</string>
+    <string name="about_user_help">User help</string>
+    <string name="about_user_help_summary">Read the in-app help document</string>
+    <string name="about_api_documentation">API documentation</string>
+    <string name="about_api_documentation_summary">API reference in the project repository</string>
+    <string name="about_update_history">Update history</string>
+    <string name="about_update_history_summary">Recent commits in the project repository</string>
+    <string name="about_crash_logs_summary">Inspect saved crash logs</string>
+    <string name="about_save_logs_summary">Save app logs to the configured backup folder</string>
+    <string name="about_heap_dump_summary">Create and copy a JVM heap dump to the configured backup folder</string>
+    <string name="about_privacy_summary">Read the app privacy policy</string>
+    <string name="about_license_summary">GNU General Public License v3</string>
+    <string name="about_disclaimer_summary">Usage and third-party content notice</string>
+    <string name="about_share_text">Legado-Z\nProject repository: https://github.com/meiyisiaaa/legado-Z</string>
+</resources>

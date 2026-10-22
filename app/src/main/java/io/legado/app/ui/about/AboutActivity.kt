@@ -6,7 +6,6 @@ import android.view.MenuItem
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityAboutBinding
-import io.legado.app.utils.openUrl
 import io.legado.app.utils.share
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
@@ -30,12 +29,12 @@ class AboutActivity : BaseActivity<ActivityAboutBinding>() {
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_scoring -> openUrl("market://details?id=$packageName")
-            R.id.menu_share_it -> share(
-                getString(R.string.app_share_description_sigma),
-                getString(R.string.app_name)
+        if (item.itemId == R.id.menu_share_it) {
+            share(
+                getString(R.string.about_share_text),
+                getString(R.string.about_product_name)
             )
+            return true
         }
         return super.onCompatOptionsItemSelected(item)
     }
