@@ -1,5 +1,7 @@
 package io.legado.app.ui.about
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -9,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
 import io.legado.app.R
 import io.legado.app.ui.widget.compose.LegadoTheme
@@ -93,6 +96,40 @@ class AboutContentSemanticsTest {
             compose.runOnIdle {
                 assertEquals(expectedAction, selectedAction)
             }
+        }
+    }
+
+    @Test
+    fun fontScaleTwoKeepsTheLastEntryReachableAndTouchSized() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var selectedAction: AboutAction? = null
+        compose.setContent {
+            LegadoTheme {
+                val currentDensity = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(currentDensity.density, fontScale = 2f)
+                ) {
+                    AboutContent(
+                        state = AboutUiState(versionName = "test-version"),
+                        onAction = { selectedAction = it }
+                    )
+                }
+            }
+        }
+
+        val disclaimerTitle = context.getString(R.string.disclaimer)
+        compose.onNodeWithTag(ABOUT_CONTENT_LIST_TEST_TAG)
+            .performScrollToNode(hasText(disclaimerTitle))
+        val disclaimer = compose.onNodeWithText(disclaimerTitle)
+        disclaimer.assertIsDisplayed().assertHasClickAction()
+        val minimumTouchHeightPx = 48f * context.resources.displayMetrics.density
+        assertTrue(
+            "The last About entry should retain a 48dp touch target at 2x font scale",
+            disclaimer.fetchSemanticsNode().boundsInRoot.height >= minimumTouchHeightPx
+        )
+        disclaimer.performClick()
+        compose.runOnIdle {
+            assertEquals(AboutAction.ShowDisclaimer, selectedAction)
         }
     }
 }

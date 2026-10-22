@@ -42,7 +42,7 @@ internal const val ABOUT_CONTENT_LIST_TEST_TAG = "about_content_list"
 
 private data class AboutEntry(
     @StringRes val title: Int,
-    @StringRes val summary: Int,
+    @StringRes val summary: Int?,
     val action: AboutAction
 )
 
@@ -56,15 +56,15 @@ private val aboutSections = listOf(
         title = R.string.about_project_section,
         entries = listOf(
             AboutEntry(R.string.about_repository, R.string.about_repository_summary, AboutAction.OpenRepository),
-            AboutEntry(R.string.about_user_help, R.string.about_user_help_summary, AboutAction.OpenHelp),
-            AboutEntry(R.string.about_api_documentation, R.string.about_api_documentation_summary, AboutAction.OpenApiDocumentation),
+            AboutEntry(R.string.about_user_help, null, AboutAction.OpenHelp),
+            AboutEntry(R.string.about_api_documentation, null, AboutAction.OpenApiDocumentation),
             AboutEntry(R.string.about_update_history, R.string.about_update_history_summary, AboutAction.OpenUpdateHistory)
         )
     ),
     AboutSection(
         title = R.string.about_diagnostics_section,
         entries = listOf(
-            AboutEntry(R.string.crash_log, R.string.about_crash_logs_summary, AboutAction.ShowCrashLogs),
+            AboutEntry(R.string.crash_log, null, AboutAction.ShowCrashLogs),
             AboutEntry(R.string.save_log, R.string.about_save_logs_summary, AboutAction.SaveLogs),
             AboutEntry(R.string.create_heap_dump, R.string.about_heap_dump_summary, AboutAction.CreateHeapDump)
         )
@@ -72,9 +72,9 @@ private val aboutSections = listOf(
     AboutSection(
         title = R.string.about_legal_section,
         entries = listOf(
-            AboutEntry(R.string.privacy_policy, R.string.about_privacy_summary, AboutAction.ShowPrivacyPolicy),
+            AboutEntry(R.string.privacy_policy, null, AboutAction.ShowPrivacyPolicy),
             AboutEntry(R.string.license, R.string.about_license_summary, AboutAction.ShowLicense),
-            AboutEntry(R.string.disclaimer, R.string.about_disclaimer_summary, AboutAction.ShowDisclaimer)
+            AboutEntry(R.string.disclaimer, null, AboutAction.ShowDisclaimer)
         )
     )
 )
@@ -142,9 +142,11 @@ internal fun AboutContent(
                                 color = MaterialTheme.colorScheme.outlineVariant
                             )
                         }
+                        val summaryResource = entry.summary
+                        val summary = if (summaryResource == null) null else stringResource(summaryResource)
                         AboutActionRow(
                             title = stringResource(entry.title),
-                            summary = stringResource(entry.summary),
+                            summary = summary,
                             onClick = { onAction(entry.action) }
                         )
                     }
@@ -157,7 +159,7 @@ internal fun AboutContent(
 @Composable
 private fun AboutActionRow(
     title: String,
-    summary: String,
+    summary: String?,
     onClick: () -> Unit
 ) {
     Surface(
@@ -178,11 +180,13 @@ private fun AboutActionRow(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
