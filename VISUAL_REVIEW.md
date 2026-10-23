@@ -235,3 +235,89 @@ API36 常规屏 16/16 通过（46.901s），320dp 规则交互 10/10 复验通�
 最终复核：所有设备检查结束后再次对比升级前数据库，7本书的33个旧字段完全一致，测试备注记录已清理。`themeMode=0`（跟随系统）、fontScale=1.0和1080×2400已读回确认。API36验收进程已关闭，原AVD数据保留；本轮临时数据库备份与重复截图已清理。Gradle workflow已finish，仅清理包装器拥有的日志。
 
 本轮调试包：[legado_app_3.26.102223.apk](app/build/outputs/apk/app/debug/legado_app_3.26.102223.apk)。
+
+# 订阅媒体下载与相册保存（2026-10-23）
+
+本节为本轮新增功能的独立记录。沿用 A「矿绿书衣」、现有 Compose/XML 混合界面、Media3 1.8.0 与 API36 AVD。下载由用户选择并提交；API26虚拟机保持删除。规格见 [SCREEN_SPEC_RSS_MEDIA_DOWNLOAD.md](docs/ui/SCREEN_SPEC_RSS_MEDIA_DOWNLOAD.md)。
+
+## 实际运行发现与修改
+
+| 位置 / 问题 | 影响 | 修改措施 | 验证方法 |
+| --- | --- | --- | --- |
+| 选择面板的裸内容截图宿主遗漏底部安全区 | 手势指示条覆盖下载按钮 | fixture 与正式 Dialog 同样消费 navigationBars inset | 常规与320dp重新截图，按钮物理边界及点击检查 |
+| 已识别文章重复显示「打开并播放」 | 次级操作打断媒体扫描，扩大组间空白 | 按未识别/需手动播放的状态显示入口 | 正常状态无重复入口；空态恢复回调检查 |
+| 空态长说明和文章恢复入口相互分离 | 信息重复，恢复动作难定位 | 文章标题下短提示和单一「打开并识别」 | 常规、小屏及大字体空态重新截图 |
+
+首轮设备测试还暴露两个生产问题：未挂载的嗅探 WebView 无法返回动态播放器资源；快速暂停、停止服务再继续触发前台服务启动超时。分别修复 WebView 挂载生命周期和服务命令/空闲停止竞争，保留原失败路径复测。原生 Dialog 首次打开超时同步修正事务与主线程观测，结果以重新运行记录为准。
+
+## 验证状态
+
+本轮实现及API36范围内的验收已完成。最终截图与通过用例见下表；既有章节的通过结果只覆盖其原改动。
+
+已取得的本轮证据：MediaStore/离线导出12项通过（14.355s）；附件解析、真实91→92迁移、选择/快照/请求上下文和三种视觉状态13项通过（63.771s）；320dp视觉/列表多选5项通过（33.589s）。视频检查包含6秒时长、音轨、实际帧解码和拖动读取，导出时关闭样例原站并断言无新网络请求。两项取消竞争断言分别验证发布后拒绝绑定的清理，以及完成绑定后caller取消仍保留成品。
+
+实际进程恢复使用独立宿主样例服务与`recovery-r3`：prepare通过（14.928s）→ADB `am force-stop io.legado.app.debug`→resume单独运行通过（20.300s）。断言PID改变、PAUSED与非零缓存进度保留、非零Range续传，成品可读取音视频轨。受控断连接后持续503、恢复后用户retry，以及302下载两项通过（58.195s）。此处为实际目标进程结束后的验证；空间不足测试使用受控ENOSPC写入故障。
+
+恢复用例的后续日志显示 `Bringing down service while still waiting for start foreground`，发生于测试在启动回调送达前调用 `stopService`。测试改为观测实际服务/cache启动后再停止，并增加全程保留服务的立即暂停/继续回归。恢复两阶段与其他case曾合批运行，JUnit重排及过宽的测试清理破坏了阶段标记；已将清理限制到该case自有任务，正式结果以分阶段重跑为准。动态iframe测试曾在扩展名预候选发出后过早断言服务端请求，现要求收到实际 `video/mp4` 响应后再判定，保留20秒上限。
+
+## 第二轮：正式窗口与截图证据
+
+| 位置 / 问题 | 影响 | 修改措施 | 验证方法 |
+| --- | --- | --- | --- |
+| 正式Dialog继承浮层默认inset、阴影与遮罩 | 实际可用宽度低于内容fixture，背景页面外露 | 使用Dialog专属非floating/noTitle主题、满幅窗口及系统栏安全区 | 原生view屏幕x=0且宽度等于可用屏宽断言，常规/小屏复拍 |
+| 选择后立即截图仍带按压涟漪 | 截图混入短暂交互状态，影响静态构图评估 | 记录器等待按压动画和窗口空闲 | 重新查看稳定选择截图，减少动态效果配置另验 |
+| 崩溃中断留下上一例的测试任务 | 完成画面混入失效样例任务 | 清理严格限定fixture身份和当前case的DB/index/cache/相册条目 | 原生完成/失败面板复拍，确认仅显示本例任务 |
+
+## 本轮构建验证问题与有界答案
+
+Gradle由同一`gradle-run` workflow管理；嵌套任务为`:app:testAppDebugUnitTest --tests io.legado.app.model.rss.media.*`、`:app:assembleAppDebug`、`:app:assembleAppDebugAndroidTest`。日志由包装器管理，以下保留每次非空问题及实际答案。
+
+| Run | Verification question（原文） | 有界答案 |
+| --- | --- | --- |
+| 0001 | “Do RSS media unit tests and both debug APK builds pass after the download implementation?” | 失败，88.531s；PowerShell拆分未加引号的Kotlin参数，随后修正 |
+| 0002 | “Do RSS media unit tests and both debug APK builds pass with correctly quoted Kotlin compiler arguments?” | 失败，379.296s；定位图片回调和Activity访问编译错误 |
+| 0003 | “Do RSS media unit tests and both debug APK builds pass after fixing the two UI compiler errors and refreshing retry credentials?” | 失败，195.547s；按VMBaseActivity的protected契约增加内部文章访问方法 |
+| 0004 | “Do all RSS media unit tests and both debug APK builds pass after the final compiler, MIME, credential and cancellation fixes?” | 通过，498.765s；当时14项单元及两个APK通过，随后继续实际设备验收 |
+| 0005 | “Do the RSS media credential, cancellation and service-race fixes pass focused unit tests and build both APKs for real recovery and screenshot revalidation?” | 21项单元通过；测试包编译失败，363.391s；删除成员方法assertDoesNotExist的无效顶层import |
+| 0006 | “Do committed-file cancellation, target-domain request reuse and corrected media UI fixtures pass focused tests and build both APKs for device acceptance?” | 通过，510.031s；21项单元及两个APK通过 |
+| 0007 | “Do the final redirect credential fix, full-screen media window and lifecycle-correct recovery fixtures pass focused unit tests and build both acceptance APKs?” | 通过，480.140s；21项单元及两个APK通过，进入最终设备复验 |
+| 0008 | “Does the Android test APK build after making the redirect regression method explicitly return Unit for JUnit?” | 通过，449.359s；仅修改测试方法返回类型，生产代码沿用0007安装包 |
+
+## 最终设备结果与截图
+
+| 验证范围 | 不同用例数 | 实际结果 |
+| --- | ---: | --- |
+| JVM解析/内容签名/凭据边界/服务命令 | 21 | 全部通过 |
+| Media3离线导出与MediaStore | 12 | 全部通过；PNG、MP4、TS/fMP4 HLS、分离音视频、AES-128、DASH、鉴权分片、文件名和取消清理 |
+| 持久下载队列 | 9 | 全部通过；暂停/服务重启、立即暂停继续、重复文件、真实跨域302私密头清理、HTML伪装、过期403重试、无后缀HLS、取消、直播拒绝 |
+| 真实Dialog及下载流程 | 3 | 全部通过；与队列合批12/12，66.286s；实际页面宽度、HLS勾选到相册MP4、直播原因/重试/原文入口 |
+| 目标进程重启/断网恢复/重定向 | 4 | 分阶段及独立case全部通过，见上文r3记录 |
+| 动态WebView识别 | 2 | iframe/blob底层请求与无后缀fetch均收到实际video/mp4响应；保留20秒上限 |
+| 媒体选择/快照/失败动作 | 6 | 全部通过；默认未选、全选取消、选择提交、压缩状态、实际请求头和双恢复动作 |
+| 文章列表多选 | 2 | 全部通过；五种原布局、长按、多选退出及失效选择清理，320dp复验通过 |
+| 视觉状态 | 3 | 正常/空/错误全部通过；常规、小屏、2倍字体、深色及关闭动画配置分批检查 |
+| RSS附件/收藏与Room91→92迁移 | 2 | 全部通过；旧文章/收藏保留，附件与任务记录可持久化 |
+
+共21项JVM与43项不同设备用例取得通过证据；同一用例在尺寸/主题下复跑不重复计数。未受后续独立跨域分支或Dialog窗口修改影响的有效结果直接复用。中间失败包含已修复的生产问题及测试生命周期、JUnit返回类型、前置标记和重复节点问题，按最终有效复跑统计。
+
+- **常规：**1080×2400、420dpi、1倍字体。原生选择/完成/失败页面来自生产Dialog与实际Media3任务。
+- **小屏：**840×1680、420dpi，320dp。1倍的视觉/列表5项通过；2倍字体的视觉/原生流程6/6通过（33.687s）。
+- **深色与减少动态效果：**常规屏、1倍字体、系统night=yes，三个动画scale=0；视觉/原生流程6/6通过（27.767s）。
+- **真实首页入口：**从Main点击「订阅→更多选项→下载任务」，实际打开空任务页；测试自有任务、缓存索引与相册成品已清理。原书架和漫画仍可见。
+
+| 截图 | 来源 |
+| --- | --- |
+| [媒体选择](docs/ui/assets/rss-media/selection-native.png) · [相册完成](docs/ui/assets/rss-media/task-completed.png) · [直播拒绝](docs/ui/assets/rss-media/task-live-rejected.png) | 真实Dialog、受控网页与实际下载 |
+| [320dp、2倍字体选择](docs/ui/assets/rss-media/selection-small-large.png) · [大字失败操作](docs/ui/assets/rss-media/task-live-small-large.png) | 真实Dialog，原生物理屏宽断言通过 |
+| [深色选择](docs/ui/assets/rss-media/selection-dark.png) · [深色失败](docs/ui/assets/rss-media/task-live-dark.png) | 真实Dialog，关闭动画配置 |
+| [长标题常规](docs/ui/assets/rss-media/selection-long-regular.png) · [长标题320dp](docs/ui/assets/rss-media/selection-long-small.png) | 同一生产选择组件，固定本地图像fixture |
+| [错误](docs/ui/assets/rss-media/selection-error.png) · [空态](docs/ui/assets/rss-media/selection-empty.png) · [大字空态](docs/ui/assets/rss-media/empty-small-large.png) | 同一生产选择组件与真实点击回调 |
+| [订阅首页实际打开任务页](docs/ui/assets/rss-media/tasks-entry.png) | ADB点击真实导航与菜单，无测试内容替换 |
+
+已查看常规、小屏、大字、深色及关键异常原图；独立视觉复核未发现验收阻断。固定fixture使用既有本地占位素材，真实下载样例使用项目内生成的公开测试图像和6秒音视频；没有私有站点凭据或远程素材混入交付。
+
+待验范围：API26–28实机权限与扫描入库、物理设备声音/编码性能、TalkBack实际朗读、私有站点登录与签名轮换、真实DRM/SAMPLE-AES来源、非H.264/AAC输入的设备转码兼容性。空间不足已验证受控ENOSPC清理，磁盘填满场景未执行。清晰度沿用来源可获取的标签，未知大小/清晰度省略。
+
+设备已恢复1080×2400、font_scale=1.0、night=no及原动画设置（animator_duration_scale缺省，另两项1.0）；保留API36模拟器在实际「下载任务」页。宿主样例服务已结束且8765无监听。调试包：[legado_app_3.26.102317.apk](app/build/outputs/apk/app/debug/legado_app_3.26.102317.apk)。
+
+Gradle workflow已finish，仅清理包装器拥有的日志；本轮重复截图目录和临时UI层级文件已删除，最终原图保留在`docs/ui/assets/rss-media/`。AVD运行日志供当前模拟器使用，未清理AVD或共享SDK。

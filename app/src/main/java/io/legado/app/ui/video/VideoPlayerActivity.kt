@@ -613,6 +613,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         menuCustomBtn = menu.findItem(R.id.menu_custom_btn)?.also {
             it.isVisible = (VideoPlay.source as? BookSource)?.customButton == true
         }
+        menu.findItem(R.id.menu_rss_media_download)?.isVisible = VideoPlay.source is RssSource
         starMenuItem = menu.findItem(R.id.menu_rss_star)
         upStarMenu()
         return super.onPrepareOptionsMenu(menu)
@@ -641,6 +642,11 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.menu_rss_media_download -> {
+                val article = VideoPlay.rssStar?.toRssArticle() ?: VideoPlay.rssRecord?.toRssArticle()
+                if (article != null) io.legado.app.ui.rss.media.RssMediaUi.show(this, listOf(article), captured =
+                    VideoPlay.videoUrl?.let { listOf(io.legado.app.model.rss.media.RssMediaCandidate(article, it, "video", thumbnail = article.image)) }.orEmpty())
+            }
             R.id.menu_custom_btn -> {
                 (VideoPlay.source as? BookSource)?.let {source ->
                     VideoPlay.book?.let { book ->

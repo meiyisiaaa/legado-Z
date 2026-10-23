@@ -22,7 +22,27 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_89_90,
             migration_90_91,
+            migration_91_92,
         )
+    }
+
+    private val migration_91_92 = object : Migration(91, 92) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `rssArticles` ADD COLUMN `enclosureJson` TEXT NOT NULL DEFAULT '[]'")
+            db.execSQL("ALTER TABLE `rssStars` ADD COLUMN `enclosureJson` TEXT NOT NULL DEFAULT '[]'")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `rssMediaDownloadTasks` (
+                    `id` TEXT NOT NULL, `origin` TEXT NOT NULL, `link` TEXT NOT NULL,
+                    `title` TEXT NOT NULL, `url` TEXT NOT NULL, `kind` TEXT NOT NULL,
+                    `mimeType` TEXT, `thumbnail` TEXT, `size` INTEGER, `label` TEXT,
+                    `headersJson` TEXT NOT NULL, `status` TEXT NOT NULL,
+                    `outputUri` TEXT, `error` TEXT, `createdAt` INTEGER NOT NULL,
+                    `bytesDownloaded` INTEGER NOT NULL, `totalBytes` INTEGER NOT NULL,
+                    `requestUrl` TEXT,
+                    PRIMARY KEY(`id`)
+                )
+            """.trimIndent())
+        }
     }
 
     private val migration_90_91 = object : Migration(90, 91) {

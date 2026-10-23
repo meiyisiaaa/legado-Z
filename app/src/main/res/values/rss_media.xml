@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rss_media_notification_title">Media downloads (%1$d)</string>
+    <string name="rss_media_notification_mixed">Downloading · Saving to gallery</string>
+    <string name="rss_media_download">Download media</string>
+    <string name="rss_media_tasks">Download tasks</string>
+    <string name="rss_media_selected_count">%1$d selected</string>
+    <string name="rss_media_download_count">Download selected (%1$d)</string>
+    <string name="rss_media_deselect_all">Deselect all</string>
+    <string name="rss_media_image">Image</string>
+    <string name="rss_media_video">Video</string>
+    <string name="rss_media_file">Media file</string>
+    <string name="rss_media_resolving">Finding media…</string>
+    <string name="rss_media_sniffing">Checking dynamic media…</string>
+    <string name="rss_media_sniff">Check dynamic media</string>
+    <string name="rss_media_stop_sniff">Stop checking</string>
+    <string name="rss_media_empty">No media found</string>
+    <string name="rss_media_open_detect">Open and detect</string>
+    <string name="rss_media_open_article">Open article</string>
+    <string name="rss_media_open_play">Open and play</string>
+    <string name="rss_media_play_hint">Play the video below to detect its download address.</string>
+    <string name="rss_media_tasks_empty">No media download tasks</string>
+    <string name="rss_media_storage_permission">Allow storage access to save selected media to your gallery.</string>
+    <string name="rss_media_permission_denied">Storage access is required to save media on this Android version.</string>
+    <string name="rss_media_pause">Pause</string>
+    <string name="rss_media_resume">Resume</string>
+    <string name="rss_media_queued">Queued</string>
+    <string name="rss_media_downloading">Downloading</string>
+    <string name="rss_media_paused">Paused</string>
+    <string name="rss_media_exporting">Saving to gallery</string>
+    <string name="rss_media_completed">Saved to gallery</string>
+    <string name="rss_media_failed">Download failed</string>
+    <string name="rss_media_cancelled">Cancelled</string>
+    <string name="rss_media_select_article">Select article</string>
+</resources>

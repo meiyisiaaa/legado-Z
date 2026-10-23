@@ -6,6 +6,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,11 +42,14 @@ import io.legado.app.utils.setLayout
 /** 显示图片；保留 PhotoView 的缩放、拖动和旋转手势。 */
 class PhotoDialog() : BaseDialogFragment(0) {
 
-    constructor(src: String, sourceOrigin: String? = null, isBook: Boolean = false) : this() {
+    constructor(src: String, sourceOrigin: String? = null, isBook: Boolean = false, rssArticle: io.legado.app.data.entities.RssArticle? = null) : this() {
         arguments = Bundle().apply {
             putString("src", src)
             putString("sourceOrigin", sourceOrigin)
             putBoolean("isBook", isBook)
+            rssArticle?.let { putString("rssArticle", io.legado.app.utils.GSON.toJson(
+                io.legado.app.data.entities.RssArticle(origin = it.origin, sort = it.sort,
+                    title = it.title, link = it.link, image = it.image, type = it.type))) }
         }
     }
 
@@ -51,7 +62,12 @@ class PhotoDialog() : BaseDialogFragment(0) {
     ): View = LegadoComposeView(requireContext()).apply {
         setContent {
             LegadoTheme {
-                PhotoDialogContent(::loadImage)
+                PhotoDialogContent(::loadImage, arguments?.getString("rssArticle")?.let { articleJson -> {
+                    val article = io.legado.app.utils.GSON.fromJson(articleJson, io.legado.app.data.entities.RssArticle::class.java)
+                    val src = requireArguments().getString("src").orEmpty()
+                    io.legado.app.ui.rss.media.RssMediaUi.show(requireActivity(), listOf(article), captured = listOf(
+                        io.legado.app.model.rss.media.RssMediaCandidate(article, src, "image")))
+                } })
             }
         }
     }
@@ -103,9 +119,10 @@ class PhotoDialog() : BaseDialogFragment(0) {
 }
 
 @Composable
-internal fun PhotoDialogContent(onPhotoViewCreated: (PhotoView) -> Unit) {
+internal fun PhotoDialogContent(onPhotoViewCreated: (PhotoView) -> Unit, onDownload: (() -> Unit)? = null) {
     val animationEnabled = LocalLegadoMotion.current.enabled
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
@@ -117,11 +134,15 @@ internal fun PhotoDialogContent(onPhotoViewCreated: (PhotoView) -> Unit) {
                 }
             }
         )
+        if (onDownload != null) Button(onClick = onDownload, modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(24.dp)) {
+            Text(stringResource(R.string.rss_media_download))
+        }
+        }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun PhotoDialogPreview() {
-    LegadoTheme { PhotoDialogContent {} }
+    LegadoTheme { PhotoDialogContent(onPhotoViewCreated = {}) }
 }

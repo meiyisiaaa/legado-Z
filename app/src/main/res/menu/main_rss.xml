@@ -32,4 +32,5 @@
         app:showAsAction="always"
         tools:ignore="AlwaysShowAction" />
 
+    <item android:id="@+id/menu_rss_media_tasks" android:title="@string/rss_media_tasks" android:icon="@drawable/ic_download_line" app:showAsAction="never" />
 </menu>

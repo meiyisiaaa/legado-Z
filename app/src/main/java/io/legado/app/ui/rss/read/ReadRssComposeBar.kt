@@ -68,6 +68,7 @@ internal fun ReadRssComposeBar(
                 Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.menu))
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                ReadRssMenuItem(R.id.menu_rss_media_download, R.string.rss_media_download, onAction) { menuExpanded = false }
                 if (hasLogin) ReadRssMenuItem(R.id.menu_login, R.string.login, onAction) { menuExpanded = false }
                 ReadRssMenuItem(R.id.menu_browser_open, R.string.open_in_browser, onAction) { menuExpanded = false }
                 ReadRssMenuItem(R.id.menu_read_record, R.string.read_record, onAction) { menuExpanded = false }

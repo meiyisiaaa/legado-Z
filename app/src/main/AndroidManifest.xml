@@ -528,6 +528,10 @@
         <service
             android:name=".service.DownloadService"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".service.RssMediaDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <receiver
             android:name=".receiver.MediaButtonReceiver"

@@ -101,6 +101,7 @@ class RssFragment() : VMBaseFragment<RssViewModel>(R.layout.fragment_rss), MainF
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
         when (item.itemId) {
+            R.id.menu_rss_media_tasks -> io.legado.app.ui.rss.media.RssMediaUi.showTasks(requireActivity())
             R.id.menu_read_record -> showDialogFragment<ReadRecordDialog>()
             R.id.menu_rss_config -> startActivity<RssSourceActivity>()
             R.id.menu_rss_star -> startActivity<RssFavoritesActivity>()

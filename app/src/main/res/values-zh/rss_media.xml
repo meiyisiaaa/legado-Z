@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rss_media_notification_title">订阅媒体下载（%1$d）</string>
+    <string name="rss_media_notification_mixed">下载中 · 保存到相册</string>
+    <string name="rss_media_download">下载媒体</string>
+    <string name="rss_media_tasks">下载任务</string>
+    <string name="rss_media_selected_count">已选 %1$d 项</string>
+    <string name="rss_media_download_count">下载所选（%1$d）</string>
+    <string name="rss_media_deselect_all">取消全选</string>
+    <string name="rss_media_image">图片</string>
+    <string name="rss_media_video">视频</string>
+    <string name="rss_media_file">媒体文件</string>
+    <string name="rss_media_resolving">正在识别媒体…</string>
+    <string name="rss_media_sniffing">正在识别动态媒体…</string>
+    <string name="rss_media_sniff">识别动态媒体</string>
+    <string name="rss_media_stop_sniff">停止识别</string>
+    <string name="rss_media_empty">暂未找到媒体</string>
+    <string name="rss_media_open_detect">打开并识别</string>
+    <string name="rss_media_open_article">打开原文</string>
+    <string name="rss_media_open_play">打开并播放</string>
+    <string name="rss_media_play_hint">点击下方视频播放，识别实际下载地址。</string>
+    <string name="rss_media_tasks_empty">暂无媒体下载任务</string>
+    <string name="rss_media_storage_permission">需要存储权限，将所选媒体保存到相册。</string>
+    <string name="rss_media_permission_denied">此 Android 版本保存媒体需要存储权限。</string>
+    <string name="rss_media_pause">暂停</string>
+    <string name="rss_media_resume">继续</string>
+    <string name="rss_media_queued">等待下载</string>
+    <string name="rss_media_downloading">正在下载</string>
+    <string name="rss_media_paused">已暂停</string>
+    <string name="rss_media_exporting">正在保存到相册</string>
+    <string name="rss_media_completed">已保存到相册</string>
+    <string name="rss_media_failed">下载失败</string>
+    <string name="rss_media_cancelled">已取消</string>
+    <string name="rss_media_select_article">选择文章</string>
+</resources>

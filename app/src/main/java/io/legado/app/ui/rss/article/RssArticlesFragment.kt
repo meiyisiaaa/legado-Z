@@ -65,6 +65,7 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
                     onRefresh = ::loadArticles,
                     onLoadMore = ::scrollToBottom,
                     onRead = ::readRss,
+                    onDownload = { io.legado.app.ui.rss.media.RssMediaUi.show(requireActivity(), it) },
                     preload = isPreload
                 )
             }

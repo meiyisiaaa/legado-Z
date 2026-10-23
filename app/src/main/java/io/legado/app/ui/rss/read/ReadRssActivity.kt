@@ -119,6 +119,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     private lateinit var pooledWebView: PooledWebView
     private lateinit var currentWebView: WebView
 
+    @Volatile private var currentMediaArticle: io.legado.app.data.entities.RssArticle? = null
+    private val capturedMedia = linkedMapOf<String, io.legado.app.model.rss.media.RssMediaCandidate>()
+    private fun mediaArticle() = viewModel.rssArticle ?: io.legado.app.data.entities.RssArticle(
+        origin = viewModel.rssSource?.sourceUrl.orEmpty(), title = screenTitle, link = currentWebView.url.orEmpty())
+    internal fun currentArticleForMedia() = mediaArticle()
+    private fun collectMedia(values: List<io.legado.app.model.rss.media.RssMediaCandidate>) {
+        values.forEach { capturedMedia[it.id] = it }
+    }
+
     private var screenTitle by mutableStateOf("")
     private var hasArticle by mutableStateOf(false)
     private var isFavorite by mutableStateOf(false)
@@ -267,6 +276,14 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
     private fun performReadAction(actionId: Int) {
         when (actionId) {
+            R.id.menu_rss_media_download -> {
+                val article = mediaArticle()
+                currentWebView.evaluateJavascript("document.documentElement.outerHTML") { value ->
+                    val html = runCatching { io.legado.app.utils.GSON.fromJson(value, String::class.java) }.getOrNull()
+                    io.legado.app.ui.rss.media.RssMediaUi.show(this, listOf(article), html,
+                        currentWebView.url, capturedMedia.values.toList())
+                }
+            }
             R.id.menu_rss_refresh -> refresh()
 
             R.id.menu_rss_star -> {
@@ -594,6 +611,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                 currentWebView.clearHistory() //清除历史
             }
             super.onPageStarted(view, url, favicon)
+            currentMediaArticle = mediaArticle()
             currentWebView.evaluateJavascript(basicJs, null)
         }
 
@@ -644,6 +662,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     whitelist.forEach {
                         try {
                             if (url.startsWith(it) || url.matches(it.toRegex())) {
+                                currentMediaArticle?.let { article -> io.legado.app.ui.rss.media.RssMediaSniffer.captureRequest(article, url, request.requestHeaders) { values -> view.post { collectMedia(values) } } }
                                 return super.shouldInterceptRequest(view, request)
                             }
                         } catch (e: PatternSyntaxException) {
@@ -654,6 +673,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
                     return createEmptyResource()
                 }
             }
+            currentMediaArticle?.let { article -> io.legado.app.ui.rss.media.RssMediaSniffer.captureRequest(article, url, request.requestHeaders) { values -> view.post { collectMedia(values) } } }
             return super.shouldInterceptRequest(view, request)
         }
 
@@ -704,6 +724,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            io.legado.app.ui.rss.media.RssMediaSniffer.captureDom(view, mediaArticle(), ::collectMedia)
             view.title?.let { title ->
                 if (title != url
                     && title != view.url

@@ -2,6 +2,7 @@ package io.legado.app.ui.rss.article
 
 import android.content.Context
 import android.widget.ImageView
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -43,6 +44,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.Checkbox
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,10 +86,31 @@ internal fun RssArticleListContent(
     onLoadMore: (Boolean) -> Unit,
     onRead: (RssArticle) -> Unit,
     preload: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDownload: (List<RssArticle>) -> Unit = {}
 ) {
+    var selectedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val selected = articles.filter { articleKey(it) in selectedKeys }
+    val selecting = selectedKeys.isNotEmpty()
+    val loadedKeys = articles.map(::articleKey)
+    LaunchedEffect(loadedKeys) { selectedKeys = selectedKeys.filter { it in loadedKeys } }
+    BackHandler(enabled = selecting) { selectedKeys = emptyList() }
+    fun toggle(article: RssArticle) {
+        val key = articleKey(article)
+        selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+    }
+    Column(modifier.fillMaxSize()) {
+        if (selecting) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { selectedKeys = emptyList() }) { Text(stringResource(R.string.cancel)) }
+                Text(stringResource(R.string.rss_media_selected_count, selected.size), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = { selectedKeys = articles.map(::articleKey) }) { Text(stringResource(R.string.select_all)) }
+            }
+            Button(onClick = { onDownload(selected); selectedKeys = emptyList() }, enabled = selected.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp)) { Text(stringResource(R.string.rss_media_download_count, selected.size)) }
+        }
     PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh,
-        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        modifier = Modifier.weight(1f).fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         when {
             articles.isEmpty() && isRefreshing -> LoadingArticles()
             articles.isEmpty() && error != null -> ArticleLoadError(error, onRefresh)
@@ -110,7 +137,17 @@ internal fun RssArticleListContent(
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
-                        RssArticleCard(article, articleStyle, onClick = { onRead(article) })
+                        Column {
+                            if (selecting) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Checkbox(checked = articleKey(article) in selectedKeys,
+                                    onCheckedChange = { toggle(article) },
+                                    modifier = Modifier.semantics { contentDescription = article.title })
+                            }
+                            RssArticleCard(article, articleStyle,
+                                onClick = { if (selecting) toggle(article) else onRead(article) },
+                                onLongClick = { toggle(article) },
+                                longClickLabel = R.string.rss_media_select_article)
+                        }
                     }
                     item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
                         ArticleListFooter(isLoadingMore, hasMore, error, onLoadMore)
@@ -135,7 +172,17 @@ internal fun RssArticleListContent(
                     verticalItemSpacing = 12.dp
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
-                        RssArticleCard(article, articleStyle, onClick = { onRead(article) })
+                        Column {
+                            if (selecting) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Checkbox(checked = articleKey(article) in selectedKeys,
+                                    onCheckedChange = { toggle(article) },
+                                    modifier = Modifier.semantics { contentDescription = article.title })
+                            }
+                            RssArticleCard(article, articleStyle,
+                                onClick = { if (selecting) toggle(article) else onRead(article) },
+                                onLongClick = { toggle(article) },
+                                longClickLabel = R.string.rss_media_select_article)
+                        }
                     }
                     item { ArticleListFooter(isLoadingMore, hasMore, error, onLoadMore) }
                 }
@@ -157,12 +204,23 @@ internal fun RssArticleListContent(
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
-                        RssArticleCard(article, articleStyle, onClick = { onRead(article) })
+                        Column {
+                            if (selecting) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Checkbox(checked = articleKey(article) in selectedKeys,
+                                    onCheckedChange = { toggle(article) },
+                                    modifier = Modifier.semantics { contentDescription = article.title })
+                            }
+                            RssArticleCard(article, articleStyle,
+                                onClick = { if (selecting) toggle(article) else onRead(article) },
+                                onLongClick = { toggle(article) },
+                                longClickLabel = R.string.rss_media_select_article)
+                        }
                     }
                     item { ArticleListFooter(isLoadingMore, hasMore, error, onLoadMore) }
                 }
             }
         }
+    }
     }
 }
 
@@ -205,7 +263,8 @@ private fun RssArticleCard(
     article: RssArticle,
     articleStyle: Int,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: Int = R.string.delete
 ) {
     val grid = articleStyle == 2 || articleStyle == 3 || articleStyle == 4
     val titleColor = if (article.read) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
@@ -221,7 +280,7 @@ private fun RssArticleCard(
             interactionSource = interactions, indication = androidx.compose.foundation.LocalIndication.current,
             onClick = onClick,
             onLongClick = onLongClick,
-            onLongClickLabel = stringResource(R.string.delete),
+            onLongClickLabel = stringResource(longClickLabel),
             role = Role.Button
         ))
 

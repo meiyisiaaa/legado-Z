@@ -30,7 +30,9 @@ data class RssStar(
     var type: Int = 0,
     /**阅读进度**/
     @ColumnInfo(defaultValue = "0")
-    var durPos: Int = 0
+    var durPos: Int = 0,
+    @ColumnInfo(defaultValue = "'[]'")
+    var enclosureJson: String = "[]"
 ) : BaseRssArticle {
 
     @delegate:Transient
@@ -52,7 +54,8 @@ data class RssStar(
         group = group,
         variable = variable,
         type = type,
-        durPos = durPos
+        durPos = durPos,
+        enclosureJson = enclosureJson
     )
 
     fun toRecord() = RssReadRecord(
