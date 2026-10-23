@@ -321,3 +321,24 @@ Gradle由同一`gradle-run` workflow管理；嵌套任务为`:app:testAppDebugUn
 设备已恢复1080×2400、font_scale=1.0、night=no及原动画设置（animator_duration_scale缺省，另两项1.0）；保留API36模拟器在实际「下载任务」页。宿主样例服务已结束且8765无监听。调试包：[legado_app_3.26.102317.apk](app/build/outputs/apk/app/debug/legado_app_3.26.102317.apk)。
 
 Gradle workflow已finish，仅清理包装器拥有的日志；本轮重复截图目录和临时UI层级文件已删除，最终原图保留在`docs/ui/assets/rss-media/`。AVD运行日志供当前模拟器使用，未清理AVD或共享SDK。
+
+## 公开媒体订阅源实测 · 2026-10-23
+
+本轮仅追加可导入的订阅规则及验收截图，沿用已安装的调试包。通过现有 `legado://import/rssSource` 预览确认流程加入「公开媒体测试」，原书架及其他订阅保留。
+
+- 规则文件：[rss-public-media.json](docs/samples/rss-public-media.json)。数据来自 [Google Cast 官方样例目录](https://storage.googleapis.com/cpe-sample-media/content.json)，[官方教程](https://developers.google.com/cast/codelabs/cast-receiver)的 Sample API 节引用该目录。
+- 实际解析出 5 篇短片，每篇有 PNG 封面和 MP4。4 篇 15 秒，For Bigger Fun 为 60 秒；本轮十个媒体 URL 的 HEAD 均返回 200，总大小 24,644,687 字节。前两段视频另验证 Range 206 和 MP4 文件头。
+- 在 API36、1080×2400、420dpi、1 倍字体下，从文章标题长按进入多选，勾选前两篇；下载面板初始为 0 项，提供两个视频与两张图片，点击全选后提交 4 项。
+- 四项均显示「已保存到相册」。系统 MediaStore 的 `is_pending` 均为 0；图片位于 `Pictures/Legado/`，视频位于 `Movies/Legado/`，文件字节数与公开来源一致。
+- Joyrides 的任务「打开」实际进入系统相册播放器，看到播放画面及 0:04 / 0:15 控件。未执行本轮音频听感或拖动播放检查。
+
+| 条目 | 图片字节数 | 视频字节数 | 相册视频元数据 |
+| --- | ---: | ---: | --- |
+| For Bigger Blazes | 492,470 | 2,498,125 | 15,022ms，1280×720 |
+| For Bigger Joyrides | 509,147 | 2,372,820 | 15,045ms，1280×720 |
+
+实际截图：[订阅列表](docs/ui/assets/rss-media/public-source-list.png)、[两篇文章的媒体选择](docs/ui/assets/rss-media/public-source-panel.png)、[四项相册保存完成](docs/ui/assets/rss-media/public-source-completed.png)、[系统相册播放](docs/ui/assets/rss-media/public-source-playback.png)。已查看原图，列表图片正常加载，选择、提交和打开操作实际执行。
+
+观察到一项既有显示问题：完成任务仍展示最后一次下载中的字节进度，例如 97 kB / 509 kB；实际相册文件为完整 509,147 字节。该问题留待任务进度显示修复，本轮追加订阅规则未修改下载实现。
+
+保留两篇的四个完成任务及相册成品供验收，其余三篇尚未完整下载，媒体链接已验证。模拟器返回「公开媒体测试」文章列表。公开源后续可用性受提供方和网络影响；本轮未重跑其他来源或旧版设备检查。
