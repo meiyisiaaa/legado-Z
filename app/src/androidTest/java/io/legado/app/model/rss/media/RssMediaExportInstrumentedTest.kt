@@ -131,7 +131,7 @@ class RssMediaExportInstrumentedTest {
                         rejected = uri
                         assertTrue("The synchronization point must follow publication", RssMediaFiles.exists(uri.toString()))
                         appDb.rssMediaDownloadDao.requestStatus(task.id, RssMediaDownloadTask.CANCELLED, RssMediaDownloadTask.EXPORTING)
-                        appDb.rssMediaDownloadDao.completeExport(task.id, uri.toString()) > 0
+                        appDb.rssMediaDownloadDao.completeExport(task.id, uri.toString(), RssMediaFiles.sizeOf(uri.toString())!!) > 0
                     }) { output ->
                         instrumentation.context.assets.open("rss-media-fixture/image.png").use { it.copyTo(output) }
                     }
@@ -169,7 +169,7 @@ class RssMediaExportInstrumentedTest {
                         RssMediaFiles.save(task, "image/png", commit = { uri ->
                             result = uri
                             caller.cancel()
-                            if (accepted) appDb.rssMediaDownloadDao.completeExport(task.id, uri.toString()) > 0
+                            if (accepted) appDb.rssMediaDownloadDao.completeExport(task.id, uri.toString(), RssMediaFiles.sizeOf(uri.toString())!!) > 0
                             else {
                                 appDb.rssMediaDownloadDao.requestStatus(task.id, RssMediaDownloadTask.CANCELLED, RssMediaDownloadTask.EXPORTING)
                                 false

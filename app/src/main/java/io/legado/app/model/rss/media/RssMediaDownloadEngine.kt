@@ -3,7 +3,6 @@ package io.legado.app.model.rss.media
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.offline.DefaultDownloadIndex
 import androidx.media3.exoplayer.offline.DefaultDownloaderFactory
 import androidx.media3.exoplayer.offline.Download
@@ -105,7 +104,7 @@ internal class RssMediaDownloadEngine(private val scope: CoroutineScope) {
                 tasks.filter { it.status == QUEUED || it.status == DOWNLOADING }.forEach { task ->
                     val download = withContext(Dispatchers.IO) { index.getDownload(task.id) }
                     when {
-                        download?.state == Download.STATE_COMPLETED -> startExport(task, download.request)
+                        download?.state == Download.STATE_COMPLETED -> startExport(task, download)
                         download == null && !preparations.containsKey(task.id) &&
                             preparations.size + manager.currentDownloads.count {
                                 it.state in listOf(Download.STATE_DOWNLOADING, Download.STATE_QUEUED, Download.STATE_RESTARTING)
@@ -177,9 +176,7 @@ internal class RssMediaDownloadEngine(private val scope: CoroutineScope) {
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
         return suspendCancellableCoroutine { continuation ->
-            val helper = DownloadHelper.Factory().setDataSourceFactory(cache.upstream(task))
-                .setRenderersFactory(DefaultRenderersFactory(appCtx))
-                .setTrackSelectionParameters(parameters).create(item)
+            val helper = RssMediaTrackSelection.createHelper(item, cache.upstream(task), parameters)
             continuation.invokeOnCancellation {
                 android.os.Handler(android.os.Looper.getMainLooper()).post { helper.release() }
             }
@@ -223,14 +220,21 @@ internal class RssMediaDownloadEngine(private val scope: CoroutineScope) {
         }
     }
 
-    private fun startExport(task: RssMediaDownloadTask, request: DownloadRequest) {
+    private fun startExport(task: RssMediaDownloadTask, download: Download) {
         if (exportJob?.isCompleted == false) return
         exportingId = task.id
         exportJob = scope.launch {
-            if (withContext(Dispatchers.IO) { dao.beginExport(task.id) } == 0) return@launch
+            if (withContext(Dispatchers.IO) {
+                dao.beginExport(task.id, download.bytesDownloaded,
+                    download.contentLength.takeIf { it >= 0 } ?: download.bytesDownloaded)
+            } == 0) return@launch
             try {
-                RssMediaExporter(cache).export(task, request) { uri ->
-                    withContext(Dispatchers.IO) { dao.completeExport(task.id, uri.toString()) > 0 }
+                RssMediaExporter(cache).export(task, download.request) { uri ->
+                    withContext(Dispatchers.IO) {
+                        // Download/export progress counts cached media bytes; completion shows the published file size.
+                        val bytes = checkNotNull(RssMediaFiles.sizeOf(uri.toString())) { "无法读取导出文件大小" }
+                        dao.completeExport(task.id, uri.toString(), bytes) > 0
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

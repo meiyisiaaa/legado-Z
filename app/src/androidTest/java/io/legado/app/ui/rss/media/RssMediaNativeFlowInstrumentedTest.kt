@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import io.legado.app.R
@@ -22,6 +23,8 @@ import io.legado.app.ui.about.AboutActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -75,6 +78,57 @@ class RssMediaNativeFlowInstrumentedTest {
         assertDialogFillsWidth()
     }
 
+    @Test fun batchDownloadsOnlyOriginalContentImagesAndVideosWithFinalSizes() = runBlocking<Unit> {
+        val articles = listOf("article", "second").mapIndexed { index, path ->
+            RssArticle(origin = server.baseUrl, link = "${server.baseUrl}/quality/$path",
+                title = "原图批量验证 ${index + 1}",
+                image = "${server.baseUrl}/quality-preview.png".takeIf { index == 0 },
+                description = """<img src="/quality-preview.png">""".takeIf { index == 1 })
+        }
+        val expected = articles.flatMap { article -> listOf(
+            RssMediaCandidate(article, "${server.baseUrl}/quality-original.png?article=${article.link.substringAfterLast('/')}", "image"),
+            RssMediaCandidate(article, "${server.baseUrl}/sample.mp4", "video")
+        ) }
+        ids += expected.map { it.id }
+        compose.activityRule.scenario.onActivity { RssMediaUi.show(it, articles) }
+        compose.waitUntil(20_000) {
+            compose.onAllNodesWithText("正文原图").fetchSemanticsNodes().size == 2
+        }
+        compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 0)).assertIsNotEnabled()
+        compose.onNodeWithText("quality-preview.png").assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.select_all)).performClick()
+        compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 4)).assertIsDisplayed()
+        record("original-batch-selected")
+        compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 4)).performClick()
+        compose.waitUntil(50_000) {
+            expected.all { appDb.rssMediaDownloadDao.get(it.id)?.status in listOf(
+                RssMediaDownloadTask.COMPLETED, RssMediaDownloadTask.FAILED, RssMediaDownloadTask.EXPORT_FAILED) }
+        }
+        withContext(Dispatchers.IO) {
+            expected.forEach { candidate ->
+                val task = appDb.rssMediaDownloadDao.get(candidate.id)!!
+                assertEquals(task.error, RssMediaDownloadTask.COMPLETED, task.status)
+                val uri = Uri.parse(task.outputUri)
+                val saved = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+                assertEquals(saved.size.toLong(), task.bytesDownloaded)
+                assertEquals(task.bytesDownloaded, task.totalBytes)
+                assertArrayEquals("Direct images and videos must keep their original bytes",
+                    java.net.URL(candidate.url).openStream().use { it.readBytes() }, saved)
+                context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.IS_PENDING), null, null, null)!!.use {
+                    assertTrue(it.moveToFirst())
+                    assertEquals(0, it.getInt(0))
+                }
+                if (candidate.kind == "image") {
+                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(saved, 0, saved.size, options)
+                    assertEquals(1920, options.outWidth)
+                    assertEquals(1280, options.outHeight)
+                }
+            }
+        }
+        record("original-batch-completed")
+    }
+
     @Test fun userSelectsHlsAndReceivesAnActualAlbumMp4() {
         val article = RssArticle(origin = server.baseUrl, link = "${server.baseUrl}/article", title = "林间来信 · 留住一段山野")
         val candidate = RssMediaCandidate(article, "${server.baseUrl}/hls/index.m3u8", "video",
@@ -109,7 +163,7 @@ class RssMediaNativeFlowInstrumentedTest {
         val uri = Uri.parse(result.outputUri)
         assertEquals("video/mp4", context.contentResolver.getType(uri))
         assertTrue(context.contentResolver.openAssetFileDescriptor(uri, "r")!!.use { it.length > 0 })
-        compose.onNodeWithText(context.getString(R.string.open)).assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.open))[0].assertIsDisplayed()
         record("native-completed")
     }
 

@@ -14,17 +14,21 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import java.io.IOException
 import java.net.URI
 import java.util.Locale
 
+internal data class RssMediaResolution(val candidates: List<RssMediaCandidate>, val excludedImageUrls: Set<String>)
+
 object RssMediaResolver {
-    suspend fun resolve(
+    internal suspend fun resolve(
         article: RssArticle,
         html: String? = null,
         baseUrl: String? = null
-    ): List<RssMediaCandidate> = withContext(Dispatchers.IO) {
+    ): RssMediaResolution = withContext(Dispatchers.IO) {
         val source = appDb.rssSourceDao.getByKey(article.origin)
         var base = baseUrl ?: absoluteUrl(article.origin, article.link)
             ?: NetworkUtils.getAbsoluteURL(article.origin, article.link)
@@ -58,9 +62,11 @@ object RssMediaResolver {
                 }
             }
         }
-        (listOfNotNull(linkedMedia) + extract(article, pages.joinToString("\n"), base)
+        val content = pages.joinToString("\n")
+        val candidates = (listOfNotNull(linkedMedia) + extract(article, content, base)
             .filter { it.url != excludedArticleUrl })
             .map { prepare(it, source, base) }.distinctBy { it.url }
+        RssMediaResolution(candidates, imageUrlsToExclude(article, content, base))
     }
 
     suspend fun prepare(candidate: RssMediaCandidate): RssMediaCandidate = withContext(Dispatchers.IO) {
@@ -119,6 +125,7 @@ object RssMediaResolver {
 
     fun extract(article: RssArticle, html: String, baseUrl: String): List<RssMediaCandidate> {
         val candidates = linkedMapOf<String, RssMediaCandidate>()
+        val excludedImages = mutableSetOf<String>()
         fun add(
             value: String?, kind: String? = null, mime: String? = null,
             thumbnail: String? = null, size: Long? = null, label: String? = null
@@ -127,6 +134,7 @@ object RssMediaResolver {
             val normalizedMime = mime?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
                 ?.takeIf { it.isNotEmpty() }
             val resolvedKind = mediaKind(url, normalizedMime, kind) ?: return
+            if (resolvedKind == "image" && isAuxiliaryImageUrl(url)) return
             val item = RssMediaCandidate(
                 article, url, resolvedKind, normalizedMime,
                 absoluteUrl(baseUrl, thumbnail), size?.takeIf { it >= 0 }, label,
@@ -137,18 +145,14 @@ object RssMediaResolver {
         }
         GSON.fromJsonObject<List<RssMediaAttachment?>>(article.enclosureJson).getOrNull()
             ?.filterNotNull()?.forEach { add(it.url, it.kind, it.mimeType, it.thumbnail, it.size, it.label) }
-        if (!html.contains('<')) {
+        if (!html.contains('<') && isPlainMediaUrl(article.link)) {
             add(article.link, when (article.type) { 1 -> "image"; 2 -> "video"; else -> null })
         }
-        listOf(article.description, article.content, html).filterNotNull().distinct().forEach { page ->
+        mediaPages(article, html).forEach { page ->
             val document = Jsoup.parse(page, baseUrl)
-            document.select("img").forEach { element ->
-                listOf("src", "data-src", "data-original").forEach {
-                    add(element.attr(it), "image", label = element.attr("alt").ifBlank { null })
-                }
-                listOf("srcset", "data-srcset").forEach { attribute ->
-                    srcsetUrls(element.attr(attribute)).forEach { add(it, "image") }
-                }
+            selectImages(document, baseUrl).forEach { image ->
+                excludedImages += image.excluded
+                add(image.value, "image", image.mime, label = image.label)
             }
             document.select("video, video source").forEach { element ->
                 val video = if (element.tagName() == "video") element else element.parent()
@@ -156,19 +160,99 @@ object RssMediaResolver {
                     add(element.attr(it), "video", element.attr("type"), video?.attr("poster"))
                 }
             }
-            document.select("a[href], source[srcset]").forEach { element ->
-                if (element.tagName() == "a") {
-                    add(element.attr("href"), mime = element.attr("type"), label = element.text())
-                } else if (element.parent()?.tagName() == "picture") {
-                    srcsetUrls(element.attr("srcset")).forEach { add(it, "image", element.attr("type")) }
-                }
+            document.select("a[href]").forEach { element ->
+                val target = absoluteUrl(baseUrl, element.attr("href"))
+                if (target != null && mediaKind(target) == "image" && isAuxiliaryImage(element)) {
+                    excludedImages += target
+                } else add(element.attr("href"), mime = element.attr("type"), label = element.text())
             }
-            if (!page.contains('<')) page.lineSequence().forEach {
+            document.select("meta[property=og:image], meta[property=og:image:url], meta[property=og:image:secure_url], meta[name=twitter:image]")
+                .forEach { add(it.attr("content"), "image") }
+            if (!page.contains('<')) page.lineSequence().filter(::isPlainMediaUrl).forEach {
                 add(it, when (article.type) { 1 -> "image"; 2 -> "video"; else -> null })
             }
         }
         add(article.image, "image")
-        return candidates.values.toList()
+        return candidates.values.filter { it.kind != "image" || it.url !in excludedImages }
+    }
+
+    private fun mediaPages(article: RssArticle, html: String): List<String> =
+        listOf(article.description, article.content, html).filterNotNull().distinct()
+
+    /** DOM alternatives also exclude previews already observed by the network sniffer. */
+    internal fun imageUrlsToExclude(article: RssArticle, html: String, baseUrl: String): Set<String> =
+        mediaPages(article, html).flatMap { page ->
+            val document = Jsoup.parse(page, baseUrl)
+            selectImages(document, baseUrl).flatMap { it.excluded } + document.select("a[href]")
+                .filter { isAuxiliaryImage(it) }.mapNotNull { absoluteUrl(baseUrl, it.attr("href")) }
+        }.toSet()
+
+    private data class ImageSelection(
+        val value: String?, val excluded: Set<String>, val label: String?, val mime: String? = null
+    )
+
+    private data class ImageSource(val value: String, val pixels: Double = 0.0, val mime: String? = null)
+
+    private fun selectImages(document: Document, baseUrl: String): List<ImageSelection> =
+        document.select("img, picture:not(:has(img))").map { image ->
+            val picture = if (image.tagName() == "picture") image else image.parent()?.takeIf { it.tagName() == "picture" }
+            val elements = listOf(image) + picture?.select("source").orEmpty()
+            val width = image.attr("width").removeSuffix("px").toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0
+            val sets = elements.flatMap { element ->
+                listOf("data-srcset", "srcset").flatMap { attribute ->
+                    srcsetSources(element.attr(attribute), width).map { it.copy(mime = element.attr("type").ifBlank { null }) }
+                }
+            }
+            val originals = elements.flatMap { element ->
+                listOf("data-original", "data-original-src", "data-orig-file", "data-large_image",
+                    "data-full-src", "data-full-url").map { ImageSource(element.attr(it)) }
+            }
+            val linked = image.parent()?.takeIf { it.tagName() == "a" }?.attr("href")
+                ?.takeIf { absoluteUrl(baseUrl, it)?.let { url -> mediaKind(url) == "image" } == true }
+                ?.let { listOf(ImageSource(it)) }.orEmpty()
+            val fallbacks = elements.flatMap { element -> listOf("data-src", "src").map { ImageSource(element.attr(it)) } }
+            fun valid(sources: List<ImageSource>) = sources.filter {
+                absoluteUrl(baseUrl, it.value)?.let { url -> !isAuxiliaryImageUrl(url) } == true
+            }
+            val alternatives = originals + linked + sets + fallbacks
+            val urls = alternatives.mapNotNull { absoluteUrl(baseUrl, it.value) }.toSet()
+            val selected = if (isAuxiliaryImage(image, valid(originals + linked + sets).isNotEmpty())) null else
+                valid(originals).firstOrNull() ?: valid(linked).firstOrNull()
+                ?: valid(sets).maxByOrNull { it.pixels } ?: valid(fallbacks).firstOrNull()
+            ImageSelection(selected?.value, urls - setOfNotNull(absoluteUrl(baseUrl, selected?.value)),
+                image.attr("alt").ifBlank { null }, selected?.mime)
+        }
+
+    private val auxiliarySemantic = Regex("(?:^|[^a-z0-9])(?:icons?|logos?|avatars?|favicons?|tracking|tracker|spacer|decorative|decoration|social-share|navigation|navbar|buttons?|author-photo|author-image|profile-photo|profile-image)(?:$|[^a-z0-9])")
+    private val auxiliaryPath = Regex("(?:^|/)(?:icons?|favicons?|avatars?|tracking|trackers?)(?:/|$)|(?:^|/)(?:(?:site|brand|header|footer)[_-])?(?:favicon|logo|avatar|spacer|pixel|tracking[-_]pixel|transparent|blank)(?:[-_]\\d+(?:x\\d+)?)?\\.[a-z0-9]+$")
+
+    internal fun isAuxiliaryImageUrl(url: String): Boolean = runCatching {
+        auxiliaryPath.containsMatchIn(URI(url).path.orEmpty().lowercase(Locale.ROOT))
+    }.getOrDefault(false)
+
+    private fun isAuxiliaryImage(image: Element, hasFullSizeSource: Boolean = false): Boolean {
+        val width = image.attr("width").removeSuffix("px").toDoubleOrNull()
+        val height = image.attr("height").removeSuffix("px").toDoubleOrNull()
+        if (!hasFullSizeSource && width != null && height != null && width in 0.0..2.0 && height in 0.0..2.0) return true
+        val ancestry = listOf(image) + image.parents()
+        if (ancestry.none { it.tagName() in setOf("article", "main") } && ancestry.any {
+                it.tagName() in setOf("header", "footer", "aside") ||
+                    it.attr("role") in setOf("banner", "contentinfo", "complementary")
+            }) return true
+        return ancestry.takeWhile { it.tagName() !in setOf("article", "main", "body", "html") }.any { element ->
+            element.tagName() in setOf("nav", "button") || element.attr("role") in setOf("navigation", "button") ||
+                auxiliarySemantic.containsMatchIn((element.id() + " " + element.className() + " " +
+                    element.attr("role") + " " + element.attr("aria-label")).lowercase(Locale.ROOT)) ||
+                (element === image && auxiliarySemantic.matches(element.attr("alt").trim().lowercase(Locale.ROOT)))
+        }
+    }
+
+    private fun isPlainMediaUrl(value: String): Boolean {
+        val raw = value.trim().removeSuffix(urlOptions(value.trim()))
+        if (raw.isBlank() || raw.any { it.isWhitespace() || it == '<' || it == '>' }) return false
+        return raw.startsWith("https://", true) || raw.startsWith("http://", true) ||
+            raw.startsWith("//") || raw.startsWith('/') || raw.startsWith("./") || raw.startsWith("../") ||
+            runCatching { mediaKind(URI("https://media.invalid/").resolve(raw).toString()) != null }.getOrDefault(false)
     }
 
     internal fun extractAttachments(item: String): List<RssMediaAttachment> =
@@ -201,8 +285,8 @@ object RssMediaResolver {
         Regex(",\\s*\\{").find(it)?.range?.first?.let { position -> it.substring(position) }
     }.orEmpty()
 
-    private fun srcsetUrls(value: String): List<String> {
-        val result = mutableListOf<String>()
+    private fun srcsetSources(value: String, width: Double): List<ImageSource> {
+        val result = mutableListOf<ImageSource>()
         var position = 0
         while (position < value.length) {
             while (position < value.length && (value[position].isWhitespace() || value[position] == ',')) position++
@@ -210,10 +294,20 @@ object RssMediaResolver {
             while (position < value.length && !value[position].isWhitespace()) position++
             val token = value.substring(start, position)
             if (token.isEmpty()) break
-            result += token.trimEnd(',')
+            val url = token.trimEnd(',')
+            var descriptor = ""
             if (!token.endsWith(',')) {
+                val descriptorStart = position
                 while (position < value.length && value[position] != ',') position++
+                descriptor = value.substring(descriptorStart, position).trim()
             }
+            val pixels = when {
+                descriptor.isEmpty() -> width
+                descriptor.endsWith('w') -> descriptor.dropLast(1).toDoubleOrNull()
+                descriptor.endsWith('x') -> descriptor.dropLast(1).toDoubleOrNull()?.times(width)
+                else -> null
+            }
+            if (pixels != null && pixels.isFinite() && pixels > 0) result += ImageSource(url, pixels)
         }
         return result
     }

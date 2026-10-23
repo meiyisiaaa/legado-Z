@@ -27,6 +27,14 @@ object RssMediaDownloads {
 
     /** The observing UI or foreground service owns collection and cancellation. */
     suspend fun observeTasks() {
+        withContext(Dispatchers.IO) {
+            val dao = appDb.rssMediaDownloadDao
+            dao.all().filter { it.status == COMPLETED }.forEach { task ->
+                RssMediaFiles.sizeOf(task.outputUri)?.let { bytes ->
+                    dao.correctCompletedSize(task.id, task.outputUri!!, bytes)
+                }
+            }
+        }
         appDb.rssMediaDownloadDao.observeAll().collect { mutableTasks.value = it }
     }
 

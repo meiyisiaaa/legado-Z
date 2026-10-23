@@ -36,7 +36,8 @@ import java.util.Locale
 @SuppressLint("SetJavaScriptEnabled")
 internal class RssMediaSniffer(context: Context, private val scope: CoroutineScope,
     private val onCandidates: (List<RssMediaCandidate>) -> Unit, private val onFinished: () -> Unit,
-    private val onError: (String) -> Unit = {}) {
+    private val onError: (String) -> Unit = {},
+    private val onImageExclusions: (RssArticle, Set<String>) -> Unit = { _, _ -> }) {
     @Volatile private var current: RssArticle? = null
     @Volatile private var source: RssSource? = null
     @Volatile private var mainPageUrl: String? = null
@@ -84,7 +85,7 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
                 if (!running) return
                 pageFinished = true
                 source?.injectJs?.takeIf { it.isNotBlank() }?.let { view.evaluateJavascript(it, null) }
-                if (running) current?.let { captureDom(view, it, onCandidates) }
+                if (running) current?.let { captureDom(view, it, onCandidates, onImageExclusions) }
             }
         }
     }
@@ -99,7 +100,7 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
                         load(article)
                         repeat(40) { if (!pageFinished) delay(200) }
                         delay(1200)
-                        captureDom(view, article, onCandidates)
+                        captureDom(view, article, onCandidates, onImageExclusions)
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) { onError("${article.title}: ${e.localizedMessage.orEmpty()}") }
                 }
@@ -174,7 +175,6 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
             val mime = response.body.contentType()?.toString()?.substringBefore(';').orEmpty()
             val kind = when {
                 mime.startsWith("video/", true) || mime.contains("mpegurl", true) || mime.contains("dash+xml", true) -> "video"
-                mime.startsWith("image/", true) -> "image"
                 else -> null
             }
             if (kind != null) {
@@ -229,7 +229,6 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
             val extension = url.substringBefore('?').substringBefore('#').substringAfterLast('.').lowercase()
             val kind = when (extension) {
                 "m3u8", "mpd", "mp4", "webm", "m4v", "mov", "mkv" -> "video"
-                "jpg", "jpeg", "png", "gif", "webp", "avif", "bmp" -> "image"
                 else -> return
             }
             if (!url.startsWith("https://", true) && !url.startsWith("http://", true)) return
@@ -239,10 +238,13 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
                 thumbnail = article.image, headers = mediaRequestHeaders(headers))))
         }
 
-        fun captureDom(webView: WebView, article: RssArticle, onCandidates: (List<RssMediaCandidate>) -> Unit) {
+        fun captureDom(webView: WebView, article: RssArticle, onCandidates: (List<RssMediaCandidate>) -> Unit,
+            onImageExclusions: (RssArticle, Set<String>) -> Unit = { _, _ -> }) {
             webView.evaluateJavascript("""(function(){return document.documentElement.outerHTML;})()""") { value ->
                 val html = runCatching { GSON.fromJson(value, String::class.java) }.getOrNull() ?: return@evaluateJavascript
-                onCandidates(RssMediaResolver.extract(article, html, webView.url ?: article.link))
+                val base = webView.url ?: article.link
+                onImageExclusions(article, RssMediaResolver.imageUrlsToExclude(article, html, base))
+                onCandidates(RssMediaResolver.extract(article, html, base))
             }
             webView.evaluateJavascript("""JSON.stringify(performance.getEntriesByType('resource').map(function(e){return e.name;}))""") { value ->
                 val json = runCatching { GSON.fromJson(value, String::class.java) }.getOrNull() ?: return@evaluateJavascript

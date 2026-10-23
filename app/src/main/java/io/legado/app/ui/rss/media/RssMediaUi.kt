@@ -70,6 +70,7 @@ object RssMediaUi {
                 arguments = Bundle().apply {
                     putString("articles", GSON.toJson(snapshot.articles))
                     putString("captured", GSON.toJson(snapshot.candidates))
+                    putString("imageExclusions", GSON.toJson(snapshot.imageExclusions))
                     putString("base", baseUrl)
                 }
             }.showNow(activity.supportFragmentManager, "rssMedia")
@@ -84,7 +85,8 @@ object RssMediaUi {
 }
 
 /** Saved state contains article identities and one copy of each media address. */
-internal data class RssMediaSelectionSnapshot(val articles: List<RssArticle>, val candidates: List<RssMediaCandidateSnapshot>)
+internal data class RssMediaSelectionSnapshot(val articles: List<RssArticle>, val candidates: List<RssMediaCandidateSnapshot>,
+    val imageExclusions: Map<Int, Set<String>> = emptyMap())
 internal data class RssMediaCandidateSnapshot(val articleIndex: Int, val url: String, val kind: String,
     val mimeType: String?, val thumbnail: String?, val size: Long?, val label: String?,
     val headers: Map<String, String>, val requestUrl: String) {
@@ -101,17 +103,24 @@ internal fun mediaSelectionSnapshot(articles: List<RssArticle>, html: String?, b
         RssMediaResolver.extract(article, html.takeIf { articles.size == 1 }.orEmpty(),
             baseUrl ?: io.legado.app.utils.NetworkUtils.getAbsoluteURL(article.origin, article.link))
     }
+    val exclusions = articles.mapIndexed { index, article -> index to RssMediaResolver.imageUrlsToExclude(
+        article, html.takeIf { articles.size == 1 }.orEmpty(),
+        baseUrl ?: io.legado.app.utils.NetworkUtils.getAbsoluteURL(article.origin, article.link))
+    }.filter { it.second.isNotEmpty() }.toMap()
     val candidates = found.filter { it.url.startsWith("http://", true) || it.url.startsWith("https://", true) }
+        .filterNot { it.kind == "image" && (RssMediaResolver.isAuxiliaryImageUrl(it.url) ||
+            it.url in exclusions[articles.indexOf(it.article)].orEmpty()) }
         .distinctBy { it.id }.mapNotNull { candidate ->
         val index = articles.indexOf(candidate.article).takeIf { it >= 0 } ?: return@mapNotNull null
         RssMediaCandidateSnapshot(index, candidate.url, candidate.kind, candidate.mimeType, candidate.thumbnail,
             candidate.size, candidate.label?.take(200), RssMediaSniffer.mediaRequestHeaders(candidate.headers), candidate.requestUrl)
     }
-    return RssMediaSelectionSnapshot(compact, candidates)
+    return RssMediaSelectionSnapshot(compact, candidates, exclusions)
 }
 
 class RssMediaDialog : BaseDialogFragment(0) {
     private val candidates = mutableStateListOf<RssMediaCandidate>()
+    private val excludedImages = mutableMapOf<RssArticle, MutableSet<String>>()
     private var loading by mutableStateOf(false)
     private var error by mutableStateOf<String?>(null)
     private var tasksPage by mutableStateOf(false)
@@ -175,9 +184,11 @@ class RssMediaDialog : BaseDialogFragment(0) {
                 sniffing = false
                 manualPlaybackArticles = articles.filter { article -> article.type != 1 &&
                     candidates.none { it.article == article && it.kind == "video" } }
-            }, onError = { error = it })
+            }, onError = { error = it }, onImageExclusions = ::excludeImages)
         viewLifecycleOwner.lifecycleScope.launch { RssMediaDownloads.observeTasks() }
         if (arguments?.getBoolean("tasks") != true) {
+            GSON.fromJsonObject<Map<Int, Set<String>>>(arguments?.getString("imageExclusions")).getOrNull()
+                .orEmpty().forEach { (index, urls) -> articles.getOrNull(index)?.let { excludeImages(it, urls) } }
             addCandidates(GSON.fromJsonObject<List<RssMediaCandidateSnapshot>>(arguments?.getString("captured"))
                 .getOrNull().orEmpty().mapNotNull { it.restore(articles) })
             resolve()
@@ -210,7 +221,8 @@ class RssMediaDialog : BaseDialogFragment(0) {
     override fun onDestroyView() { sniffer?.destroy(); sniffer = null; super.onDestroyView() }
 
     private fun addCandidates(values: List<RssMediaCandidate>) {
-        values.forEach { value ->
+        values.filterNot { it.kind == "image" && (RssMediaResolver.isAuxiliaryImageUrl(it.url) ||
+            it.url in excludedImages[it.article].orEmpty()) }.forEach { value ->
             val index = candidates.indexOfFirst { it.id == value.id }
             if (index < 0) candidates += value
             else {
@@ -220,6 +232,12 @@ class RssMediaDialog : BaseDialogFragment(0) {
                     label = old.label ?: value.label, headers = value.headers + old.headers)
             }
         }
+    }
+
+    private fun excludeImages(article: RssArticle, urls: Set<String>) {
+        if (urls.isEmpty()) return
+        excludedImages.getOrPut(article) { mutableSetOf() }.addAll(urls)
+        candidates.removeAll { it.kind == "image" && it.article == article && it.url in urls }
     }
 
     private fun resolve() {
@@ -235,8 +253,10 @@ class RssMediaDialog : BaseDialogFragment(0) {
                             appDb.rssArticleDao.get(article.origin, article.link, article.sort)
                                 ?: appDb.rssStarDao.get(article.origin, article.link)?.toRssArticle() ?: article
                         }
-                        addCandidates(RssMediaResolver.resolve(restored, null,
-                            arguments?.getString("base").takeIf { articles.size == 1 }))
+                        val resolved = RssMediaResolver.resolve(restored, null,
+                            arguments?.getString("base").takeIf { articles.size == 1 })
+                        excludeImages(restored, resolved.excludedImageUrls)
+                        addCandidates(resolved.candidates)
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) { failures += "${article.title}: ${e.localizedMessage.orEmpty()}" }
                 }
@@ -415,7 +435,8 @@ internal fun RssMediaSelectionContent(candidates: List<RssMediaCandidate>, loadi
             if (candidates.isNotEmpty() || articles.size > 1 || sniffing) TextButton(onClick = onSniff, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(if (sniffing) R.string.rss_media_stop_sniff else R.string.rss_media_sniff))
             }
-            Button(onClick = { onSubmit(valid) }, enabled = valid.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Button(onClick = { onSubmit(valid) }, enabled = valid.isNotEmpty() && !loading && !sniffing,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(stringResource(R.string.rss_media_download_count, valid.size))
             }
         }

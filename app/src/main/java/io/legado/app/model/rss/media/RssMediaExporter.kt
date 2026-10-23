@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultDecoderFactory
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExoPlayerAssetLoader
 import androidx.media3.transformer.ExportException
@@ -88,6 +89,7 @@ internal class RssMediaExporter(private val cache: RssMediaCache) {
                 val codecs = GSON.fromJsonObject<Map<String, List<String>>>(request.data.toString(Charsets.UTF_8))
                     .getOrNull().orEmpty()
                 val builder = Transformer.Builder(appCtx)
+                    .setEncoderFactory(DefaultEncoderFactory.Builder(appCtx).setEnableFallback(false).build())
                     .setAssetLoaderFactory(ExoPlayerAssetLoader.Factory(appCtx,
                         DefaultDecoderFactory.Builder(appCtx).build(), Clock.DEFAULT, mediaSource))
                     .setMuxerFactory(muxer)

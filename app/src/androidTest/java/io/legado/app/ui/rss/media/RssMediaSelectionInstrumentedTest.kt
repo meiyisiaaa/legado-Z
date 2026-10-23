@@ -71,6 +71,30 @@ class RssMediaSelectionInstrumentedTest {
         assertEquals(article.link, snapshot.candidates.first().restore(snapshot.articles)?.article?.link)
     }
 
+    @Test fun currentDomRemovesCapturedIconsAndPreviewsFromTheSavedSelection() {
+        val article = RssArticle(origin = "https://example.test", link = "https://example.test/article", image = "/preview.png")
+        val html = """<header><img class="site-logo" src="/opaque.png"></header>
+            <article><img src="/preview.png" data-original="/original.png"><video src="/movie.mp4"></video></article>"""
+        val captured = listOf("preview.png", "opaque.png").map {
+            RssMediaCandidate(article, "https://example.test/$it", "image")
+        }
+        val snapshot = mediaSelectionSnapshot(listOf(article), html, article.link, captured)
+        assertEquals(setOf("https://example.test/original.png", "https://example.test/movie.mp4"),
+            snapshot.candidates.map { it.url }.toSet())
+        assertEquals(setOf("https://example.test/preview.png", "https://example.test/opaque.png"), snapshot.imageExclusions[0])
+    }
+
+    @Test fun rawNetworkImagesAreExcludedUntilTheDomIdentifiesContent() {
+        val article = RssArticle(origin = "https://example.test", link = "https://example.test/article")
+        val captured = mutableListOf<RssMediaCandidate>()
+        listOf("favicon.ico", "logo.png", "opaque.jpg", "preview.webp").forEach {
+            RssMediaSniffer.captureRequest(article, "https://example.test/$it") { captured += it }
+        }
+        assertTrue(captured.isEmpty())
+        RssMediaSniffer.captureRequest(article, "https://example.test/movie.mp4") { captured += it }
+        assertEquals("video", captured.single().kind)
+    }
+
     @Test fun candidatesStartUnselectedAndSubmitOnlyExplicitSelection() {
         val article = RssArticle(origin = "https://example.test", title = "Gallery", link = "https://example.test/article")
         val video = RssMediaCandidate(article, "https://example.test/one.mp4", "video", label = "First video")
@@ -95,5 +119,22 @@ class RssMediaSelectionInstrumentedTest {
         compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 1)).assertIsEnabled()
         compose.onNodeWithText(context.getString(R.string.rss_media_deselect_all)).performClick()
         compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 0)).assertIsNotEnabled()
+    }
+
+    @Test fun selectedMediaWaitForOriginalResolutionAndSniffingToFinish() {
+        val article = RssArticle(origin = "https://example.test", link = "https://example.test/article")
+        val candidate = RssMediaCandidate(article, "https://example.test/original.png", "image", label = "Original")
+        val resolving = androidx.compose.runtime.mutableStateOf(true)
+        val sniffing = androidx.compose.runtime.mutableStateOf(false)
+        compose.setContent { LegadoTheme {
+            RssMediaSelectionContent(listOf(candidate), resolving.value, sniffing.value, null, {}, {}, {}, {})
+        } }
+        compose.onNodeWithText(context.getString(R.string.select_all)).performClick()
+        val download = compose.onNodeWithText(context.getString(R.string.rss_media_download_count, 1))
+        download.assertIsNotEnabled()
+        compose.runOnIdle { resolving.value = false; sniffing.value = true }
+        download.assertIsNotEnabled()
+        compose.runOnIdle { sniffing.value = false }
+        download.assertIsEnabled()
     }
 }

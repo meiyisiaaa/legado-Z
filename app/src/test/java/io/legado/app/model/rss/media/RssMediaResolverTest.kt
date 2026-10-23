@@ -58,8 +58,9 @@ class RssMediaResolverTest {
             <img src="/same.png" srcset="/small.webp 1x, /large.webp 2x" data-original="/original.jpg">
             <a href="/manifest.mpd">DASH</a><a href="/page">page</a>
         """.trimIndent(), input.link)
-        assertEquals(7, result.size)
-        assertEquals(1, result.count { it.url.endsWith("/same.png") })
+        assertEquals(4, result.size)
+        assertEquals(0, result.count { it.url.endsWith("/same.png") })
+        assertTrue(result.any { it.url.endsWith("/original.jpg") })
         assertEquals("video", result.single { it.url.endsWith("/clip.m3u8") }.kind)
         assertEquals("https://site.example/poster.jpg", result.single { it.url.endsWith("/clip.m3u8") }.thumbnail)
         assertTrue(result.any { it.url.endsWith("/manifest.mpd") && it.kind == "video" })

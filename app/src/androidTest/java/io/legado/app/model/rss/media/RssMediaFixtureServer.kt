@@ -32,6 +32,28 @@ internal class RssMediaFixtureServer(private val assetsContext: Context) : NanoH
             }
         }
         when (session.uri) {
+            "/quality/article", "/quality/second" -> return html("""
+                <html><head><title>原图与正文媒体</title></head><body>
+                <header><img class="site-logo" src="/quality-opaque"></header>
+                <nav><img src="/quality-logo.png"></nav>
+                <article><div class="author-avatar"><img src="/quality-avatar.png"></div>
+                <img src="/quality-preview.png" data-original="/quality-original.png?article=${session.uri.substringAfterLast('/')}" alt="正文原图">
+                <img src="/quality-pixel.png" width="1" height="1">
+                <video src="/sample.mp4" controls></video></article></body></html>
+            """.trimIndent())
+            "/quality-original.png", "/quality-preview.png", "/quality-logo.png", "/quality-avatar.png", "/quality-pixel.png", "/quality-opaque" -> {
+                val width = if (session.uri == "/quality-original.png") 1920 else 32
+                val height = if (session.uri == "/quality-original.png") 1280 else 32
+                val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                val bytes = try {
+                    bitmap.eraseColor(android.graphics.Color.rgb(28, 81, 70))
+                    java.io.ByteArrayOutputStream().use { output ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+                        output.toByteArray()
+                    }
+                } finally { bitmap.recycle() }
+                return newFixedLengthResponse(Response.Status.OK, "image/png", ByteArrayInputStream(bytes), bytes.size.toLong())
+            }
             "/article" -> return html("""
                 <html><head><title>林间来信 · 媒体样本</title></head><body>
                 <h1>沿着光，留住一段山野</h1>

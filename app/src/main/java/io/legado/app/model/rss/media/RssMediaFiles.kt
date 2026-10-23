@@ -50,15 +50,17 @@ internal object RssMediaFiles {
         return "$title-${task.id.take(12)}.$extension"
     }
 
-    fun exists(outputUri: String?): Boolean {
-        if (outputUri == null) return false
+    fun exists(outputUri: String?): Boolean = sizeOf(outputUri) != null
+
+    fun sizeOf(outputUri: String?): Long? {
+        if (outputUri == null) return null
         return try {
             appCtx.contentResolver.openAssetFileDescriptor(Uri.parse(outputUri), "r")?.use {
                 val length = if (it.length >= 0) it.length else it.parcelFileDescriptor.statSize
-                length > 0L
-            } == true
+                length.takeIf { size -> size > 0L }
+            }
         } catch (_: Exception) {
-            false
+            null
         }
     }
 

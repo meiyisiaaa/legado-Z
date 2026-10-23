@@ -3,14 +3,14 @@
     "sourceUrl": "https://storage.googleapis.com/cpe-sample-media/content.json",
     "sourceName": "公开媒体测试",
     "sourceGroup": "公开样例",
-    "sourceComment": "Google Cast 官方公开样例。5 篇短片各含封面图片和 MP4；4 篇 15 秒，For Bigger Fun 为 60 秒，全部媒体约 23.5 MiB。来源：https://developers.google.com/cast/codelabs/cast-receiver",
+    "sourceComment": "Google Cast 官方公开样例。每篇含原始 PNG 图片；For Bigger 系列为 MP4 原文件。新增 37 秒 Chromecast Ultra Ad，使用 HLS 清单自动选择最高 1920×1080 视频及默认音轨。来源：https://developers.google.com/cast/codelabs/cast-receiver",
     "enabled": true,
     "singleUrl": false,
     "articleStyle": 2,
     "type": 2,
-    "ruleArticles": "@js:var data = JSON.parse(result); ['fbb_ad','fbj_ad','fbe_ad','fbf_ad','fbm_ad'].map(function(key) { return JSON.stringify(data[key]); });",
+    "ruleArticles": "@js:var data = JSON.parse(result); ['chromecast_ultra_ad','fbb_ad','fbj_ad','fbe_ad','fbf_ad','fbm_ad'].map(function(key) { return JSON.stringify(data[key]); });",
     "ruleTitle": "$.title",
     "ruleImage": "$.poster",
-    "ruleLink": "$.prog"
+    "ruleLink": "@js:var media = JSON.parse(result); media.title === 'Chromecast Ultra Ad' ? media.stream.hls : media.prog;"
   }
 ]
