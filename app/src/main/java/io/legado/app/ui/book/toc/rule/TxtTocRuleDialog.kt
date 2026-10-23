@@ -6,8 +6,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -46,7 +46,7 @@ class TxtTocRuleDialog() : BaseDialogFragment(0), TxtTocRuleEditDialog.Callback 
 
     private val importTocRuleKey = "tocRuleUrl"
     private val viewModel: TxtTocRuleViewModel by viewModels()
-    private val rules = mutableStateListOf<TxtTocRule>()
+    private var rules by mutableStateOf<List<TxtTocRule>>(emptyList(), referentialEqualityPolicy())
     private var selectedName by mutableStateOf<String?>(null)
     private var durRegex: String? = null
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
@@ -72,7 +72,7 @@ class TxtTocRuleDialog() : BaseDialogFragment(0), TxtTocRuleEditDialog.Callback 
             setContent {
                 LegadoTheme {
                     TxtTocRulePickerContent(
-                        rules = rules.toList(),
+                        rules = rules,
                         selectedName = selectedName,
                         onSelectedNameChange = { selectedName = it },
                         onAdd = { showDialogFragment(TxtTocRuleEditDialog()) },
@@ -91,13 +91,12 @@ class TxtTocRuleDialog() : BaseDialogFragment(0), TxtTocRuleEditDialog.Callback 
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             appDb.txtTocRuleDao.observeAll().catch {
                 AppLog.put("TXT目录规则对话框获取数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect { latest ->
                 initSelectedName(latest)
-                rules.clear()
-                rules.addAll(latest)
+                rules = latest
             }
         }
     }
@@ -126,7 +125,7 @@ class TxtTocRuleDialog() : BaseDialogFragment(0), TxtTocRuleEditDialog.Callback 
     private fun toggleEnabled(rule: TxtTocRule, enabled: Boolean) {
         val updated = rule.copy(enable = enabled)
         val index = rules.indexOfFirst { it.id == rule.id }
-        if (index >= 0) rules[index] = updated
+        if (index >= 0) rules = rules.toMutableList().apply { this[index] = updated }
         viewModel.update(updated)
     }
 
@@ -140,8 +139,7 @@ class TxtTocRuleDialog() : BaseDialogFragment(0), TxtTocRuleEditDialog.Callback 
 
     private fun moveRule(from: Int, to: Int) {
         if (from !in rules.indices || to !in rules.indices || from == to) return
-        val rule = rules.removeAt(from)
-        rules.add(to, rule)
+        rules = rules.toMutableList().apply { add(to, removeAt(from)) }
     }
 
     private fun saveRuleOrder() {

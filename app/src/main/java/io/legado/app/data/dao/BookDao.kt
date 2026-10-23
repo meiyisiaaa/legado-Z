@@ -27,6 +27,7 @@ interface BookDao {
             BookGroup.IdNetNone -> flowNetNoGroup()
             BookGroup.IdLocalNone -> flowLocalNoGroup()
             BookGroup.IdVideo -> flowVideo()
+            BookGroup.IdImage -> flowImage()
             BookGroup.IdError -> flowUpdateError()
             else -> flowByUserGroup(groupId)
         }.map { list ->
@@ -52,6 +53,9 @@ interface BookDao {
 
     @Query("SELECT * FROM books WHERE type & ${BookType.video} > 0")
     fun flowVideo(): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE type & ${BookType.image} > 0")
+    fun flowImage(): Flow<List<Book>>
 
     @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0")
     fun flowLocal(): Flow<List<Book>>

@@ -3,7 +3,10 @@ package io.legado.app.ui.book.toc.rule
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,13 +42,14 @@ import androidx.compose.material3.TextButton
 import io.legado.app.ui.widget.compose.LegadoTopAppBar as TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -59,6 +63,10 @@ import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.ui.widget.compose.LegadoTheme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 internal enum class TxtTocRuleImportAction { Local, Online, QrCode, Default, Help }
 
@@ -218,55 +226,125 @@ private fun TxtTocRuleList(
     onDragFinished: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    val currentSelectedIds = rememberUpdatedState(selectedIds)
-    val currentRules = rememberUpdatedState(rules)
-    var draggingIndex by remember { mutableIntStateOf(-1) }
-    var dragPosition by remember { mutableStateOf(0f) }
-    var selectionDrag by remember { mutableStateOf<Boolean?>(null) }
-    var selectionDragValue by remember { mutableStateOf(false) }
+    val currentSelectedIds by rememberUpdatedState(selectedIds)
+    val currentRuleIds by rememberUpdatedState(rules.map { it.id })
+    val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
+    val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnDragFinished by rememberUpdatedState(onDragFinished)
+    var draggingId by remember { mutableStateOf<Long?>(null) }
+    var selectionDrag by remember { mutableStateOf(false) }
     LazyColumn(
         state = listState,
-        modifier = modifier.pointerInput(rules.size, selectionMode) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { point ->
-                    val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                        point.y >= it.offset && point.y <= it.offset + it.size
+        modifier = modifier.pointerInput(selectionMode) {
+            coroutineScope {
+                val edgeSize = 56.dp.toPx()
+                val maxScrollSpeed = 720.dp.toPx()
+                var dragPosition = 0f
+                var selectionDragValue = false
+                var orderChanged = false
+                var autoScroll: Job? = null
+                var observedRuleIds = emptyList<Long>()
+                var dragRuleIds = emptyList<Long>()
+
+                fun updateDragTarget() {
+                    if (currentRuleIds != observedRuleIds) {
+                        observedRuleIds = currentRuleIds
+                        dragRuleIds = currentRuleIds
                     }
-                    val index = item?.index?.takeIf { it in currentRules.value.indices } ?: -1
-                    draggingIndex = index
-                    dragPosition = point.y
-                    if (selectionMode && point.x < size.width * 0.22f && index in currentRules.value.indices) {
-                        selectionDrag = true
-                        selectionDragValue = currentRules.value[index].id !in currentSelectedIds.value
-                        onSelectionChange(currentRules.value[index].id, selectionDragValue)
+                    val ids = dragRuleIds
+                    val id = draggingId ?: return
+                    val from = ids.indexOf(id)
+                    if (from < 0) return
+                    val target = listState.layoutInfo.visibleItemsInfo
+                        .filter { it.key is Long && it.index in ids.indices }
+                        .minByOrNull { kotlin.math.abs(it.offset + it.size / 2f - dragPosition) }
+                        ?.index ?: return
+                    if (target == from) return
+                    if (selectionDrag) {
+                        for (index in minOf(from, target)..maxOf(from, target)) {
+                            currentOnSelectionChange(ids[index], selectionDragValue)
+                        }
+                        draggingId = ids[target]
                     } else {
-                        selectionDrag = false
+                        val firstVisibleIndex = listState.firstVisibleItemIndex
+                        val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+                        dragRuleIds = ids.toMutableList().apply { add(target, removeAt(from)) }
+                        currentOnMove(from, target)
+                        listState.requestScrollToItem(firstVisibleIndex, firstVisibleOffset)
+                        orderChanged = true
                     }
-                },
-                onDragEnd = {
-                    if (selectionDrag != true && draggingIndex >= 0) onDragFinished()
-                    draggingIndex = -1
-                    selectionDrag = null
-                },
-                onDragCancel = {
-                    if (selectionDrag != true && draggingIndex >= 0) onDragFinished()
-                    draggingIndex = -1
-                    selectionDrag = null
                 }
-            ) { change, amount ->
-                change.consume()
-                if (draggingIndex < 0) return@detectDragGesturesAfterLongPress
-                dragPosition += amount.y
-                val targetIndex = listState.layoutInfo.visibleItemsInfo
-                    .minByOrNull { kotlin.math.abs(it.offset + it.size / 2f - dragPosition) }
-                    ?.index ?: draggingIndex
-                if (targetIndex !in currentRules.value.indices || targetIndex == draggingIndex) return@detectDragGesturesAfterLongPress
-                if (selectionDrag == true) {
-                    onSelectionChange(currentRules.value[targetIndex].id, selectionDragValue)
-                    draggingIndex = targetIndex
-                } else {
-                    onMove(draggingIndex, targetIndex)
-                    draggingIndex = targetIndex
+
+                fun finishDrag() {
+                    autoScroll?.cancel()
+                    autoScroll = null
+                    if (orderChanged) currentOnDragFinished()
+                    orderChanged = false
+                    draggingId = null
+                    selectionDrag = false
+                }
+
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                    val point = longPress.position
+                    val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                        point.y >= it.offset && point.y < it.offset + it.size
+                    }
+                    draggingId = item?.key as? Long
+                    dragPosition = point.y
+                    selectionDrag = selectionMode && point.x < size.width * 0.22f
+                    orderChanged = false
+                    observedRuleIds = currentRuleIds
+                    dragRuleIds = currentRuleIds
+                    draggingId?.let { id ->
+                        if (selectionDrag) {
+                            selectionDragValue = id !in currentSelectedIds
+                            currentOnSelectionChange(id, selectionDragValue)
+                        }
+                        autoScroll = launch {
+                            var previousFrame = withFrameNanos { it }
+                            while (isActive && draggingId?.let { it in currentRuleIds } == true) {
+                                val frame = withFrameNanos { it }
+                                val elapsed = ((frame - previousFrame) / 1_000_000_000f).coerceAtMost(0.05f)
+                                previousFrame = frame
+                                val bottom = listState.layoutInfo.viewportEndOffset
+                                val edgeFraction = when {
+                                    dragPosition < edgeSize -> ((dragPosition - edgeSize) / edgeSize).coerceAtLeast(-1f)
+                                    dragPosition > bottom - edgeSize -> ((dragPosition - bottom + edgeSize) / edgeSize).coerceAtMost(1f)
+                                    else -> 0f
+                                }
+                                if (edgeFraction != 0f && listState.scrollBy(edgeFraction * maxScrollSpeed * elapsed) != 0f) {
+                                    updateDragTarget()
+                                }
+                            }
+                        }
+                    }
+                    if (draggingId == null) {
+                        finishDrag()
+                        return@awaitEachGesture
+                    }
+                    var pointerId = longPress.id
+                    try {
+                        while (true) {
+                            // Claim long-press drags before LazyColumn's scrollable consumes movement.
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                            if (change.isConsumed) break
+                            change.consume()
+                            if (!change.pressed) {
+                                val next = event.changes.firstOrNull { it.pressed } ?: break
+                                pointerId = next.id
+                                next.consume()
+                                dragPosition = next.position.y
+                            } else {
+                                dragPosition = change.position.y
+                            }
+                            updateDragTarget()
+                        }
+                    } finally {
+                        finishDrag()
+                    }
                 }
             }
         },
@@ -285,7 +363,7 @@ private fun TxtTocRuleList(
                 rule = rule,
                 checked = if (selectionMode) rule.id in selectedIds else rule.name == selectedName,
                 selectionMode = selectionMode,
-                isDragging = index == draggingIndex && selectionDrag != true,
+                isDragging = rule.id == draggingId && !selectionDrag,
                 onCheckedChange = { checked ->
                     if (selectionMode) onSelectionChange(rule.id, checked) else if (checked) onSelectName(rule.name)
                 },

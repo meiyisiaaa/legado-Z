@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.viewModels
 import io.legado.app.R
@@ -40,7 +41,7 @@ class TxtTocRuleEditDialog() : BaseDialogFragment(0) {
     private val viewModel by viewModels<ViewModel>()
     private val callback get() = (parentFragment as? Callback) ?: activity as? Callback
     private var originalRule: TxtTocRule? = null
-    private var draft by mutableStateOf<TxtTocRule?>(null)
+    private var draft by mutableStateOf<TxtTocRule?>(null, referentialEqualityPolicy())
     private var loaded by mutableStateOf(false)
     private var validationError by mutableStateOf<String?>(null)
 

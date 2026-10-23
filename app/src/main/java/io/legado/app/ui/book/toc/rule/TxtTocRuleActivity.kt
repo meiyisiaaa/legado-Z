@@ -4,6 +4,10 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -40,7 +44,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
 
     override val viewModel by viewModels<TxtTocRuleViewModel>()
     override val binding by viewBinding(ActivityTxtTocRuleBinding::inflate)
-    private val rules = mutableStateListOf<TxtTocRule>()
+    private var rules by mutableStateOf<List<TxtTocRule>>(emptyList(), referentialEqualityPolicy())
     private val selectedIds = mutableStateListOf<Long>()
     private val importTocRuleKey = "tocRuleUrl"
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
@@ -59,7 +63,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
         binding.composeView.setContent {
             LegadoTheme {
                 TxtTocRuleManageContent(
-                    rules = rules.toList(),
+                    rules = rules,
                     selectedIds = selectedIds.toSet(),
                     onAdd = { showDialogFragment(TxtTocRuleEditDialog()) },
                     onImport = ::handleImport,
@@ -87,8 +91,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
             appDb.txtTocRuleDao.observeAll().catch {
                 AppLog.put("TXT目录规则界面获取数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect { latest ->
-                rules.clear()
-                rules.addAll(latest)
+                rules = latest
                 val availableIds = latest.mapTo(hashSetOf()) { it.id }
                 selectedIds.retainAll(availableIds)
             }
@@ -111,7 +114,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
     private fun toggleEnabled(rule: TxtTocRule, enabled: Boolean) {
         val updated = rule.copy(enable = enabled)
         val index = rules.indexOfFirst { it.id == rule.id }
-        if (index >= 0) rules[index] = updated
+        if (index >= 0) rules = rules.toMutableList().apply { this[index] = updated }
         viewModel.update(updated)
     }
 
@@ -158,8 +161,7 @@ class TxtTocRuleActivity : VMBaseActivity<ActivityTxtTocRuleBinding, TxtTocRuleV
 
     private fun moveRule(from: Int, to: Int) {
         if (from !in rules.indices || to !in rules.indices || from == to) return
-        val item = rules.removeAt(from)
-        rules.add(to, item)
+        rules = rules.toMutableList().apply { add(to, removeAt(from)) }
     }
 
     private fun saveRuleOrder() {

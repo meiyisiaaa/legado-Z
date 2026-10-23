@@ -218,6 +218,13 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 db.execSQL(insertBookGroupVideoSql)
                 @Language("sql")
+                val insertBookGroupImageSql = """
+                    insert into book_groups(groupId, groupName, 'order', show)
+                    select ${BookGroup.IdImage}, '漫画', -4, 1
+                    where not exists (select * from book_groups where groupId = ${BookGroup.IdImage})
+                """.trimIndent()
+                db.execSQL(insertBookGroupImageSql)
+                @Language("sql")
                 val insertBookGroupErrorSql = """
                     insert into book_groups(groupId, groupName, 'order', show) 
                     select ${BookGroup.IdError}, '更新失败', -1, 1
