@@ -46,6 +46,8 @@ import java.io.FileOutputStream
 
 @Keep
 object ThemeConfig {
+    val mineralDay = Config("矿绿书衣", false, "#183F38", "#24675B", "#F7F7F2", "#EBEEE7", false, null, 0)
+    val mineralNight = Config("矿绿书衣·夜", true, "#172E2A", "#A3D4C1", "#151D1B", "#1C2824", false, null, 0)
     const val configFileName = "themeConfig.json"
     val configFilePath = FileUtils.getPath(appCtx.filesDir, configFileName)
 
@@ -315,13 +317,13 @@ object ThemeConfig {
 
     private fun getDayTheme(context: Context, name: String): Config {
         val primary =
-            context.getPrefInt(PreferKey.cPrimary, context.getCompatColor(R.color.md_brown_500))
+            context.getPrefInt(PreferKey.cPrimary, context.getCompatColor(R.color.mineral_primary))
         val accent =
-            context.getPrefInt(PreferKey.cAccent, context.getCompatColor(R.color.md_red_600))
+            context.getPrefInt(PreferKey.cAccent, context.getCompatColor(R.color.mineral_accent))
         val background =
-            context.getPrefInt(PreferKey.cBackground, context.getCompatColor(R.color.md_grey_100))
+            context.getPrefInt(PreferKey.cBackground, context.getCompatColor(R.color.mineral_paper))
         val bBackground =
-            context.getPrefInt(PreferKey.cBBackground, context.getCompatColor(R.color.md_grey_200))
+            context.getPrefInt(PreferKey.cBBackground, context.getCompatColor(R.color.mineral_bottom))
         val transparentNavBar =
             context.getPrefBoolean(PreferKey.tNavBar, false)
         val bgImgPath =
@@ -351,17 +353,17 @@ object ThemeConfig {
         val primary =
             context.getPrefInt(
                 PreferKey.cNPrimary,
-                context.getCompatColor(R.color.md_blue_grey_600)
+                context.getCompatColor(R.color.mineral_primary_night)
             )
         val accent =
             context.getPrefInt(
                 PreferKey.cNAccent,
-                context.getCompatColor(R.color.md_deep_orange_800)
+                context.getCompatColor(R.color.mineral_accent_night)
             )
         val background =
-            context.getPrefInt(PreferKey.cNBackground, context.getCompatColor(R.color.md_grey_900))
+            context.getPrefInt(PreferKey.cNBackground, context.getCompatColor(R.color.mineral_paper_night))
         val bBackground =
-            context.getPrefInt(PreferKey.cNBBackground, context.getCompatColor(R.color.md_grey_850))
+            context.getPrefInt(PreferKey.cNBBackground, context.getCompatColor(R.color.mineral_bottom_night))
         val transparentNavBar =
             context.getPrefBoolean(PreferKey.tNavBarN, false)
         val bgImgPath =
@@ -403,17 +405,17 @@ object ThemeConfig {
 
             AppConfig.isNightTheme -> {
                 val primary =
-                    getPrefInt(PreferKey.cNPrimary, getCompatColor(R.color.md_blue_grey_600))
+                    getPrefInt(PreferKey.cNPrimary, getCompatColor(R.color.mineral_primary_night))
                 val accent =
-                    getPrefInt(PreferKey.cNAccent, getCompatColor(R.color.md_deep_orange_800))
+                    getPrefInt(PreferKey.cNAccent, getCompatColor(R.color.mineral_accent_night))
                 var background =
-                    getPrefInt(PreferKey.cNBackground, getCompatColor(R.color.md_grey_900))
+                    getPrefInt(PreferKey.cNBackground, getCompatColor(R.color.mineral_paper_night))
                 if (ColorUtils.isColorLight(background)) {
-                    background = getCompatColor(R.color.md_grey_900)
+                    background = getCompatColor(R.color.mineral_paper_night)
                     putPrefInt(PreferKey.cNBackground, background)
                 }
                 val bBackground =
-                    getPrefInt(PreferKey.cNBBackground, getCompatColor(R.color.md_grey_850))
+                    getPrefInt(PreferKey.cNBBackground, getCompatColor(R.color.mineral_bottom_night))
                 val transparentNavBar =
                     getPrefBoolean(PreferKey.tNavBarN, false)
                 ThemeStore.editTheme(this)
@@ -427,17 +429,17 @@ object ThemeConfig {
 
             else -> {
                 val primary =
-                    getPrefInt(PreferKey.cPrimary, getCompatColor(R.color.md_brown_500))
+                    getPrefInt(PreferKey.cPrimary, getCompatColor(R.color.mineral_primary))
                 val accent =
-                    getPrefInt(PreferKey.cAccent, getCompatColor(R.color.md_red_600))
+                    getPrefInt(PreferKey.cAccent, getCompatColor(R.color.mineral_accent))
                 var background =
-                    getPrefInt(PreferKey.cBackground, getCompatColor(R.color.md_grey_100))
+                    getPrefInt(PreferKey.cBackground, getCompatColor(R.color.mineral_paper))
                 if (!ColorUtils.isColorLight(background)) {
-                    background = getCompatColor(R.color.md_grey_100)
+                    background = getCompatColor(R.color.mineral_paper)
                     putPrefInt(PreferKey.cBackground, background)
                 }
                 val bBackground =
-                    getPrefInt(PreferKey.cBBackground, getCompatColor(R.color.md_grey_200))
+                    getPrefInt(PreferKey.cBBackground, getCompatColor(R.color.mineral_bottom))
                 val transparentNavBar =
                     getPrefBoolean(PreferKey.tNavBar, false)
                 ThemeStore.editTheme(this)

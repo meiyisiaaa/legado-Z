@@ -272,6 +272,7 @@ class BookInfoActivity :
 
     @SuppressLint("PrivateResource")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.titleBar.elevation = 0f
         binding.refreshLayout?.setColorSchemeColors(accentColor)
         binding.root.applyNavigationBarPadding()
         installComposeContent()
@@ -563,14 +564,10 @@ class BookInfoActivity :
     private fun showBook(book: Book) {
         infoUiState.value = infoUiState.value.copy(
             name = book.name,
-            author = getString(R.string.author_show, book.getRealAuthor()),
-            origin = getString(R.string.origin_show, book.originName),
-            latestChapter = getString(
-                R.string.lasted_show,
-                if (book.isWebFile) "下载中..." else book.latestChapterTitle.orEmpty()
-            ),
-            currentChapter = getString(R.string.toc_s,
-                book.durChapterTitle?.takeIf(String::isNotBlank) ?: getString(R.string.loading)),
+            author = book.getRealAuthor(),
+            origin = book.originName,
+            latestChapter = if (book.isWebFile) "下载中..." else book.latestChapterTitle.orEmpty(),
+            currentChapter = book.durChapterTitle?.takeIf(String::isNotBlank) ?: getString(R.string.loading),
             inBookshelf = viewModel.inBookshelf,
             isWebFile = book.isWebFile,
             hasIntro = !book.getDisplayIntro().isNullOrBlank(),
@@ -763,7 +760,7 @@ class BookInfoActivity :
     private fun upLoading(isLoading: Boolean, chapterList: List<BookChapter>? = null) {
         if (isLoading) {
             infoUiState.value = infoUiState.value.copy(
-                currentChapter = getString(R.string.toc_s, getString(R.string.loading)),
+                currentChapter = getString(R.string.loading),
                 loading = true
             )
             return
@@ -771,15 +768,15 @@ class BookInfoActivity :
         val currentBook = book
         if (chapterList.isNullOrEmpty()) {
             infoUiState.value = infoUiState.value.copy(
-                currentChapter = getString(R.string.toc_s, getString(R.string.error_load_toc)),
-                latestChapter = getString(R.string.lasted_show, currentBook?.latestChapterTitle.orEmpty()),
+                currentChapter = getString(R.string.error_load_toc),
+                latestChapter = currentBook?.latestChapterTitle.orEmpty(),
                 loading = false
             )
         } else {
             currentBook?.let {
                 infoUiState.value = infoUiState.value.copy(
-                    currentChapter = getString(R.string.toc_s, it.durChapterTitle.orEmpty()),
-                    latestChapter = getString(R.string.lasted_show, it.latestChapterTitle.orEmpty()),
+                    currentChapter = it.durChapterTitle.orEmpty(),
+                    latestChapter = it.latestChapterTitle.orEmpty(),
                     loading = false
                 )
             }
@@ -797,7 +794,7 @@ class BookInfoActivity :
                 if (book?.isLocal == true) getString(R.string.local_no_group)
                 else getString(R.string.no_group)
             } else groupName
-            infoUiState.value = infoUiState.value.copy(group = getString(R.string.group_s, display))
+            infoUiState.value = infoUiState.value.copy(group = display)
         }
     }
 

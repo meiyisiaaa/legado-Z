@@ -3,6 +3,7 @@ package io.legado.app.ui.book.info
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -14,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
@@ -33,6 +35,27 @@ import java.util.Locale
 
 class BookInfoScreenInstrumentedTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun compactIdentityLeavesTheCurrentChapterVisible() {
+        compose.setContent { LegadoTheme {
+            Box(Modifier.width(320.dp).height(536.dp)) {
+                BookInfoScreen(BookInfoUiState(name = "北岸来信", author = "林青遥", origin = "本地书源",
+                    group = "未分组", kinds = listOf("5100", "原创·海边日常"),
+                    currentChapter = "第一章 没有邮戳的信", loading = false),
+                    coverContent = { Box(it) }, introContent = {},
+                    onCoverClick = {}, onCoverLongClick = {}, onNameClick = {}, onNameLongClick = {},
+                    onAuthorClick = {}, onAuthorLongClick = {}, onOriginClick = {}, onChangeSource = {},
+                    onChangeGroup = {}, onOpenToc = {}, onKindClick = {}, onKindLongClick = {},
+                    onShelfClick = {}, onReadClick = {})
+            }
+        } }
+        compose.onNodeWithText("北岸来信").assertIsDisplayed()
+        compose.onNodeWithText("第一章 没有邮戳的信").assertIsDisplayed()
+        val chapterBounds = compose.onNodeWithText("第一章 没有邮戳的信").fetchSemanticsNode().boundsInRoot
+        val readBounds = compose.onNodeWithText(InstrumentationRegistry.getInstrumentation().targetContext
+            .getString(R.string.reading)).fetchSemanticsNode().boundsInRoot
+        assertTrue("The entire current chapter stays above the fixed actions", chapterBounds.bottom <= readBounds.top)
+    }
 
     @Test fun shelfReadingAndTocActionsRemainSeparate() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

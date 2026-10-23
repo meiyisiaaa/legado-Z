@@ -2,27 +2,37 @@ package io.legado.app.ui.about
 
 import android.os.Bundle
 import androidx.appcompat.widget.SearchView
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +54,8 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.compose.LocalLegadoMotion
+import io.legado.app.ui.widget.compose.legadoPressFeedback
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.getInt
@@ -260,91 +272,87 @@ internal fun ReadRecordContent(
     onOpen: (ReadRecordShow) -> Unit,
     onDelete: (ReadRecordShow) -> Unit
 ) {
+    val motion = LocalLegadoMotion.current
     val loadingDescription = stringResource(R.string.loading)
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding()
+            .background(MaterialTheme.colorScheme.background)
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp),
-            shape = MaterialTheme.shapes.extraSmall,
-            color = MaterialTheme.colorScheme.background
-        ) {
+        Column(Modifier.widthIn(max = 840.dp).fillMaxSize()) {
             Row(
-                modifier = Modifier,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = stringResource(R.string.all_read_time),
-                        modifier = Modifier.padding(6.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = totalReadingTime,
-                        modifier = Modifier.padding(6.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 TextButton(
                     onClick = onClearAll,
-                    enabled = !loading && records.isNotEmpty(),
-                    modifier = Modifier.padding(horizontal = 6.dp)
+                    enabled = !loading && records.isNotEmpty()
                 ) {
                     Text(stringResource(R.string.clear))
                 }
             }
-        }
-        when {
-            loading -> LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = loadingDescription }
-            )
-            loadError -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.error_get_data),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(onClick = onRetry) {
-                    Text(stringResource(R.string.retry))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            when {
+                loading -> Column(Modifier.fillMaxSize()) {
+                    if (motion.enabled) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(loadingDescription,
+                            modifier = Modifier.padding(32.dp).semantics { contentDescription = loadingDescription },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-            }
-            records.isEmpty() -> Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.read_record_empty),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    bottom = 20.dp
-                )
-            ) {
-                items(records, key = { it.bookName }) { record ->
-                    ReadRecordRow(record, onOpen, onDelete)
+                loadError -> Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.error_get_data),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = onRetry) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
+                records.isEmpty() -> Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.read_record_empty),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)
+                ) {
+                    items(records, key = { it.bookName }) { record ->
+                        ReadRecordRow(record, onOpen, onDelete,
+                            modifier = Modifier.animateItem(fadeInSpec = tween(motion.state),
+                                fadeOutSpec = tween(motion.state), placementSpec = tween(motion.state)))
+                    }
                 }
             }
         }
@@ -355,52 +363,60 @@ internal fun ReadRecordContent(
 private fun ReadRecordRow(
     record: ReadRecordShow,
     onOpen: (ReadRecordShow) -> Unit,
-    onDelete: (ReadRecordShow) -> Unit
+    onDelete: (ReadRecordShow) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val interactions = remember { MutableInteractionSource() }
+    val clearLabel = stringResource(R.string.clear)
     val date = if (record.lastRead > 0) {
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(record.lastRead)
     } else {
         ""
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button) { onOpen(record) }
-            .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+    Column(modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .legadoPressFeedback(interactions)
+                .clickable(interactionSource = interactions, indication = LocalIndication.current,
+                    role = Role.Button) { onOpen(record) }
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = record.bookName,
-                modifier = Modifier.padding(6.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = stringResource(R.string.reading_time_tag) + " ${formatReadTime(record.readTime)}",
-                modifier = Modifier.padding(6.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (date.isNotBlank()) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
-                    text = stringResource(R.string.last_read_time_tag) + " $date",
-                    modifier = Modifier.padding(6.dp),
-                    style = MaterialTheme.typography.bodySmall,
+                    text = record.bookName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stringResource(R.string.reading_time_tag) + " ${formatReadTime(record.readTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (date.isNotBlank()) {
+                    Text(
+                        text = stringResource(R.string.last_read_time_tag) + " $date",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            TextButton(
+                onClick = { onDelete(record) },
+                modifier = Modifier.heightIn(min = 48.dp)
+                    .semantics { contentDescription = "$clearLabel ${record.bookName}" }
+            ) {
+                Text(clearLabel)
             }
         }
-        TextButton(
-            onClick = { onDelete(record) },
-            modifier = Modifier.padding(horizontal = 6.dp)
-        ) {
-            Text(stringResource(R.string.clear))
-        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 

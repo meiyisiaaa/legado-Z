@@ -70,9 +70,20 @@ internal fun ThemeListContent(configs: List<ThemeConfig.Config>, onApply: (Theme
                     colors = ButtonDefaults.textButtonColors(contentColor = LocalContentColor.current)
                 ) { Text(stringResource(R.string.import_str)) }
             }
-            if (configs.isEmpty()) Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
-                Text("没有已保存的主题", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                item(key = "mineral-presets") {
+                    listOf(ThemeConfig.mineralDay, ThemeConfig.mineralNight).forEach { preset ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                            .clickable { onApply(preset) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Surface(Modifier.size(28.dp), shape = MaterialTheme.shapes.extraSmall,
+                                color = androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(preset.primaryColor))) {}
+                            Text(preset.themeName, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
                 itemsIndexed(configs, key = { index, item -> "${item.themeName}:$index" }) { index, config ->
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 52.dp)

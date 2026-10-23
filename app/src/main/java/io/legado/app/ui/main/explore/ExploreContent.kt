@@ -297,7 +297,6 @@ private fun ExploreSourceCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(animationSpec = tween(motionDuration))
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Box {

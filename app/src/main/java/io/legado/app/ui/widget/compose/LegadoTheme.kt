@@ -3,6 +3,9 @@ package io.legado.app.ui.widget.compose
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -96,6 +99,8 @@ data class LegadoMotion(val enabled: Boolean = true) {
     val press: Int get() = if (enabled) 120 else 0
     val state: Int get() = if (enabled) 240 else 0
     val container: Int get() = if (enabled) 360 else 0
+    fun <T> pressSpec(): FiniteAnimationSpec<T> =
+        if (enabled) spring(dampingRatio = 1f, stiffness = 700f) else snap()
 }
 
 val LocalLegadoMotion = staticCompositionLocalOf { LegadoMotion() }
@@ -131,7 +136,7 @@ fun LegadoTheme(content: @Composable () -> Unit) {
     val motionEnabled = !preview && !ink && ValueAnimator.areAnimatorsEnabled()
     val rippleConfiguration = LocalRippleConfiguration.current
     val dark = if (preview) isSystemInDarkTheme() else AppConfig.isNightTheme && !ink
-    val background = if (preview) Color(if (dark) 0xFF212121 else 0xFFF5F5F5)
+    val background = if (preview) Color(if (dark) 0xFF151D1B else 0xFFF7F7F2)
         else Color(ThemeStore.backgroundColor(context))
     val foreground = if (preview) Color(if (dark) 0xFFFFFFFF else 0xFF212121)
         else Color(ThemeStore.textColorPrimary(context))
@@ -139,7 +144,7 @@ fun LegadoTheme(content: @Composable () -> Unit) {
         Color(if (dark) 0xFFBDBDBD else 0xFF616161) else Color(ThemeStore.textColorSecondary(context))
     val accent = when {
         ink -> Color.Black
-        preview -> Color(if (dark) 0xFFD84315 else 0xFFE53935)
+        preview -> Color(if (dark) 0xFFA3D4C1 else 0xFF24675B)
         else -> Color(ThemeStore.accentColor(context))
     }
     var hostContext = context
@@ -177,6 +182,13 @@ fun LegadoTheme(content: @Composable () -> Unit) {
         if (blackContrast >= whiteContrast) Color.Black else Color.White
     }
     val colors = if (dark) darkColorScheme() else lightColorScheme()
+    val coverField = when {
+        ink -> Color.White
+        preview -> Color(if (dark) 0xFF172E2A else 0xFF183F38)
+        else -> Color(ThemeStore.primaryColor(context))
+    }
+    val onCoverField = if (CoreColorUtils.calculateContrast(Color.White.toArgb(), coverField.toArgb()) >=
+        CoreColorUtils.calculateContrast(Color.Black.toArgb(), coverField.toArgb())) Color.White else Color.Black
     MaterialTheme(
         typography = legadoTypography,
         colorScheme = colors.copy(
@@ -188,6 +200,17 @@ fun LegadoTheme(content: @Composable () -> Unit) {
             onSecondary = onAccent,
             secondaryContainer = lerp(background, accent, if (ink) 0f else 0.1f),
             onSecondaryContainer = foreground,
+            tertiary = accessibleAccent,
+            onTertiary = onAccent,
+            tertiaryContainer = coverField,
+            onTertiaryContainer = onCoverField,
+            inversePrimary = if (ink) Color.Black else lerp(Color(0xFFD1D69A), accent, 0.12f),
+            inverseSurface = foreground,
+            inverseOnSurface = background,
+            error = if (ink) Color.Black else if (dark) Color(0xFFFFB4AA) else Color(0xFF9C362B),
+            onError = if (ink) Color.White else if (dark) Color(0xFF5C1914) else Color.White,
+            errorContainer = if (ink) Color.White else if (dark) Color(0xFF5C1914) else Color(0xFFFFDAD4),
+            onErrorContainer = if (ink) Color.Black else if (dark) Color(0xFFFFDAD4) else Color(0xFF42110D),
             background = surface,
             onBackground = foreground,
             surface = surface,

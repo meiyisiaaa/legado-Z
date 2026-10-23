@@ -1,8 +1,12 @@
 package io.legado.app.ui.book.source.manage
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +17,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -40,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -47,11 +55,14 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.legado.app.R
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.ui.widget.compose.LocalLegadoMotion
+import io.legado.app.ui.widget.compose.legadoPressFeedback
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -101,6 +112,7 @@ internal fun BookSourceManageContent(
     val selectAllLabel = stringResource(R.string.select_all)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.book_source)) },
@@ -116,7 +128,11 @@ internal fun BookSourceManageContent(
                         }
                         DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text((if (!sortAscending) "✓  " else "") + stringResource(R.string.sort_desc)) },
+                                modifier = Modifier.semantics { selected = !sortAscending },
+                                text = { Text(stringResource(R.string.sort_desc)) },
+                                trailingIcon = {
+                                    if (!sortAscending) Icon(painterResource(R.drawable.ic_check), contentDescription = null)
+                                },
                                 onClick = { sortOpen = false; onToggleSortDirection() }
                             )
                             HorizontalDivider(Modifier.padding(vertical = 4.dp))
@@ -130,7 +146,11 @@ internal fun BookSourceManageContent(
                                 BookSourceSort.Enable to R.string.is_enabled
                             ).forEach { (value, label) ->
                                 DropdownMenuItem(
-                                    text = { Text((if (sort == value) "✓  " else "") + stringResource(label)) },
+                                    modifier = Modifier.semantics { selected = sort == value },
+                                    text = { Text(stringResource(label)) },
+                                    trailingIcon = {
+                                        if (sort == value) Icon(painterResource(R.drawable.ic_check), contentDescription = null)
+                                    },
                                     onClick = { sortOpen = false; onSort(value) }
                                 )
                             }
@@ -184,8 +204,10 @@ internal fun BookSourceManageContent(
                                 )
                             }
                             DropdownMenuItem(
-                                text = {
-                                    Text((if (groupByDomain) "✓  " else "") + stringResource(R.string.group_sources_by_domain))
+                                text = { Text(stringResource(R.string.group_sources_by_domain)) },
+                                modifier = Modifier.semantics { selected = groupByDomain },
+                                trailingIcon = {
+                                    if (groupByDomain) Icon(painterResource(R.drawable.ic_check), contentDescription = null)
                                 },
                                 onClick = { actionsOpen = false; onToggleGroupByDomain() }
                             )
@@ -199,17 +221,15 @@ internal fun BookSourceManageContent(
             )
         },
         bottomBar = {
-            Row(
+            Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .navigationBarsPadding()
-                    .padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
@@ -224,46 +244,60 @@ internal fun BookSourceManageContent(
                             selectedUrls.size,
                             sources.size
                         ),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                TextButton(onClick = onRevertSelection, enabled = selectedUrls.isNotEmpty()) {
-                    Text(stringResource(R.string.revert_selection), maxLines = 1)
-                }
-                TextButton(onClick = onDeleteSelected, enabled = selectedUrls.isNotEmpty()) {
-                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error, maxLines = 1)
-                }
-                Box {
-                    IconButton(
-                        onClick = { selectedActionsOpen = true },
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    TextButton(
+                        onClick = onRevertSelection,
                         enabled = selectedUrls.isNotEmpty(),
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.weight(1f).sizeIn(minHeight = 48.dp)
                     ) {
-                        Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.menu))
+                        Text(stringResource(R.string.revert_selection))
                     }
-                    DropdownMenu(expanded = selectedActionsOpen, onDismissRequest = { selectedActionsOpen = false }) {
-                        listOf(
-                            R.id.menu_enable_selection to R.string.enable_selection,
-                            R.id.menu_disable_selection to R.string.disable_selection,
-                            R.id.menu_enable_explore to R.string.enable_explore,
-                            R.id.menu_disable_explore to R.string.disable_explore,
-                            R.id.menu_add_group to R.string.add_group,
-                            R.id.menu_remove_group to R.string.remove_group,
-                            R.id.menu_top_sel to R.string.selection_to_top,
-                            R.id.menu_bottom_sel to R.string.selection_to_bottom,
-                            R.id.menu_export_selection to R.string.export_selection,
-                            R.id.menu_export_main_js to R.string.export_main_js_file,
-                            R.id.menu_share_source to R.string.share_selected_source,
-                            R.id.menu_check_source to R.string.check_select_source,
-                            R.id.menu_check_selected_interval to R.string.check_selected_interval
-                        ).forEach { (id, label) ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(label)) },
-                                enabled = selectedUrls.isNotEmpty(),
-                                onClick = { selectedActionsOpen = false; onSelectionAction(id) }
-                            )
+                    TextButton(
+                        onClick = onDeleteSelected,
+                        enabled = selectedUrls.isNotEmpty(),
+                        modifier = Modifier.weight(1f).sizeIn(minHeight = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(stringResource(R.string.delete))
+                    }
+                    Box {
+                        IconButton(
+                            onClick = { selectedActionsOpen = true },
+                            enabled = selectedUrls.isNotEmpty(),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.menu))
+                        }
+                        DropdownMenu(expanded = selectedActionsOpen, onDismissRequest = { selectedActionsOpen = false }) {
+                            listOf(
+                                R.id.menu_enable_selection to R.string.enable_selection,
+                                R.id.menu_disable_selection to R.string.disable_selection,
+                                R.id.menu_enable_explore to R.string.enable_explore,
+                                R.id.menu_disable_explore to R.string.disable_explore,
+                                R.id.menu_add_group to R.string.add_group,
+                                R.id.menu_remove_group to R.string.remove_group,
+                                R.id.menu_top_sel to R.string.selection_to_top,
+                                R.id.menu_bottom_sel to R.string.selection_to_bottom,
+                                R.id.menu_export_selection to R.string.export_selection,
+                                R.id.menu_export_main_js to R.string.export_main_js_file,
+                                R.id.menu_share_source to R.string.share_selected_source,
+                                R.id.menu_check_source to R.string.check_select_source,
+                                R.id.menu_check_selected_interval to R.string.check_selected_interval
+                            ).forEach { (id, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(label)) },
+                                    enabled = selectedUrls.isNotEmpty(),
+                                    onClick = { selectedActionsOpen = false; onSelectionAction(id) }
+                                )
+                            }
                         }
                     }
                 }
@@ -271,13 +305,23 @@ internal fun BookSourceManageContent(
         }
     ) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
+            val searchLabel = stringResource(R.string.search_book_source)
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                    .semantics { contentDescription = searchLabel },
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.search_book_source)) },
-                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) }
+                shape = RoundedCornerShape(12.dp),
+                placeholder = { Text(searchLabel) },
+                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(painterResource(R.drawable.ic_clear), contentDescription = stringResource(R.string.clear))
+                        }
+                    }
+                }
             )
             if (sources.isEmpty()) {
                 Column(
@@ -299,7 +343,7 @@ internal fun BookSourceManageContent(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     if (groupByDomain) {
                         sources.groupBy { sourceHost(it.bookSourceUrl) }.forEach { (host, domainSources) ->
@@ -308,8 +352,8 @@ internal fun BookSourceManageContent(
                                     host,
                                     Modifier
                                         .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surface)
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -317,6 +361,7 @@ internal fun BookSourceManageContent(
                             items(domainSources, key = { it.bookSourceUrl }) { source ->
                                 BookSourceRow(
                                     source = source,
+                                    sourceHost = null,
                                     selected = source.bookSourceUrl in selectedUrls,
                                     menuExpanded = sourceMenu == source,
                                     debugMessage = debugMessages[source.bookSourceUrl],
@@ -344,6 +389,7 @@ internal fun BookSourceManageContent(
                         items(sources, key = { it.bookSourceUrl }) { source ->
                             BookSourceRow(
                                 source = source,
+                                sourceHost = sourceHost(source.bookSourceUrl),
                                 selected = source.bookSourceUrl in selectedUrls,
                                 menuExpanded = sourceMenu == source,
                                 debugMessage = debugMessages[source.bookSourceUrl],
@@ -377,6 +423,7 @@ internal fun BookSourceManageContent(
 @Composable
 private fun BookSourceRow(
     source: BookSourcePart,
+    sourceHost: String?,
     selected: Boolean,
     menuExpanded: Boolean,
     debugMessage: String?,
@@ -405,7 +452,15 @@ private fun BookSourceRow(
     val editLabel = stringResource(R.string.edit)
     val moreLabel = stringResource(R.string.more_menu)
     val enableExploreLabel = stringResource(if (source.enabledExplore) R.string.disable_explore else R.string.enable_explore)
+    val exploreState = stringResource(if (source.enabledExplore) R.string.enabled_explore else R.string.disabled_explore)
     val finalCheckMessage = debugMessage?.contains(Regex("成功|失败")) == true
+    val motion = LocalLegadoMotion.current
+    val selectedColor = animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+        tween(motion.state), label = "source selection"
+    )
+    val editInteractions = remember { MutableInteractionSource() }
+    val menuInteractions = remember { MutableInteractionSource() }
     val moveModifier = if (canMove) {
         Modifier.pointerInput(source.bookSourceUrl, sources) {
             var initialIndex = -1
@@ -425,8 +480,7 @@ private fun BookSourceRow(
                 onDragEnd = {
                     if (validDrag && targetIndex != initialIndex) {
                         val movedDown = targetIndex > initialIndex
-                        val neighborIndex = if (movedDown) targetIndex - 1 else targetIndex + 1
-                        sources.getOrNull(neighborIndex)?.let { target ->
+                        sources.getOrNull(targetIndex)?.let { target ->
                             onMove(source.bookSourceUrl, target.bookSourceUrl, movedDown) {}
                         }
                     }
@@ -444,9 +498,14 @@ private fun BookSourceRow(
         }
     } else Modifier
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        Modifier.fillMaxWidth()
+            .drawBehind { drawRect(selectedColor.value) }
+            .animateContentSize(tween(motion.container))
+            .then(moveModifier)
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp).then(moveModifier),
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -454,12 +513,36 @@ private fun BookSourceRow(
                 onCheckedChange = onSelected,
                 modifier = Modifier.semantics { contentDescription = sourceName }
             )
+            Column(Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = source.bookSourceName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val details = listOfNotNull(source.bookSourceGroup?.takeIf { it.isNotBlank() }, sourceHost?.takeIf { it.isNotBlank() })
+                if (details.isNotEmpty()) {
+                    Text(
+                        details.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text(
-                text = sourceName,
+                text = enabledState,
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Switch(
                 checked = source.enabled,
@@ -471,14 +554,21 @@ private fun BookSourceRow(
             )
             IconButton(
                 onClick = onEdit,
-                modifier = Modifier.size(40.dp).semantics { contentDescription = "$sourceName, $editLabel" }
+                interactionSource = editInteractions,
+                modifier = Modifier.size(48.dp).legadoPressFeedback(editInteractions)
+                    .semantics { contentDescription = "$sourceName, $editLabel" }
             ) {
                 Icon(painterResource(R.drawable.ic_edit), contentDescription = null)
             }
             Box {
                 IconButton(
                     onClick = onMenu,
-                    modifier = Modifier.size(40.dp).semantics { contentDescription = "$sourceName, $moreLabel" }
+                    interactionSource = menuInteractions,
+                    modifier = Modifier.size(48.dp).legadoPressFeedback(menuInteractions)
+                        .semantics {
+                            contentDescription = "$sourceName, $moreLabel"
+                            if (source.hasExploreUrl) stateDescription = exploreState
+                        }
                 ) {
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = null)
                 }
@@ -486,7 +576,7 @@ private fun BookSourceRow(
                     Box(
                         Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 8.dp)
+                            .padding(top = 9.dp, end = 9.dp)
                             .size(8.dp)
                             .clip(CircleShape)
                             .background(if (source.enabledExplore) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
@@ -517,7 +607,7 @@ private fun BookSourceRow(
         }
         if (!debugMessage.isNullOrBlank()) {
             Row(
-                Modifier.fillMaxWidth().padding(start = 58.dp, end = 12.dp, bottom = 6.dp),
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -533,7 +623,7 @@ private fun BookSourceRow(
                     color = if (finalCheckMessage && debugMessage.contains("失败")) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (isChecking && !finalCheckMessage) {
@@ -541,6 +631,6 @@ private fun BookSourceRow(
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }

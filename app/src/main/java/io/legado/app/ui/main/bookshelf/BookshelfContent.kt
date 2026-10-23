@@ -252,7 +252,7 @@ private fun ShelfEntry(entry: Any, grid: Boolean, updating: (Book) -> Boolean,
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && motion.enabled) 0.985f else 1f,
-        tween(motion.press), label = "bookshelf press")
+        motion.pressSpec(), label = "bookshelf press")
     val clickable = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .clip(MaterialTheme.shapes.extraSmall).combinedClickable(
             interactionSource = interactions, indication = if (motion.enabled) LocalIndication.current else null,

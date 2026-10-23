@@ -1,6 +1,19 @@
 # 核心页面 SCREEN_SPEC 索引与实现边界
 
-书架核心 UI 已有实现，本轮已将“书页边注”语言延伸到发现、书籍搜索、RSS、我的与共享设置分组、目录内容，并接入书目备注和只读阅读进度筛选。API36 模拟器已执行约 411dp 常规屏、320dp 小屏及 1×/2× 字体的状态、操作和截图检查。各项执行结果、修复与复验进展统一见 [VISUAL_REVIEW.md](../../VISUAL_REVIEW.md)，此前书架阶段证据保留在 [书架历史验收](VISUAL_REVIEW_BOOKSHELF.md)。
+## 当前：A 矿绿书衣
+
+用户已选择 [A 概念](CONCEPTS_V3.md)，本轮规格与实际运行证据按新方向更新；下方“书页边注”章节保留前一阶段的功能与信息架构背景。
+
+- [书籍详情](SCREEN_SPEC_BOOK_INFO_V3.md)：非对称封面、整块书衣、纸面章节/简介/备注与底部双操作。
+- [书源与书源分组](SCREEN_SPEC_SOURCES_V3.md)：名称/域名与工具分层、批量操作、分组编辑和拖动。
+- [订阅文章与收藏](SCREEN_SPEC_RSS_ARTICLES_V3.md)：五种显示样式、图文索引、分页与长按。
+- [全书签与阅读记录](SCREEN_SPEC_LIBRARY_TOOLS_V3.md)：分组吸顶、摘录、查询排序、可见加载/错误/重试。
+
+共享主题、导航选中态与按压反馈同步统一；书架、发现、搜索、订阅源、我的及目录继续沿既有功能布局复用该系统。设备结果以根 [VISUAL_REVIEW.md](../../VISUAL_REVIEW.md) 本轮记录为准。
+
+## 历史阶段：书页边注与差异功能
+
+书架核心 UI 已有实现，上一阶段已将“书页边注”语言延伸到发现、书籍搜索、RSS、我的与共享设置分组、目录内容，并接入书目备注和只读阅读进度筛选。API36 模拟器已执行约 411dp 常规屏、320dp 小屏及 1×/2× 字体的状态、操作和截图检查。各项历史执行结果统一见 [VISUAL_REVIEW.md](../../VISUAL_REVIEW.md) 历史段，此前书架阶段证据保留在 [书架历史验收](VISUAL_REVIEW_BOOKSHELF.md)。
 
 共同规范见 [DESIGN_SYSTEM.md](../../DESIGN_SYSTEM.md)：沿用 Material 3 语义颜色、ThemeStore、现有动效、4/8/12/16/24/32dp 间距、至少 48dp 触控目标与系统字体缩放。原 Activity / Fragment、Intent、导航结果、书源/订阅/阅读引擎及用户偏好继续承接业务。Android 当前采用 View/XML 宿主与 Compose 内容共存；iOS 与专门平板阅读双栏作为后续独立设计范围。
 

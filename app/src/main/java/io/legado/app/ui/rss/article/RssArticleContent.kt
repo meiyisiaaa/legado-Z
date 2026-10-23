@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -26,11 +30,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -38,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -58,6 +64,7 @@ import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssStar
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
+import io.legado.app.ui.widget.compose.legadoPressFeedback
 import com.bumptech.glide.request.RequestOptions
 
 @Composable
@@ -75,7 +82,8 @@ internal fun RssArticleListContent(
     preload: Boolean,
     modifier: Modifier = Modifier
 ) {
-    PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh, modifier = modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = isRefreshing, onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         when {
             articles.isEmpty() && isRefreshing -> LoadingArticles()
             articles.isEmpty() && error != null -> ArticleLoadError(error, onRefresh)
@@ -97,9 +105,9 @@ internal fun RssArticleListContent(
                     columns = GridCells.Fixed(columns),
                     state = state,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
                         RssArticleCard(article, articleStyle, onClick = { onRead(article) })
@@ -122,9 +130,9 @@ internal fun RssArticleListContent(
                     columns = StaggeredGridCells.Adaptive(168.dp),
                     state = state,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalItemSpacing = 10.dp
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalItemSpacing = 12.dp
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
                         RssArticleCard(article, articleStyle, onClick = { onRead(article) })
@@ -145,7 +153,7 @@ internal fun RssArticleListContent(
                 LazyColumn(
                     state = state,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     items(articles, key = { articleKey(it) }) { article ->
@@ -175,8 +183,8 @@ internal fun RssFavoriteListContent(
         )
     } else {
         LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             items(favorites, key = { "${it.origin}\u0000${it.link}" }) { favorite ->
@@ -201,61 +209,70 @@ private fun RssArticleCard(
 ) {
     val grid = articleStyle == 2 || articleStyle == 3 || articleStyle == 4
     val titleColor = if (article.read) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-    val clickModifier = if (onLongClick == null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier.combinedClickable(
-        onClick = onClick,
-        onLongClick = onLongClick,
-        onLongClickLabel = stringResource(R.string.delete),
-        role = Role.Button
-    )
+    val titleWeight = if (article.read) FontWeight.Normal else FontWeight.SemiBold
+    val interactions = remember { MutableInteractionSource() }
+    val clickModifier = Modifier
+        .legadoPressFeedback(interactions)
+        .clip(if (articleStyle == 3) MaterialTheme.shapes.medium else MaterialTheme.shapes.small)
+        .then(if (onLongClick == null) Modifier.clickable(
+            interactionSource = interactions, indication = androidx.compose.foundation.LocalIndication.current,
+            role = Role.Button, onClick = onClick
+        ) else Modifier.combinedClickable(
+            interactionSource = interactions, indication = androidx.compose.foundation.LocalIndication.current,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onLongClickLabel = stringResource(R.string.delete),
+            role = Role.Button
+        ))
 
     if (articleStyle == 1) {
-        Column(clickModifier.fillMaxWidth()) {
+        Column(clickModifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 16.dp)) {
             if (!article.image.isNullOrBlank()) {
                 RssArticleImage(
                     article.image,
                     article.origin,
-                    Modifier.fillMaxWidth().height(220.dp).padding(start = 12.dp, top = 12.dp, end = 12.dp)
+                    Modifier.fillMaxWidth().height(220.dp).clip(MaterialTheme.shapes.medium)
                 )
             }
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                Text(article.title, color = titleColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+            Column(Modifier.padding(top = if (article.image.isNullOrBlank()) 0.dp else 12.dp, bottom = 24.dp)) {
+                Text(article.title, color = titleColor, style = MaterialTheme.typography.titleMedium, fontWeight = titleWeight,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(8.dp))
                 ArticleDate(article.pubDate)
             }
-            Box(Modifier.fillMaxWidth().height(8.dp).background(MaterialTheme.colorScheme.surfaceVariant))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     } else if (grid) {
         val imageModifier = when (articleStyle) {
-            2 -> Modifier.fillMaxWidth().height(272.dp)
-            4 -> Modifier.fillMaxWidth().height(182.dp)
+            2, 4 -> Modifier.fillMaxWidth().aspectRatio(0.75f).clip(MaterialTheme.shapes.small)
             else -> Modifier.fillMaxWidth().heightIn(min = 90.dp, max = 340.dp)
         }
         val articleGridBody: @Composable () -> Unit = {
             Column {
                 if (!article.image.isNullOrBlank()) {
-                    RssArticleImage(article.image, article.origin, imageModifier)
+                    RssArticleImage(article.image, article.origin, imageModifier,
+                        naturalHeight = articleStyle == 3)
                 } else if (articleStyle == 2) {
                     Box(imageModifier, contentAlignment = Alignment.Center) {
                         androidx.compose.foundation.Image(
                             painter = painterResource(R.drawable.image_rss_article),
                             contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
                 if (articleStyle == 3) {
-                    Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = 12.dp)) {
-                        Text(article.title, color = titleColor, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    Column(Modifier.padding(12.dp)) {
+                        Text(article.title, color = titleColor, style = MaterialTheme.typography.bodyMedium, fontWeight = titleWeight,
                             maxLines = 9, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(8.dp))
                         ArticleDate(article.pubDate, maxLines = 39)
                     }
                 } else {
-                    Column(Modifier.padding(top = 10.dp)) {
-                        Text(article.title, color = titleColor, style = MaterialTheme.typography.bodySmall,
+                    Column(Modifier.padding(top = if (articleStyle == 2) 12.dp else 8.dp)) {
+                        Text(article.title, color = titleColor,
+                            style = if (articleStyle == 2) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                            fontWeight = titleWeight,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(8.dp))
                         ArticleDate(article.pubDate)
                     }
                 }
@@ -263,8 +280,8 @@ private fun RssArticleCard(
         }
         if (articleStyle == 3) {
             Card(
-                modifier = clickModifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = clickModifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
@@ -272,37 +289,30 @@ private fun RssArticleCard(
             }
         } else {
             Column(
-                modifier = clickModifier.fillMaxWidth().padding(
-                    start = if (articleStyle == 2) 4.dp else 2.dp,
-                    top = 8.dp,
-                    end = if (articleStyle == 2) 4.dp else 2.dp,
-                    bottom = 6.dp
-                )
+                modifier = clickModifier.fillMaxWidth().heightIn(min = 48.dp)
             ) {
                 articleGridBody()
-                if (articleStyle == 2) {
-                    Box(
-                        Modifier.fillMaxWidth().padding(top = 12.dp).height(8.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    )
-                }
             }
         }
     } else {
-        Row(
-            modifier = clickModifier.fillMaxWidth().heightIn(min = 100.dp).padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(article.title, color = titleColor, style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(8.dp))
-                ArticleDate(article.pubDate)
+        val imageWidth = if (LocalDensity.current.fontScale >= 1.5f) 64.dp else 96.dp
+        Column(clickModifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).padding(vertical = 16.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(article.title, color = titleColor, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = titleWeight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    ArticleDate(article.pubDate)
+                }
+                if (!article.image.isNullOrBlank()) {
+                    RssArticleImage(article.image, article.origin,
+                        Modifier.size(width = imageWidth, height = 76.dp).clip(MaterialTheme.shapes.small))
+                }
             }
-            if (!article.image.isNullOrBlank()) {
-                RssArticleImage(article.image, article.origin, Modifier.size(width = 110.dp, height = 68.dp).clip(RoundedCornerShape(8.dp)))
-            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -310,35 +320,45 @@ private fun RssArticleCard(
 @Composable
 private fun ArticleDate(date: String?, maxLines: Int = 1) {
     if (!date.isNullOrBlank()) {
+        Spacer(Modifier.height(8.dp))
         Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = maxLines, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun RssArticleImage(url: String?, origin: String, modifier: Modifier) {
+private fun RssArticleImage(
+    url: String?,
+    origin: String,
+    modifier: Modifier,
+    naturalHeight: Boolean = false
+) {
     val context = LocalContext.current
     if (url.isNullOrBlank()) return
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
                 contentDescription = null
-                adjustViewBounds = true
                 clipToOutline = true
             }
         },
-        update = { image -> loadArticleImage(context, image, url, origin) }
+        update = { image ->
+            image.adjustViewBounds = naturalHeight
+            image.scaleType = if (naturalHeight) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+            loadArticleImage(context, image, url, origin, naturalHeight)
+        }
     )
 }
 
-private fun loadArticleImage(context: Context, image: ImageView, url: String, origin: String) {
-    val loadKey = "$origin\u0000$url"
+private fun loadArticleImage(context: Context, image: ImageView, url: String, origin: String, naturalHeight: Boolean) {
+    val loadKey = "$origin\u0000$url\u0000$naturalHeight"
     if (image.getTag(R.id.tag1) == loadKey) return
     image.setTag(R.id.tag1, loadKey)
     ImageLoader.load(context, url)
-        .apply(RequestOptions().set(OkHttpModelLoader.sourceOriginOption, origin))
+        .apply(RequestOptions().set(OkHttpModelLoader.sourceOriginOption, origin).apply {
+            if (naturalHeight) fitCenter() else centerCrop()
+        })
         .placeholder(R.drawable.image_rss_article)
         .error(R.drawable.image_rss_article)
         .into(image)
@@ -367,9 +387,9 @@ private fun ArticleListFooter(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                TextButton(onClick = { onLoadMore(true) }) { Text(stringResource(R.string.retry)) }
+                TextButton(onClick = { onLoadMore(true) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.retry)) }
             }
-            hasMore -> TextButton(onClick = { onLoadMore(true) }) { Text(stringResource(R.string.rss_load_more)) }
+            hasMore -> TextButton(onClick = { onLoadMore(true) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.rss_load_more)) }
             else -> Text(
                 stringResource(R.string.rss_no_more_articles),
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -402,7 +422,8 @@ private fun EmptyArticles(
     descriptionRes: Int = R.string.rss_articles_empty_description,
     announceEmpty: Boolean = true
 ) {
-    Column(modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
+        .verticalScroll(rememberScrollState()).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
         Text(
             stringResource(titleRes),
@@ -414,14 +435,14 @@ private fun EmptyArticles(
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (onRefresh != null) {
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onRefresh) { Text(stringResource(R.string.refresh)) }
+            Button(onClick = onRefresh, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.refresh)) }
         }
     }
 }
 
 @Composable
 private fun ArticleLoadError(error: String, onRefresh: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
         Text(
             stringResource(R.string.rss_articles_load_failed),
@@ -432,7 +453,7 @@ private fun ArticleLoadError(error: String, onRefresh: () -> Unit) {
         Text(error.lineSequence().take(5).joinToString("\n"), color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall, maxLines = 7, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onRefresh) { Text(stringResource(R.string.retry)) }
+        Button(onClick = onRefresh, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.retry)) }
     }
 }
 

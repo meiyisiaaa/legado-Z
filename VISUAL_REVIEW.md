@@ -1,3 +1,107 @@
+# 视觉验收 · A 矿绿书衣（2026-10-23）
+
+用户已从三种原创构图中选择 A。本轮以当前 Android 架构落地书籍详情，并统一书源与分组、文章与收藏、所有书签、阅读记录；书架、发现、订阅、目录和共享设置沿用原功能并接入同一配色、状态与动效。候选与批准记录见 [CONCEPTS_V3.md](docs/ui/CONCEPTS_V3.md)。
+
+## 实现范围与数据约束
+
+- 书衣采用真实布纹 bitmap、非对称封面与轻衬线书名，纸面承载章节、简介与备注；底部保留独立书架/阅读操作。
+- 管理页面使用连续列表、细分隔、明确的名称/状态/工具层级。文章原有五种样式及二列、三列、瀑布流继续保留。
+- 共享按压使用0.985缩放、可中断的临界阻尼spring；系统移除动画和墨水屏立即反馈。展开区由原AnimatedVisibility负责，去掉重复尺寸动画。
+- 新安装默认矿绿色；已有安装保留已存主题。可在“主题设置 → 主题列表”选择“矿绿书衣”或“矿绿书衣·夜”。真实升级截图保留原棕红主题，证明未覆盖旧配置；验收设备随后手动选择A。
+- 修复真实拖动落点错误：未在拖动中重排的源列表，结束时直接使用目标项，避免上下相邻拖动提交自身。
+- 书签增加真实加载/错误/手动重试；已有快照在失败和重试中仍可打开与长按，避免局部错误移除有效内容。
+
+## 证据来源
+
+使用保留数据的既有API36模拟器，1080×2400、420dpi（约411dp）；实际小屏840×1680（320dp）、1×/2×字体。API26虚拟机沿用此前已清理状态，本轮未新建。模拟器与Gradle顺序运行，降低宿主内存竞争。
+
+`host-r1/`与`host-final/`由实际Activity经ADB screencap直接输出；`all-r1/`、`all-final/`由生产Compose组件在原生instrumentation宿主渲染。fixture内容为内存合成样本，点击、长按、状态、真实触摸拖动由测试执行；其截图只证明对应内容与状态。部分320dp内容fixture位于411dp外窗内，侧边留白属于fixture框架；真实320dp窗口另外截图。图片保留原始像素。
+
+概念图由imagegen生成，属于方向探索；布纹是实际加入APK的生成资产。现有书封与元数据保持应用数据。截图、测试与生成概念分别记录。
+
+## 核心页面第一轮：三个主要问题
+
+| 位置与影响 | 修改 | 验证路径 |
+| --- | --- | --- |
+| 详情来源/分组前缀与章节标签重复，削弱书名层级 | raw字段直接显示；当前/最新按区分组 | 核对Activity各更新路径及内容交互测试，重拍真实详情 |
+| 详情工具栏与书衣有阴影接缝，次按钮描边偏重 | 宿主工具栏elevation归零，次按钮用tonal表面 | 真实详情首屏；既有自定义主题升级保留 |
+| 简介内层8dp重复缩进，破坏左侧基线 | AndroidView内部start padding归零，复用外层20dp | 详情与长备注截图、原编辑/目录回调测试 |
+
+## 全页面第二轮：三个主要问题与集中修正
+
+| 位置与影响 | 修改 | 复验 |
+| --- | --- | --- |
+| 320dp详情大封面纵排吞没首屏；常规书签停在绿色区，进度区域分散 | compact1×使用104×150封面/标题横排，元数据下移；大字缩小封面后纵排。常规书签跨接缝，章节收进1dp细框，标题Normal，按钮恢复原生图标 | 新compact首屏断言、真实320dp1×/2×图与常规详情重拍 |
+| RSS2/4固定画框内出现大段空白 | 明确区分固定画框centerCrop与瀑布流自然高度fitCenter；load key包含模式 | 五种样式、收藏、分页/重试测试和重拍 |
+| 阅读记录行清除控件实际40dp | 同一TextButton显式heightIn(min=48.dp) | 保留48dp断言，打开/独立清除/总时长回归 |
+
+独立fresh finish review第一轮结论为 `disposition: fix`，提出上述接缝、进度、字重、图标、图片和小屏证据六项。修复后的verdict见下方最终记录；本轮detector仅执行一次，结果`[]`。
+
+## 第三轮：主题证据与修复后的构图确认
+
+| 位置与影响 | 修改 | 验证方法 |
+| --- | --- | --- |
+| 夜间library/RSS/source fixture沿用application浅主题，文字attr与持久背景不一致 | fixture显式配置当前night mask及AppTheme_Dark/Light，正文/表面对比度断言至少4.5 | 真实ReadRecordActivity夜间白字对照；修正后fixture重跑。旧图仅保留两个样本到before/fixture-*-night-context.png，已排除出通过证据 |
+| 书衣修复接缝时底部对齐使左上留白增大 | 恢复封面与身份垂直居中，Canvas按真实封面底沿计算书签起点 | 常规日夜真实Activity重拍；分类、长来源仍保留 |
+| 点击断言后立即拍正常态，ripple斑驳遮挡内容 | fixture截图前推进Compose时钟400ms，再等待空闲 | 部分硬件ripple仍按真实时间消退，图中保留按压反馈；稳定列表使用真实ReadRecordActivity对照，press独立用例覆盖反向/取消/减少动画 |
+
+## 本轮设备与构建记录
+
+本轮覆盖56个不同设备用例。首批55项中54通过，唯一失败是记录清除40dp；修复后22项定向用例全部通过（153.618s），新增compact用例包含在内。截图Context修正后，夜间25项全部通过（131.734s），包括书源9项、书签/记录8项、文章5项及详情3项。最终compact分类收尾后详情3/3通过（17.441s，320dp×536dp含分类的完整章节边界断言）；RSS五样式loop与书签/记录2项为3/3通过（44.554s）。56项中曾失败的控件已修复复验通过；不同尺寸复跑按同一用例计。
+
+所有Gradle调用经`gradle-run`包装器（工作流`38f9d9ec7f5c315ed2330b147743051e`），使用离线限定任务`assembleAppDebug`、`assembleAppDebugAndroidTest`与`--max-workers=2`。
+
+| 验证问题（原文） | 有界答案 |
+| --- | --- |
+| “Does the mineral book detail build with the existing Android host and UI tests?” | 初次测试编译时新增helper晚于主源码快照，未解析引用；稳定源文件后重新构建 |
+| “Does the mineral book detail and shared press feedback build with its UI tests?” | 0002通过，145s |
+| “Do all mineral UI screens and their Android tests compile?” | 先定位height import及无效test import并修复；0006应用与测试包通过，45s |
+| “Do the screenshot-driven mineral refinements and accessibility fixes compile?” | 0008通过，235.188s；仅保留既有测试Locale构造器deprecated警告 |
+| “Do the centered cover ribbon and theme-faithful screenshot fixtures compile?” | 0010通过，161.609s，无warning/failure fingerprint |
+| “Do compact chapter visibility and consistent RSS placeholder framing compile?” | 0012通过，176.797s；既有Locale deprecated警告 |
+| “Are Gradle daemons stopped before device validation?” | 0003、0007、0009、0011、0013成功；每次设备验收前释放daemon；工作流finish成功，仅清理包装器拥有的日志 |
+
+## 实际运行截图索引
+
+| 页面 | 原生Activity / 常规 | 受控内容与状态 |
+| --- | --- | --- |
+| 详情 | [日间常规](docs/ui/assets/iteration3/host-final/book-info-day.png) · [夜间](docs/ui/assets/iteration3/host-final/book-info-night-confirm.png) · [墨水屏模式](docs/ui/assets/iteration3/host-final/book-info-eink.png) | [真实320dp](docs/ui/assets/iteration3/host-final/book-info-320-day.png) · [2×首屏](docs/ui/assets/iteration3/host-final/book-info-320-2x-day.png) · [2×滚动](docs/ui/assets/iteration3/host-final/book-info-320-2x-scrolled.png) |
+| 书源 | [实际列表](docs/ui/assets/iteration3/host-r1/book-sources.png) | [夜间选择/错误](docs/ui/assets/iteration3/all-final/sources/a-confirm-night-normal.png) · [分组弹窗](docs/ui/assets/iteration3/all-final/sources/a-confirm-night-group-edit.png) |
+| 阅读记录 | [实际夜间](docs/ui/assets/iteration3/host-final/records-night.png) | [2×长记录](docs/ui/assets/iteration3/all-final/library/a-confirm-night-records-narrow-large-type.png) |
+| 书签 | 生产AllBookmarkScreen内容fixture | [夜间内容与按压反馈](docs/ui/assets/iteration3/all-final/library/a-confirm-night-bookmarks-normal.png) · [错误保留内容](docs/ui/assets/iteration3/all-final/library/a-confirm-night-bookmarks-content-error.png) |
+| 文章 | 生产文章组件与原图片加载器，固定本地图片 | [最终日间二列](docs/ui/assets/iteration3/all-final/articles/a-delivery-day-style-2.png) · [最终三列](docs/ui/assets/iteration3/all-final/articles/a-delivery-day-style-4.png) · [分页错误](docs/ui/assets/iteration3/all-final/articles/a-confirm-night-pagination-error.png) |
+| 共享页面 | [实际书架](docs/ui/assets/iteration3/host-r1/main.png) | [书架](docs/ui/assets/iteration3/all-r1/bookshelf/a-r1-normal.png) · [发现](docs/ui/assets/iteration3/all-r1/explore/a-r1-explore-normal.png) · [目录](docs/ui/assets/iteration3/all-r1/toc/a-r1-normal.png) |
+
+## 最终视觉结论
+
+**通过本轮Android模拟器内验收。** Fresh finish review复核六项原问题：接缝书签、进度分区、轻衬线字重、双CTA图标、RSS图片密度和真实小屏证据全部 `resolved`；最终结论 `disposition: ship`，`remaining: clear`。该结论仅覆盖本报告提供的渲染与测试证据。
+
+| 内部审美维度 | 分值 | 实际依据与限制 |
+| --- | ---: | --- |
+| 构图与层级 | 18/20 | 常规非对称书衣、纸面进度分区；320dp恢复当前章节首屏可见 |
+| 字体与内容 | 14/15 | 轻衬线书名、工具sans、正文层级；2×文案按原生方式换行 |
+| 色彩与材质 | 14/15 | 矿绿/纸面、真实布纹、日夜及模拟墨水屏实图 |
+| 组件与细节 | 14/15 | 共享形状/边距/图标、48dp操作、源状态分层 |
+| 识别性 | 8/10 | 整块书衣与接缝书签构成记忆点，工具页保持任务密度 |
+| 交互与动态 | 8/10 | 实际点击、长按、拖动、reverse/cancel/reduced-motion用例；真机帧时未测 |
+| 适配 | 9/10 | 常规、真实320dp、2×首屏/滚动、日夜和模拟墨水屏 |
+| 状态完整度 | 5/5 | 空/加载/错误/手动重试、有效快照保留、长内容 |
+| 合计 | 90/100 | 内部主观评审参考，依据本轮图与操作；逐项未验范围继续保留 |
+
+本轮所检页面未见仍影响主要阅读、操作或结构的P0/P1问题。后续P2空间包括2×字体下CTA文案的行平衡、真实墨水屏残影与封面阴影的设备调校；这些未作为本轮已验证结果。设备已恢复常规尺寸、1×字体和矿绿日间模式，headless模拟器已停止并保留数据。
+
+## 当前交付物与验证范围
+
+[APP_BRIEF.md](APP_BRIEF.md)、[UI_REFERENCES.md](UI_REFERENCES.md)、[DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)、[DESIGN.md](DESIGN.md)。规格：[详情](docs/ui/SCREEN_SPEC_BOOK_INFO_V3.md)、[书源/分组](docs/ui/SCREEN_SPEC_SOURCES_V3.md)、[文章/收藏](docs/ui/SCREEN_SPEC_RSS_ARTICLES_V3.md)、[书签/记录](docs/ui/SCREEN_SPEC_LIBRARY_TOOLS_V3.md)；既有核心页规格见[索引](docs/ui/SCREEN_SPECS_CORE.md)。
+
+调试APK已安装执行，交付副本为 `build/ui-redesign-validation/delivery/legado-mineral-ui-20261023.apk`，与受测源APK SHA-256一致。真机帧率、长时间性能、TalkBack实际播报、真实墨水屏设备及真实AI/TTS Provider效果未在本轮验证。现有专用阅读/媒体引擎、全部设置子页和Web本轮保留原实现，随共享主题更新；页面重构范围以上列文件和截图为准。
+
+---
+
+# 历史阶段记录：A选型前的核心页面与差异功能
+
+以下为此前提交`0a6aa4451`阶段材料，保留用于追溯；其中85项设备/7项单元及截图属于历史结果，本轮结果见上方。
+
 # 视觉验收 · 核心页面与差异功能
 
 本轮将原创“书页边注”延伸至发现、搜索、订阅、我的/共享设置分组和目录，接入独立书目备注与阅读进度筛选。沿用当前 Android 架构、主题和原有功能。MD3 项目用于参考；三种原创探索见 [UI_REFERENCES.md](UI_REFERENCES.md)，列表、紧凑与列数偏好继续沿用原能力。

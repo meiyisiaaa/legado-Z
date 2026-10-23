@@ -1,16 +1,18 @@
 # Legado-Z Design System
 
-本文件定义 Android 的语义 token、组件状态与跨平台建议。书架核心 UI 已有实现，本轮继续接入发现、搜索、RSS、我的与共享设置分组、目录内容、书目备注和阅读进度筛选。**现行 / 本轮实现**描述源码，**计划**描述后续设计；API36 的约 411dp 常规屏、320dp 小屏及 1×/2× 字体已执行状态、操作和截图检查，分项结果及复验进展见 [VISUAL_REVIEW.md](VISUAL_REVIEW.md)。
+本文件记录 A「矿绿书衣」在当前 Android 源码中的 Design DNA、Tokens、Component Patterns 与 Platform Adaptation。根 [DESIGN.md](DESIGN.md) 的 frontmatter 持有基础值，本文解释运行时语义和组件约束；`.impeccable/design.json` 补充动效、深度、断点与组件预览。设备、状态和操作的实际验收结果统一见 [VISUAL_REVIEW.md](VISUAL_REVIEW.md)。
 
 运行时主题以 `app/src/main/java/io/legado/app/ui/widget/compose/LegadoTheme.kt` 和 `ThemeStore` 为准。`DESIGN.md`、`PRODUCT.md` 用于了解既有信息结构、功能和平台边界，原创呈现与差异功能按用户授权推进。强调色和前景当前采用对比度安全选择。现有主题、全局字体设置和动效系统保持；书架普通列表、搜索结果和编辑预览通过 `BookTypography.kt` 共享局部 `bookTitle` 角色，设置分组另用局部衬线标题，阅读正文继续服从阅读设置。
 
 ## Design DNA
 
-Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围绕找书、识别进度、发现更新和继续阅读展开，尊重现有数据、核心行为和 Android 技术框架，同时为界面呈现保留原创探索空间。[HapeLee/legado-with-MD3（3.26.18）](https://github.com/HapeLee/legado-with-MD3/tree/3.26.18) 提供视觉灵感与功能对照，当前页面在项目既有组件上原创实现。功能差异经行为和数据核实后纳入对应规格。
+**现行方向：矿绿书衣，连续纸面。** 用户在三张详情概念中选择 A，并授权统一其他页面；方向契约和候选图见 [CONCEPTS_V3.md](docs/ui/CONCEPTS_V3.md)。种子 `d57b1583` 保留为概念来源，明确的 A 选择决定实现。详情以书衣色场、左封面/右书名、局部衬线和书签细节识别书籍；书源、文章、书签与记录以导航色场、连续纸面、细线和文字层次转译相同语言。
+
+Legado 是以读者自己的书籍和书源为中心的阅读工具。找书、辨识进度、发现更新和继续阅读决定信息关系；原有四目的地、菜单与数据契约继续有效。[HapeLee/legado-with-MD3（3.26.18）](https://github.com/HapeLee/legado-with-MD3/tree/3.26.18) 保留为历史视觉参考，现行页面由当前组件原创实现。
 
 视觉语言围绕阅读内容和书目组织：稳定的基线与边缘、清楚的文字层级、克制的表面差异和适度的强调色。颜色随用户运行时主题。新图标优先沿用现有资源；新增图标使用许可适用的开源 UI 图标。
 
-**设计情绪假设：**熟悉、安静、可控、可信，作为视觉决策的设计假设保留。
+**设计性格：**熟悉、安静、可控、可信。书籍详情允许更鲜明的物体感，维护页面优先扫描效率；低对比静态布纹只用于详情书衣，纸面与细分隔承担主体信息。
 
 ## Token architecture
 
@@ -28,6 +30,8 @@ Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围�
 
 **现行来源：**Android Compose 读取 `ThemeStore` 当前背景、前景、次级前景及强调色。浅色/深色由 `AppConfig.isNightTheme` 控制，墨水屏模式使用黑白方案。颜色 token 按这些运行时值承担语义角色。
 
+默认浅/深矿绿主题基础值见 DESIGN.md 的 `android-*` 颜色 token，实际资源为 `res/values/mineral_colors.xml`。`ThemeConfig` 将其作为缺省值，已保存的颜色、图片背景和阅读配置继续生效。页面只引用语义角色。
+
 | Semantic token | 用途与当前映射 |
 | --- | --- |
 | `background` / `onBackground` | 页面底色与主要文字，来自当前主题背景、前景。 |
@@ -37,14 +41,18 @@ Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围�
 | `primary` / `onPrimary`, `secondary` / `onSecondary` | 强调操作、选中状态及其前景。强调色来自 ThemeStore，并由 `contrastSafeAccent()` 尝试满足相对全部组合表面至少 4.5:1；必要时向 HSL 明度较近的可行色调整。若不存在可同时满足的色值，回退为黑/白中对所有表面最低对比度较高者。强调色前景取与该色对比度较高的黑或白。 |
 | `primaryContainer` / `onPrimaryContainer` | 当前背景与原始强调色按 16% 混合；前景使用主题主文字色。墨水屏模式停用混色。 |
 | `secondaryContainer` / `onSecondaryContainer` | 当前背景与原始强调色按 10% 混合；前景使用主题主文字色。墨水屏模式停用混色。 |
+| `tertiaryContainer` / `onTertiaryContainer` | 书衣身份区使用 ThemeStore `primaryColor`；前景取黑/白中对比更高者。墨水屏使用白底黑字。 |
+| `inversePrimary` | 浅橄榄书签基色向用户强调色混合 12%，用于详情书签细节；墨水屏使用黑。 |
 | `outline` / `outlineVariant` | 普通模式分别为背景向前景混合 48% / 16%；墨水屏模式使用完整前景色。 |
-| `error`, `onError`, `errorContainer`, `onErrorContainer` | 使用当前 Material 3 浅色或深色方案的错误角色。 |
+| `error`, `onError`, `errorContainer`, `onErrorContainer` | `LegadoTheme.kt` 显式提供浅色深红/深色浅珊瑚及成对前景、容器；墨水屏以黑白和真实错误文案表达。 |
 
-强调色的 4.5:1 搜索适用于当前背景、surface 与 container 组合后的颜色；对比度安全算法的当前实现见 `LegadoTheme.kt`。若与 `DESIGN.md` 的旧阈值文字冲突，以运行时代码为准。
+强调色的 4.5:1 搜索适用于当前背景、surface 与 container 组合后的七种颜色；对比度安全算法的实现见 `LegadoTheme.kt`。`tertiary` 与 `primary/secondary` 共用安全强调色，书衣使用 `tertiaryContainer` 独立承载身份色场。
 
 ### Typography
 
 **现行来源：**`FontFamily.Default`、Android `sp`、Material 3 类型角色、0sp 字距。尊重系统字体缩放；全局主题字体和常规角色保持现状。`Typography.bookTitle` 对 `titleMedium` 作局部 Serif 覆盖，由普通书架、搜索书名和编辑预览使用；紧凑列表和目录章节继续使用各自常规角色。
+
+系统字体和中文回退属于有意的原生平台适配，保持字形覆盖、系统字体缩放和控件度量。局部 Serif 提供书籍气质，常规工具标题继续服从 Material 类型角色。
 
 | Role | Size / line height | Weight | 主要用途 |
 | --- | --- | --- | --- |
@@ -54,6 +62,7 @@ Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围�
 | Body Large / Medium / Small | 16/24, 14/22, 13/18 sp | Normal | 主要说明、书籍元数据、辅助正文。 |
 | Label Large / Medium / Small | 14/20, 12/16, 11/14 sp | Medium | 控件标签、短状态和徽标。 |
 | `bookTitle` | Serif 18/26sp | Medium | **本轮实现：**普通书架、搜索结果和编辑预览共享；使用系统字体及回退，实际字形与窗口检查见视觉报告。 |
+| 详情身份书名 | Serif 28/36sp | Normal | A 书衣主焦点，完整换行与heading语义；窄屏调整图文比例，大字纵向重排。 |
 | 书架作者 | `bodySmall` | Normal | **本轮实现：**普通列表作者信息。 |
 | Preference 分组标题 | Serif 20/28sp | Medium | **本轮实现：**`titleLarge` 局部衬线覆盖，0sp 字距，标题可换行并有 heading 语义。 |
 | 目录章名 | `bodyLarge` | Normal；当前章加强 | **本轮实现：**最多两行；卷名使用紧凑标题层级，保留完整语义和长按通路。 |
@@ -62,7 +71,7 @@ Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围�
 
 ### Spacing and layout
 
-**本轮间距刻度：**4、8、12、16、24、32 dp。语义映射为：图标与文字间距 4dp、紧邻控件间距 8dp、条目内部次级间距 12dp、内容边距 16dp、分组间距 24dp、主要区域间距 32dp。布局以这些值建立一致节奏与内容关系。
+**当前复用间距：**4、8、12、16、20、24、32 dp。紧邻信息以 4/8dp 组织、条目内部以 12dp 分层；工具列表以 16dp 为边缘，详情纸面、书签和记录以 20dp 为阅读边缘，书衣与分区以 24dp 形成呼吸空间，状态区域使用 32dp 留白。6/10/14dp 等局部光学值留在对应组件源码。
 
 书架的 `bookshelfMargin` 继续按用户设置生效，间距刻度用于条目内部的固定关系。主导航、书架分组、既有菜单与列表/紧凑/网格能力是现有产品基础；普通列表的视觉层级与条目布局通过原创方案重新组织。
 
@@ -77,20 +86,27 @@ Legado 是以读者自己的书籍和书源为中心的阅读工具。设计围�
 | `bookshelf.cover.aspectRatio` | 0.75（宽/高） | 现行 |
 | `bookshelf.grid.columns` | 用户设置的 2–6 列 | 现行 |
 | `bookshelf.badge.minimumHeight` | 20dp | 本轮实现；单行数字与完整语义描述，实际截图和断言结果见视觉报告。 |
+| `bookInfo.cover` | 常规136×196dp；窄屏/大字104×150dp | 详情身份区，纸面列表继续使用原封面比例。 |
+| `bookInfo.compact` | width <360dp | 小封面与书名横排、16dp间隔；分类在右侧书名/作者之下，来源/分组在下方；书衣顶部/底部内距16/12dp。 |
+| `bookInfo.stack` | fontScale ≥1.5 | 小封面与身份纵向重排，保留信息顺序与操作。 |
+| `bookInfo.primaryActions` | 最小 52dp；12dp 间隔 | 两操作平分宽度、高度随文案增加。 |
+| `libraryTools.contentMaximum` | 840dp | 书签与阅读记录内容居中，20dp 水平边缘。 |
 
 ### Shape and depth
 
 **现行 Shape token：**Material 3 `extraSmall=4dp`、`small=8dp`、`medium=12dp`、`large=16dp`、`extraLarge=24dp`。组件沿用对应语义形状。
 
-Android 内容层级来自 `surface` 和 `surfaceContainer*` 角色，静态书目使用连续平面。菜单与 Dialog 按浮层语义区分层级；墨水屏使用清晰轮廓和黑白层次。书籍封面保持既有裁切和加载路径。
+Android 内容层级来自 `surface` 和 `surfaceContainer*` 角色，`surfaceTint` 为透明，静态书目使用连续平面。详情封面单独使用 6dp 阴影、4dp 圆角，表达书衣上的实体书；书衣的 `mineral_cloth` 静态资源以 alpha 0.35、Modulate 叠加。墨水屏省略纹理，以清晰轮廓和黑白层次保持结构。菜单与 Dialog 按浮层语义区分层级，封面保持既有加载路径。
 
 ### Motion
 
 **现行动效 token：**`LocalLegadoMotion` 提供 `press=120ms`、`state=240ms`、`container=360ms`。动画受 Android 系统动画开关控制；墨水屏或系统关闭动画时三档均为 0ms，并关闭 Ripple。各页复用这套配置。
 
+共享按压实际由 `pressSpec()` 的临界阻尼 spring（dampingRatio=1、stiffness=700）驱动；按下绘制缩放至 0.985、释放回到 1，测量与命中区域稳定。`press=120ms` 为时长 token，spring 按物理参数结束。书源选中颜色为 `tween(state)`，内容增高为 `tween(container)`；书签和记录使用 `animateItem` 的 state 淡入/淡出/位置过渡。减少动画时 spring 改为 snap，tween 时长为零。
+
 动效用于按压、选中和容器变化的即时反馈，保持可中断并服从用户滚动。减少动态效果模式下通过文字、图形和语义表达选中、加载、成功或失败。本轮设备操作与截图的实际覆盖见根验收报告，真机动态表现作为后续验证范围。
 
-## Component specifications
+## Component Patterns
 
 所有组件使用上述 Material 3 语义色、排版和形状。触屏保留直接操作入口；键盘和指针输入提供可见焦点与悬停反馈。Pressed 使用当前交互反馈，Selected 使用强调色、标记和语义，Disabled 采用组件默认的禁用语义。
 
@@ -125,16 +141,21 @@ Android 内容层级来自 `surface` 和 `surfaceContainer*` 角色，静态书�
 | 书目备注 | 详情在简介后显示非空备注；编辑页使用独立多行输入，至少四行，原工具栏保存。 | 本轮实现：独立字段与草稿，空白保存为 null；已执行迁移、持久化和编辑相关设备检查，IME/重建/保存的分项与修复结果见根报告。 |
 | 阅读进度筛选 | 当前纯书籍组上方横向单选条，至少 48dp 目标；全部 / 未开始 / 在读 / 已到末章。 | 本轮实现：分组内保存页面状态；根文件夹页保留全量入口，无结果保留筛选与清除，刷新/管理/导出覆盖原整组。 |
 | 共享页面状态 | `LegadoPageState` 使用 48dp 图标、短标题、可选原因与真实操作，内容可滚动。 | 本轮实现：发现与搜索复用，内容由宿主真实状态驱动。 |
+| 矿绿书衣详情 | 常规书衣顶部/底部内距24/32dp、大字24/20dp；常规封面与右侧身份垂直居中；Canvas书签随实际封面底沿计算起点，跨接书衣/纸面；阅读区域1dp细框、8dp圆角和16dp内距；底部阅读实色、书架柔和次按钮，配原图标。 | 已实现：常规横排；<360dp缩小封面，分类接右侧书名/作者，来源/分组下移；≥1.5×纵排；长文本换行、分类滚动、原点击/长按/选择文本。 |
+| 书源与分组管理 | 16dp边缘、12dp搜索圆角；名称/域名/分组与启停/编辑/更多分为两段；底部全选计数与批量动作分层。 | 已实现：选中表面+Checkbox、Switch+状态文字、检测消息live region、错误色、原拖动与菜单、48dp图标操作。 |
+| 文章与收藏 | 五模式保留：图文行、大图、二列、瀑布流、三列；图片小圆角，固定画框CENTER_CROP、缺图占位ContentScale.Crop；瀑布流自然高度FIT_CENTER、低层表面+细轮廓。 | 已实现：已读次级前景+Normal、未读主前景+SemiBold；真实刷新/分页/重试；收藏长按删除。 |
+| 全书签 | 20dp边缘、840dp内容上限；不透明书名/作者吸顶头与真实数量，章节/原文/备注依次排列、细线分隔。 | 已实现：空/加载/错误/手动重试；已有内容保留可操作快照，局部状态反馈；原点击/长按和导出宿主。 |
+| 阅读记录 | 紧凑总时长摘要、连续记录；书名/时长/日期分层，独立清除可访问名称包含书名。 | 已实现：原搜索、排序、开关、确认和查询取消；加载/错误/空态；稳定key与位置动效。 |
 
 各页行为、状态和数据边界见 [核心页面规格索引](docs/ui/SCREEN_SPECS_CORE.md) 及独立 `SCREEN_SPEC`；截图、操作、主题和辅助功能的实际覆盖见 [VISUAL_REVIEW.md](VISUAL_REVIEW.md)。
 
 ### 书架视觉候选与选型
 
-同一普通书架比较了三种原创语言，方案图见 `docs/ui/CONCEPTS.md`。本轮采用**书页边注**；其余两种作为概念方案比较扫描效率、信息层次和阅读气质。列数、网格与紧凑模式归于既有功能，原创设计聚焦书目组织与文字层级。
+同一普通书架比较了三种原创语言，方案图见 `docs/ui/CONCEPTS.md`。既有普通列表采用**书页边注**；其余两种作为概念方案比较扫描效率、信息层次和阅读气质。列数、网格与紧凑模式归于既有功能，原创设计聚焦书目组织与文字层级。
 
 | 方向 | 视觉组织 | 状态 |
 | --- | --- | --- |
-| **书页边注** | 衬线书名与作者分级，当前和最新章节以两行边注组织。 | 本轮采用并实现。 |
+| **书页边注** | 衬线书名与作者分级，当前和最新章节以两行边注组织。 | 既有列表实现，随矿绿书衣系统继续保留。 |
 | **书目索引** | 无衬线标题、固定字段关系和水平分隔辅助扫视书目。 | 概念比较方案。 |
 | **章节对照** | 将“读至”的当前位置与“更新”的最新章节并列或分组对照，突出差异。 | 概念比较方案。 |
 
@@ -144,7 +165,16 @@ Android 内容层级来自 `surface` 和 `surfaceContainer*` 角色，静态书�
 
 编辑页以66×88dp封面、共享`bookTitle`和作者形成平面预览；表单对齐16dp边缘，形状复用`shapes.small`。简介与备注各自使用4–10行可伸展输入框，保存期间禁用编辑操作，保存反馈保留原有入口。键盘 inset 由内容层消费，根窗口只处理系统栏。
 
-## Platform guidance
+### 反模式
+
+- 管理页反复复制详情大封面构图，或把连续工具列表堆为大圆角卡片。
+- 使用概念图示例书目、装饰序号、无真实用途的统计和重复标签替代真实内容。
+- 用单一颜色表达已读、选中或失败，或去除纯图标操作的可访问名称。
+- 将自定义主题覆盖成默认矿绿，或将工具字体强加给阅读正文。
+- 将触控尺寸缺陷记录为紧凑标准；项目基线继续为至少48dp。
+- 在滚动内容中加入无业务意义的整列交错入场或持续运动。
+
+## Platform Adaptation
 
 ### Android — current implementation
 
@@ -169,6 +199,8 @@ iOS 部分作为未来跨平台设计建议保留：沿用相同的语义颜色�
 
 ## Verification boundary
 
-本文件记录设计规范与源码范围；[VISUAL_REVIEW.md](VISUAL_REVIEW.md) 汇总 API36 上发现、搜索、RSS、我的与共享设置分组、目录、备注和筛选的实际构建、状态、操作与截图证据。常规与 320dp 小屏检查、1×/2× 字体检查已运行，修复后的 fixture 复验按根报告更新。真机、TalkBack 实际朗读、真实网络 Provider、iOS、全阅读引擎和全部设置页属于后续验证范围。
+本文件记录设计规范与源码事实；[VISUAL_REVIEW.md](VISUAL_REVIEW.md) 汇总书籍详情、书源/分组、文章/收藏、全书签、阅读记录及既有核心页面的实际构建、状态、操作和截图证据。API36、320dp、常规屏、字体缩放与主题的具体覆盖、修复后复验和未验证项以该报告为准。文档维护仅执行格式、JSON结构和源码值核对；本文件自身承载设计规则，运行结论由验收报告提供。iOS内容属于未来建议，项目当前平台为Android；真机性能与动效、TalkBack实际朗读和真实Provider效果按本轮授权与报告记录。
+
+主要源码依据：`ui/widget/compose/LegadoTheme.kt`、`LegadoPressFeedback.kt`、`help/config/ThemeConfig.kt`、`res/values/mineral_colors.xml`；组件依据为 `BookInfoScreen.kt`、`BookSourceManageContent.kt`、`GroupManageDialog.kt`、`RssArticleContent.kt`、`AllBookmarkScreen.kt` 和 `ReadRecordActivity.kt`。Kotlin路径均位于 `app/src/main/java/io/legado/app/` 下。页面契约见 `docs/ui/SCREEN_SPEC_*_V3.md`。
 
 参考说明：`docs/ui/assets/reference-md3-bookshelf.png` 与 `docs/ui/assets/reference-md3-my.png` 记录官方参考包的空书架与我的首屏。参考仓库提供灵感，界面在当前组件上原创实现；书目备注和只读阅读筛选已接入，专门手柄适配、逐章时间轴和平板双栏列入后续独立评估范围。

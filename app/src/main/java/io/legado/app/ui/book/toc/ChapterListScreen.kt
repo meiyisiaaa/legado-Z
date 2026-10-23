@@ -343,7 +343,7 @@ private fun Modifier.tocClickable(onClick: () -> Unit, onLongClick: () -> Unit,
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed && motion.enabled) 0.985f else 1f,
-        tween(motion.press), label = "chapter press")
+        motion.pressSpec(), label = "chapter press")
     return graphicsLayer { scaleX = scale; scaleY = scale }.clip(MaterialTheme.shapes.extraSmall)
         .combinedClickable(interactionSource = interactions,
             indication = if (motion.enabled) LocalIndication.current else null,

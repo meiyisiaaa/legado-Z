@@ -22,6 +22,7 @@ import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -35,6 +36,9 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
     override val viewModel by viewModels<AllBookmarkViewModel>()
     override val binding by viewBinding(ActivityAllBookmarkBinding::inflate)
     private var bookmarks by mutableStateOf<List<Bookmark>>(emptyList())
+    private var isLoading by mutableStateOf(true)
+    private var loadError by mutableStateOf(false)
+    private var bookmarkJob: Job? = null
     private val exportDir = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             when (it.requestCode) {
@@ -46,11 +50,21 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         installComposeContent()
-        lifecycleScope.launch {
-            appDb.bookmarkDao.flowAll().catch {
+        loadBookmarks()
+    }
+
+    private fun loadBookmarks() {
+        bookmarkJob?.cancel()
+        isLoading = true
+        loadError = false
+        bookmarkJob = lifecycleScope.launch {
+            appDb.bookmarkDao.flowAll().flowOn(IO).catch {
                 AppLog.put("所有书签界面获取数据失败\n${it.localizedMessage}", it)
-            }.flowOn(IO).collect {
+                loadError = true
+                isLoading = false
+            }.collect {
                 bookmarks = it
+                isLoading = false
             }
         }
     }
@@ -67,7 +81,10 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
                             },
                             onBookmarkLongClick = { bookmark, position ->
                                 onItemLongClick(bookmark, position)
-                            }
+                            },
+                            loading = isLoading,
+                            loadError = loadError,
+                            onRetry = ::loadBookmarks
                         )
                     }
                 }

@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils as CoreColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.legado.app.R
+import io.legado.app.help.config.ThemeConfig
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -83,6 +85,22 @@ class LegadoThemeInstrumentedTest {
         assertPreviewAccentRoles(dark = true)
     }
 
+    @Test fun mineralPresetsMatchTheNativeFallbackPalette() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val day = ThemeConfig.mineralDay
+        val night = ThemeConfig.mineralNight
+        listOf(day.primaryColor to R.color.mineral_primary,
+            day.accentColor to R.color.mineral_accent,
+            day.backgroundColor to R.color.mineral_paper,
+            day.bottomBackground to R.color.mineral_bottom,
+            night.primaryColor to R.color.mineral_primary_night,
+            night.accentColor to R.color.mineral_accent_night,
+            night.backgroundColor to R.color.mineral_paper_night,
+            night.bottomBackground to R.color.mineral_bottom_night).forEach { (hex, resource) ->
+            assertEquals(context.getColor(resource), android.graphics.Color.parseColor(hex))
+        }
+    }
+
     private fun assertPreviewAccentRoles(dark: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val configuration = Configuration(context.resources.configuration).apply {
@@ -115,9 +133,9 @@ class LegadoThemeInstrumentedTest {
             scheme.surfaceContainerHigh.compositeOver(scheme.background),
             scheme.surfaceContainerHighest.compositeOver(scheme.background)
         )
-        val originalAccent = Color(if (dark) 0xFFD84315 else 0xFFE53935)
+        val originalAccent = Color(if (dark) 0xFFA3D4C1 else 0xFF24675B)
 
-        assertTrue("preview accent should exercise the correction", surfaces.any { contrast(originalAccent, it) < 4.5 })
+        assertEquals(contrastSafeAccent(originalAccent, surfaces), scheme.primary)
         assertEquals(scheme.primary, scheme.secondary)
         assertEquals(scheme.onPrimary, scheme.onSecondary)
         assertTrue(surfaces.all { contrast(scheme.primary, it) >= 4.5 })

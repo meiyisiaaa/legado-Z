@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mineral_primary">#183F38</color>
+    <color name="mineral_accent">#24675B</color>
+    <color name="mineral_paper">#F7F7F2</color>
+    <color name="mineral_bottom">#EBEEE7</color>
+    <color name="mineral_primary_night">#172E2A</color>
+    <color name="mineral_accent_night">#A3D4C1</color>
+    <color name="mineral_paper_night">#151D1B</color>
+    <color name="mineral_bottom_night">#1C2824</color>
+</resources>
