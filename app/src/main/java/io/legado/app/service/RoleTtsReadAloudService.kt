@@ -403,7 +403,7 @@ class RoleTtsReadAloudService : BaseReadAloudService(), Player.Listener {
             val engine = binding.engineId.orEmpty()
             val voice = binding.voiceName.orEmpty()
             Triple(
-                StoryboardEngine.sha256("system\u0000$engine\u0000$voice"),
+                StoryboardEngine.sha256("system-v2\u0000$engine\u0000$voice"),
                 "$engine\u0000${voice.ifBlank { "default" }}",
                 rate
             )

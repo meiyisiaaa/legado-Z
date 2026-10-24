@@ -184,6 +184,7 @@ dependencies {
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
     coreLibraryDesugaring(libs.desugar)
     testImplementation(libs.junit)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
     // 仅 AiConfigTest 需要：AiConfig 触碰 appCtx/SharedPreferences，必须真实 Context
     testImplementation(libs.robolectric)

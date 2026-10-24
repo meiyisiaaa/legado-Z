@@ -148,6 +148,7 @@ internal class RoleTtsSystemAudioProvider(context: Context) {
             TextToSpeech.OnInitListener { status -> ready.complete(status) },
             requestedEngineId
         )
+        private val defaultVoice by lazy { tts.defaultVoice ?: tts.voice }
         val engineId: String
             get() = initialEngineId ?: tts.defaultEngine.orEmpty()
 
@@ -194,12 +195,17 @@ internal class RoleTtsSystemAudioProvider(context: Context) {
         ) {
             awaitReady()
             withContext(Dispatchers.Main.immediate) {
-                if (!voiceName.isNullOrBlank()) {
-                    val voice = tts.voices.orEmpty().firstOrNull { it.name == voiceName }
+                // Capture the initialized engine default before selecting any role voice.
+                val engineDefaultVoice = defaultVoice
+                val voice = if (voiceName.isNullOrBlank()) {
+                    engineDefaultVoice
+                        ?: throw RoleTtsVoiceUnavailableException("system TTS default voice is unavailable")
+                } else {
+                    tts.voices.orEmpty().firstOrNull { it.name == voiceName }
                         ?: throw RoleTtsVoiceUnavailableException("system TTS voice is no longer available")
-                    if (tts.setVoice(voice) != TextToSpeech.SUCCESS) {
-                        throw RoleTtsVoiceUnavailableException("system TTS voice could not be selected")
-                    }
+                }
+                if (tts.setVoice(voice) != TextToSpeech.SUCCESS) {
+                    throw RoleTtsVoiceUnavailableException("system TTS voice could not be selected")
                 }
                 tts.setSpeechRate(if (rate > 0f) rate else 1f)
                 outputFile.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("cannot create TTS cache directory") }

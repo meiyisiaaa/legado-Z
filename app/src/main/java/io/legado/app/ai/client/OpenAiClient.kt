@@ -25,8 +25,7 @@ import kotlin.coroutines.resumeWithException
  * 设计要点：
  * - **依赖注入 [Call.Factory] 而不是 `OkHttpClient`**：`okhttp3.Call.Factory` 是单方法接口，
  *   单测里用 `FakeCallFactory` 三行就能伪造任意 HTTP 响应，无需引入 MockWebServer。
-     *   同时也满足架构文档 §7.2「禁止新建 OkHttpClient」——真实实例由 UI 层从
- *   `okHttpClient.newBuilder()` 派生后注入。
+ *   真实实例由 UI 层注入隔离的 aiHttpClient，保持平台 TLS 校验并禁止重定向。
  * - **超时用 [withTimeout] 而不是 OkHttp 的 readTimeout**：超时秒数来自每次调用的
  *   [AiChatOptions]，而 OkHttp 的超时是建在 client 上的，做不到 per-call。
  *   [TimeoutCancellationException] 是我们自己作用域内产生的，映射为 [AiError.Timeout]；

@@ -406,3 +406,47 @@ Gradle workflow已finish，仅清理包装器拥有的日志；本轮重复截�
 设备已恢复1080×2400、420dpi；保留公开源8个完成任务及对应相册文件，For Bigger Fun和For Bigger Meltdowns仍供用户自行下载。受控测试任务、相册成品由测试按自身ID清理；电脑端本轮拉取的媒体副本及临时API jar已删除，正式截图保留。私有站点、旧版设备和必要转码的设备兼容性继续列为待验。
 
 Gradle workflow已finish，仅清理包装器拥有的日志；本轮临时设备层级、截图和电脑端instrumentation原始日志已清理，AVD运行日志继续供当前模拟器使用。清理时 `rm /sdcard/media-quality-play.png` 返回 `No such file or directory`；复查 `/sdcard` 已无本轮 `media-quality-` 文件，未留下待清理目标。模拟器停在实际下载任务页，截图已更新为最终安装包的当前画面。
+
+## PR #1 合并前评审与回归 · 2026-10-24
+
+目标为 `meiyisiaaa/legado-Z:main`；上游 `Luoyacheng/legado-E` 保持原状。本轮在提交 `0e7eaced` 的独立工作树中完成评审修复，原工作区同时进行的知乎功能未纳入本 PR。
+
+三组独立代码评审及交叉复核发现并修复以下问题。TLS 测试服务器改用与现有 OkHttp 同版本的 MockWebServer 5.3.2，仅加入 `testImplementation`；其 [HTTPS 接口](https://github.com/lysine-dev/okhttp/blob/parent-5.3.2/mockwebserver/src/main/kotlin/mockwebserver3/MockWebServer.kt)与 [Apache-2.0 许可](https://central.sonatype.com/artifact/com.squareup.okhttp3/mockwebserver3/5.3.2)已核对。运行结果单独记录。
+
+| 位置 / 问题 | 用户影响与修改 | 验证 |
+| --- | --- | --- |
+| RSS WebView 媒体代理重定向 | 跨域跳转可能携带来源的私有 Header；逐跳隔离凭据，按响应域保存 Cookie，嗅探专用客户端使用原生逐跳拦截 | API36 真实 A→A→B 重定向用例，验证源域凭据保留、目标域凭据隔离与 Cookie 归属 |
+| AI 请求复用书源网络策略 | AI 密钥及正文需要正常证书、主机名校验；四个调用方改用独立客户端，并返回重定向供用户配置最终地址 | 真实本地 HTTPS 正例、证书与主机名拒绝、302 保持原响应；运行结果见下表 |
+| 系统角色朗读默认音色 | 角色段落后旁白可能沿用角色音色；每次合成恢复已初始化引擎的默认音色，更新音频缓存指纹 | Robolectric 实际调用 provider，覆盖角色音色后 null / 空默认绑定 |
+| 搜索草稿与已提交条件 | 宿主重建可能丢失已提交词及临时单源范围；分别保存恢复，帮助页隐藏继续搜索按钮 | API36 6 项搜索组件、2 项真实宿主重建测试 |
+
+### 本轮实际设备结果
+
+2026-10-23，独立 API36 实例，zh-CN、1080×2400、420dpi、1 倍字体，同一冻结 Debug APK。四组共 12 项不同用例取得有效通过证据，复跑按同一用例计数。
+
+| 分组 | 实际结果 | 执行时间 |
+| --- | ---: | ---: |
+| `SearchScreenInstrumentedTest` | 6/6 | 41.293s |
+| `SearchActivityStateInstrumentedTest` | 2/2 | 21.173s |
+| `RssMediaSnifferInstrumentedTest` | 3/3 | 17.733s |
+| `RssMediaNativeFlowInstrumentedTest#batchDownloadsOnlyOriginalContentImagesAndVideosWithFinalSizes` | 1/1 | 20.721s |
+
+批量用例实际从两篇文章选择两张原图和两个 MP4：初始未选、提交禁用、预览图片被排除、全选计数为 4；四项均完成。相册读取字节逐个等于 HTTP 来源，`bytesDownloaded=totalBytes=成品大小`，`MediaStore.IS_PENDING=0`，两张图片均为1920×1280。本轮未复验视频播放或视频尺寸，相关旧结果见前节。
+
+首次搜索启动与最后重拍在用例开始前遇到模拟器系统 startup ANR；正常启动后，上述四组均取得通过结果。两次批量截图分别被 Messages / System UI 的系统 ANR 弹窗遮挡，已排除并删除，本节未新增视觉验收通过结论。此前未变化的页面截图及小屏、大字体、深色证据按覆盖范围复用。
+
+临时 API36 实例已正常关闭；核实所属目录无联接点且无相关进程后，已删除本次临时 AVD、日志及被遮挡截图。原有 AVD 及数据未改动，未创建 API26 虚拟机。真实 Provider、私有站点、物理设备及旧版系统继续列为待验。
+
+### 本轮构建检查
+
+Gradle 由 `gradle-run` workflow `76b55cab7926be3e54e800abf467879e` 管理。初次 3GB 堆配置在高 GC 下中断，随后采用单 worker、4GB 堆。原工作区的并行知乎改动触发一次编译错误，后续检查全部切换至隔离工作树；该功能未纳入本轮修复。
+
+| Verification question（原文） | 实际结果 |
+| --- | --- |
+| “PR审查修复后，全部JVM单测、Debug设备验收包与Release构建是否通过？” | 初次组合运行因堆压力中断；0006 在测试编译阶段发现 Android 测试编译环境未暴露 JDK `HttpsServer`，704.109s，已替换该测试方案，最终检查待完成 |
+| “PR审查修复后，全部JVM单测和Debug设备验收包是否通过？” | 原工作区先发现 TLS 夹具问题，后一次受并行代码影响；未记为通过 |
+| “独立PR工作区的全部JVM单测和Debug设备验收包是否通过？” | 首次 243 项中 241 项通过，两项 TLS 正例夹具失败；最终检查待完成 |
+| “独立PR工作区的Debug设备验收包是否构建通过？” | 通过，698.172s；Debug 与 androidTest 两个 APK 均构建并实际安装 |
+| “TLS夹具修正后，TLS与Robolectric同进程定向回归是否通过？” | 0007 通过，832.062s；5 项 TLS、4 项 AI 配置及 1 项默认音色测试共10/10，失败、错误、跳过均为0。此前手写协议与 JDK 方案均已被替换 |
+
+GitHub 当前未注册 Actions 工作流、必需检查或分支规则；云端 CI 没有执行记录。本轮以本地构建、JVM、设备检查和独立代码评审记录作为合并验证，合并前再次核对远端条件。

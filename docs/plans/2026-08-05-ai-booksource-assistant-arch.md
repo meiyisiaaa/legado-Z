@@ -13,8 +13,8 @@
 | 维度 | 结论 |
 |------|------|
 | 新增运行时依赖 | **0 个**（100% 复用 OkHttp / Gson / Jsoup / Coroutines / Material） |
-| 新增测试依赖 | 1 个（`kotlinx-coroutines-test`，与现有 coroutines 版本对齐） |
-| HTTP | **裸 OkHttp 5.3.2**（复用 `io.legado.app.help.http.okHttpClient` 派生）+ `newCallStrResponse` 挂起扩展。**不引 Retrofit** |
+| 测试支持 | 沿用 JUnit、`kotlinx-coroutines-test` 与 Robolectric；TLS 测试增加 MockWebServer，与现有 OkHttp 版本对齐 |
+| HTTP | **裸 OkHttp 5.3.2**；模型请求使用隔离的 `aiHttpClient`，网页抓取复用 `okHttpClient` 派生。**不引 Retrofit** |
 | JSON | **Gson**（`io.legado.app.utils.GSON`）。项目已在 `libs.versions.toml` 中注释掉 kotlinx.serialization，属明确弃用 |
 | 配置存储 | **SharedPreferences**（`PreferKey` + `getPrefString/putPrefString`），沿用 `AppConfig` 单例范式。**不引 DataStore** |
 | 新增包 | `io.legado.app.ai`（纯逻辑内核）+ `io.legado.app.ui.ai`（UI 层） |
@@ -43,7 +43,7 @@
 
 | 关注点 | 选型 | 理由（基于现有代码约定） |
 |--------|------|------------------------|
-| HTTP 客户端 | **裸 OkHttp**，从 `io.legado.app.help.http.okHttpClient`（`HttpHelper.kt`）`newBuilder()` 派生 | 全工程零 Retrofit；`okHttpClient` 已配好 SSL 宽松策略、UA 拦截器、`OkHttpExceptionInterceptor`、连接池。**禁止 `OkHttpClient()` 新建**（会丢拦截器与连接池） |
+| HTTP 客户端 | **裸 OkHttp**；模型使用 `aiHttpClient`，网页抓取从 `io.legado.app.help.http.okHttpClient` 派生 | 模型请求承载付费密钥与正文，专用客户端保留平台 TLS / 主机名验证，关闭自动重定向，并隔离书源 / Cronet 拦截器。网页抓取保留原配置与连接池。 |
 | 挂起封装 | `OkHttpUtils.kt` 的 `newCallStrResponse()` / `newCallResponse()`（内部 `suspendCancellableCoroutine`） | 项目既有约定，天然支持协程取消（满足 P1-3） |
 | JSON | **Gson**：`GSON`（宽松、`disableHtmlEscaping`、`setPrettyPrinting`）解析 LLM 输出与预览；`GSONStrict` 仅在需要严格模式时使用 | `libs.versions.toml` 第 188-189 行 kotlinx-serialization 已被注释；`BookSource.Converters`、`ImportBookSourceViewModel` 全用 Gson。混用会造成两套注解体系 |
 | HTML 解析 | **Jsoup 1.16.2**（已有依赖） | ⚠️ 注意 `libs.versions.toml` 第 48-51 行注释：**不要升级 jsoup**（issue #3811 破坏性变更）。本设计只用 `Jsoup.parse` / `select` / `outerHtml` / `text`，不触及变更面 |
@@ -519,12 +519,15 @@ classDiagram
     class okHttpClient {
         <<existing OkHttpClient singleton>>
     }
+    class aiHttpClient {
+        <<isolated platform TLS client>>
+    }
 
     BookSourceActivity ..> AiSourceHelperDialog : 菜单入口 Q7
     AiSourceHelperDialog ..> ImportBookSourceDialog : 一键导入 P0-4
     AiSourceHelperDialog ..> CodeDialog : 编辑/复制 JSON Q4
     BookSourceSchema ..> BookSource : 反射覆盖测试
-    OpenAiClient ..> okHttpClient : newBuilder 派生
+    OpenAiClient ..> aiHttpClient : 平台验证且无重定向
     OkHttpPageFetcher ..> okHttpClient : newBuilder NO_COOKIES
 ```
 
@@ -813,13 +816,11 @@ ai/engine/*  ai/client/*  ai/prompt/*  ai/html/*  ai/source/*  [纯 Kotlin，零
   - 唯一例外：`AiError` / `ValidationIssue` 持有的 `messageRes: Int` 只是普通 `Int`，不 import `R`（由 UI 侧 `getString(it.messageRes)` 解析）。
   - `OkHttpPageFetcher` 与 `OpenAiClient` 只依赖 `okhttp3.*`（纯 JVM 库），不依赖 `io.legado.app.help.http.okHttpClient`——**真实实例由 UI/ViewModel 侧注入**：
     ```kotlin
-    // AiSourceHelperViewModel 中
-    val callFactory = okHttpClient.newBuilder()
-        .callTimeout(options.timeoutSec.toLong(), TimeUnit.SECONDS)
-        .readTimeout(options.timeoutSec.toLong(), TimeUnit.SECONDS)
-        .build()
+    // AiSourceAssistantViewModel 中
+    val chatClient = OpenAiClient(aiHttpClient)
+    val pageFetcher = OkHttpPageFetcher(okHttpClient)
     ```
-- ❌ **禁止 `OkHttpClient()` 新建实例**（会丢 `OkHttpExceptionInterceptor`、UA 拦截器、连接池、SSL 策略）。一律 `okHttpClient.newBuilder()`。
+- 模型请求统一注入 `aiHttpClient`；该安全边界允许新建专用客户端，使用平台 TLS / 主机名验证并关闭自动重定向。保留 15 秒连接 / 写入及 60 秒读取 / 整请求上限，`OpenAiClient` 继续提供用户配置的协程超时。网页抓取继续使用 `okHttpClient.newBuilder()`。
 
 ### 7.2 配置的唯一获取方式
 

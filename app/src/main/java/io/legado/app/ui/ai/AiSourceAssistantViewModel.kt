@@ -21,6 +21,7 @@ import io.legado.app.ai.batch.BatchTask
 import io.legado.app.ai.client.AiChatClient
 import io.legado.app.ai.client.ChatMessage
 import io.legado.app.ai.client.OpenAiClient
+import io.legado.app.ai.client.aiHttpClient
 import io.legado.app.ai.engine.SourceDebugEngine
 import io.legado.app.ai.engine.SourceGenEngine
 import io.legado.app.ai.engine.DebugEvidenceBuilder
@@ -47,11 +48,11 @@ import java.util.UUID
  * 把内核层的 [SourceGenEngine] / [SourceDebugEngine] / [OpenAiClient] 接到 Android 生命周期上：
  * - 通过 [AiConfig.snapshot] 每次拿最新配置（引擎/客户端不得持有配置引用，见 §7）；
  * - 通过 `BaseViewModel.execute` 跑协程，结果以 LiveData 回传 UI；
- * - 网络客户端由 [okHttpClient] 派生注入（§7.2 禁止 new OkHttpClient）。
+ * - 模型请求使用隔离的 [aiHttpClient]；网页抓取沿用 [okHttpClient] 派生客户端。
  */
 class AiSourceAssistantViewModel(application: Application) : BaseViewModel(application) {
 
-    private val chatClient: AiChatClient = OpenAiClient(okHttpClient)
+    private val chatClient: AiChatClient = OpenAiClient(aiHttpClient)
     private val pageFetcher: PageFetcher = OkHttpPageFetcher(okHttpClient)
     private val genEngine = SourceGenEngine(chatClient, pageFetcher)
     private val debugEngine = SourceDebugEngine(chatClient)

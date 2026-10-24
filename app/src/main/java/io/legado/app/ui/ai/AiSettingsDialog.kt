@@ -49,8 +49,8 @@ import io.legado.app.ai.AiError
 import io.legado.app.ai.AiReaderOptions
 import io.legado.app.ai.client.ChatMessage
 import io.legado.app.ai.client.OpenAiClient
+import io.legado.app.ai.client.aiHttpClient
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.help.http.okHttpClient
 import io.legado.app.ui.widget.compose.LegadoComposeView
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
@@ -71,7 +71,7 @@ private data class AiSettingsDraft(
 /** AI 配置界面只负责收集表单值；校验、持久化和连接测试仍走既有配置契约。 */
 class AiSettingsDialog : BaseDialogFragment(R.layout.dialog_ai_settings) {
 
-    private val chatClient by lazy { OpenAiClient(okHttpClient) }
+    private val chatClient by lazy { OpenAiClient(aiHttpClient) }
     private val initialDraft by lazy {
         val options = AiConfig.snapshot()
         val reader = AiConfig.readerSnapshot()

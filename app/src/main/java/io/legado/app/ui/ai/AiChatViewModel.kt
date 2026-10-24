@@ -13,10 +13,10 @@ import io.legado.app.ai.ExplainOutcome
 import io.legado.app.ai.SelectionQaPair
 import io.legado.app.ai.SelectionQaSession
 import io.legado.app.ai.client.OpenAiClient
+import io.legado.app.ai.client.aiHttpClient
 import io.legado.app.ai.engine.ExplainEngine
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.PreferKey
-import io.legado.app.help.http.okHttpClient
 import io.legado.app.utils.defaultSharedPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +38,7 @@ data class AiChatItem(
 
 /** 所有正文与历史仅由当前面板的选区产生，离开后不持久化。 */
 class AiChatViewModel(application: Application) : BaseViewModel(application) {
-    private val engine = ExplainEngine(OpenAiClient(okHttpClient))
+    private val engine = ExplainEngine(OpenAiClient(aiHttpClient))
     private val session = SelectionQaSession()
     private val chatItems = mutableListOf<AiChatItem>()
     private var nextItemId = 1L

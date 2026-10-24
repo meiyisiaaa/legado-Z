@@ -30,6 +30,20 @@ class SearchScreenInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun editingSuggestionsHideContinueSearchForPreviousQuery() {
+        var state by mutableStateOf(SearchUiState(query = "未提交草稿", hasMore = true))
+        composeRule.setContent {
+            LegadoTheme {
+                SearchScreen(state, {}, {}, {}, {}, { _, _ -> }, {}, {}, {})
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("继续搜索").assertDoesNotExist()
+        composeRule.runOnIdle { state = state.copy(showInputHelp = false) }
+        composeRule.onNodeWithContentDescription("继续搜索").assertExists()
+    }
+
+    @Test
     fun historyEntryStartsSearch() {
         var selectedHistory: String? = null
         composeRule.setContent {

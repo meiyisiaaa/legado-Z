@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.ai.AiConfig
 import io.legado.app.ai.client.OpenAiClient
+import io.legado.app.ai.client.aiHttpClient
 import io.legado.app.ai.tts.BookTtsRole
 import io.legado.app.ai.tts.RoleTtsRolesConfig
 import io.legado.app.ai.tts.RoleTtsRoleRegistry
@@ -50,7 +51,6 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.tts.RoleTtsCacheManager
 import io.legado.app.help.tts.RoleTtsConfigStore
-import io.legado.app.help.http.okHttpClient
 import io.legado.app.model.CacheBook
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -461,7 +461,7 @@ class RoleTtsDialog : BaseDialogFragment(R.layout.dialog_role_tts) {
             return
         }
         val roles = rolesConfig.roles.toList()
-        val engine = StoryboardEngine(OpenAiClient(okHttpClient))
+        val engine = StoryboardEngine(OpenAiClient(aiHttpClient))
         val cache = RoleTtsCacheManager(book)
         progressChapter = ""
         progressDetail = ""

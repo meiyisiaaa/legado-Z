@@ -128,6 +128,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         if (savedInstanceState == null) {
             receiptIntent(intent)
         } else {
+            savedInstanceState.getString(KEY_SEARCH_SCOPE)?.let {
+                viewModel.searchScope.update(it, postValue = false, save = false)
+            }
             uiState = uiState.copy(
                 query = savedInstanceState.getString(KEY_QUERY).orEmpty(),
                 showInputHelp = savedInstanceState.getBoolean(KEY_SHOW_HELP, true),
@@ -135,6 +138,10 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 focusRequestId = if (savedInstanceState.getBoolean(KEY_QUERY_FOCUSED)) 1 else 0
             )
             refreshSuggestions(uiState.query.trim())
+            val submittedQuery = savedInstanceState.getString(KEY_SUBMITTED_QUERY).orEmpty()
+            if (viewModel.searchKey.isEmpty() && submittedQuery.isNotBlank()) {
+                viewModel.search(submittedQuery)
+            }
         }
     }
 
@@ -142,6 +149,8 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         outState.putString(KEY_QUERY, uiState.query)
         outState.putBoolean(KEY_SHOW_HELP, uiState.showInputHelp)
         outState.putBoolean(KEY_QUERY_FOCUSED, uiState.queryFocused)
+        outState.putString(KEY_SUBMITTED_QUERY, viewModel.searchKey)
+        outState.putString(KEY_SEARCH_SCOPE, viewModel.searchScope.toString())
         super.onSaveInstanceState(outState)
     }
 
@@ -226,8 +235,10 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     }
 
     private fun initData() {
+        var initialScope = true
         viewModel.searchScope.stateLiveData.observe(this) {
-            if (!uiState.showInputHelp) submitSearch()
+            if (initialScope) initialScope = false
+            else if (!uiState.showInputHelp) submitSearch()
         }
         viewModel.isSearchLiveData.observe(this) { searching ->
             uiState = uiState.copy(
@@ -461,6 +472,8 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         private const val KEY_QUERY = "searchQuery"
         private const val KEY_SHOW_HELP = "searchShowHelp"
         private const val KEY_QUERY_FOCUSED = "searchQueryFocused"
+        private const val KEY_SUBMITTED_QUERY = "searchSubmittedQuery"
+        private const val KEY_SEARCH_SCOPE = "searchScope"
 
         fun start(context: Context, key: String?, searchScope: String? = null) {
             context.startActivity<SearchActivity> {

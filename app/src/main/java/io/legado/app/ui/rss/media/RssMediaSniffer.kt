@@ -11,9 +11,11 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssSource
 import io.legado.app.model.rss.media.RssMediaCandidate
+import io.legado.app.model.rss.media.RssMediaCache
 import io.legado.app.model.rss.media.RssMediaResolver
 import io.legado.app.help.http.CookieManager
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.lib.cronet.CronetInterceptor
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -164,14 +166,14 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
                 .forEach { (key, value) -> builder.header(key, value) }
             sourceHeadersForRequest(request.requestHeaders, url, targetUrl).forEach { (key, value) -> builder.header(key, value) }
             android.webkit.CookieManager.getInstance().getCookie(targetUrl)?.let { builder.header("Cookie", it) }
-            val call = okHttpClient.newCall(builder.build())
+            val mediaRequest = builder.build()
+            val call = mediaClient(mediaRequest).newCall(mediaRequest)
             synchronized(calls) {
                 if (!running || token != navigation) return@runCatching null
                 calls += call
             }
             val response = try { call.execute() } catch (e: Exception) { calls -= call; throw e }
             CookieManager.saveResponse(response)
-            response.headers("Set-Cookie").forEach { android.webkit.CookieManager.getInstance().setCookie(url, it) }
             val mime = response.body.contentType()?.toString()?.substringBefore(';').orEmpty()
             val kind = when {
                 mime.startsWith("video/", true) || mime.contains("mpegurl", true) || mime.contains("dash+xml", true) -> "video"
@@ -208,6 +210,29 @@ internal class RssMediaSniffer(context: Context, private val scope: CoroutineSco
     }
 
     companion object {
+        internal fun mediaClient(initial: Request) = okHttpClient.newBuilder()
+            // Cronet handles redirects itself and bypasses OkHttp's per-hop credential checks.
+            .apply { interceptors().removeAll { it is CronetInterceptor } }
+            .addNetworkInterceptor { chain ->
+                val request = chain.request()
+                val builder = request.newBuilder()
+                if (!RssMediaCache.sameCredentialOrigin(initial.url.toString(), request.url.toString())) {
+                    val permitted = sourceHeadersForRequest(initial.headers.toMap(), initial.url.toString(), request.url.toString())
+                    initial.headers.names().filter { name ->
+                        name !in permitted && name.lowercase(Locale.ROOT) !in
+                            setOf("host", "content-length", "range", "accept-encoding")
+                    }.forEach { builder.removeHeader(it) }
+                    builder.removeHeader("Cookie").removeHeader("Authorization").removeHeader("Proxy-Authorization")
+                    android.webkit.CookieManager.getInstance().getCookie(request.url.toString())
+                        ?.takeIf(String::isNotBlank)?.let { builder.header("Cookie", it) }
+                }
+                chain.proceed(builder.build()).also { response ->
+                    response.headers("Set-Cookie").forEach {
+                        android.webkit.CookieManager.getInstance().setCookie(response.request.url.toString(), it)
+                    }
+                }
+            }.build()
+
         internal fun mediaRequestHeaders(headers: Map<String, String>): Map<String, String> = headers.filterKeys {
             it.lowercase(Locale.ROOT) !in setOf("cookie", "cookie2", "host", "content-length",
                 "accept-encoding", "connection", "keep-alive", "proxy-connection", "proxy-authorization",

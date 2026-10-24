@@ -230,7 +230,7 @@ internal fun SearchScreen(
         }
 
         AnimatedVisibility(
-            visible = state.query.isNotBlank() &&
+            visible = !state.showInputHelp && state.query.isNotBlank() &&
                 (state.isSearching || (state.hasMore && !state.manuallyStopped)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
