@@ -1,8 +1,33 @@
 # 阅读[API](/app/src/main/java/io/legado/app/api/controller)
 
+## MCP 书源维护
+
+在「设置 → 其他设置 → MCP 书源调试会话」中手动开启。默认端口为 `1236`，
+Streamable HTTP 地址为 `http://手机局域网IP:1236/mcp`。客户端须发送
+`Authorization: Bearer <访问令牌>`；可在同一面板复制或重新生成令牌。
+服务默认关闭，不随 App 或系统启动。通知和设置面板均可停止；移除 App 任务或系统时限到达也会停止。
+
+| 工具 | 参数 | 行为 |
+| --- | --- | --- |
+| `list_sources` | `query?`, `page?`, `limit?` | 分页摘要，单页最多 100 条 |
+| `get_source` | `url`, `format?` (`json`/`js`) | 导出 JSON 或原始单文件 JS |
+| `save_source` | `source`, `overwrite?` | 接收 JSON/JS；默认拒绝覆盖，显式覆盖时保留现有分组、启停、排序等用户设置 |
+| `delete_sources` | `urls` | 仅删除明确列出的书源，最多 100 个 |
+| `check_source` | `url` 或 `source` | 无网络、无写入的本地结构校验，返回 `validationOnly=true` |
+| `debug_source` | `url` 或 `draft`, `key` | 运行已保存书源或内存草稿；两者互斥，草稿不落库 |
+
+调试与 App 调试页、WebSocket、批量校验共用运行所有权，其他会话占用时返回 `BUSY`。
+调试返回有界、脱敏的阶段诊断，不提供书架正文或阅读记录。书源导出本身保留可还原的代码，
+因此请仅向可信客户端提供令牌。浏览器 `Origin` 与请求 `Host` 必须匹配当前监听地址及端口。
+令牌只保存在设备加密存储中，不进入 App 备份或系统备份。
+
 ## 对于[Web](/app/src/main/java/io/legado/app/web/)的配置
 
 您需要先在设置中启用"Web 服务"。
+
+默认 HTTP 端口为 `1122`，WebSocket 端口为 HTTP 端口加 `1`（默认 `1123`）；端口可在 App 中配置。下文原有 `1234` / `1235` 地址是自定义端口示例，使用时应替换为当前服务端口。Web 客户端 HTTP 响应采用 `{ isSuccess, errorMsg, data }` 结构。
+
+`POST /parseBookSource` 接受 `{"text":"JSON 或单文件 JS 内容"}`，仅在受限作用域中解析并返回书源预览，不保存书源。Web 编辑器的 `.js` 导入使用此入口；检查后仍需手动保存。JSON 导出包含用户设置和 `mainJs`，原始 JS 导出仅包含脚本。
 
 ## 使用
 
@@ -11,6 +36,16 @@
 以下说明假设您的操作在本机进行，且开放端口为1234。  
 如果您要从远程计算机访问[阅读]()，请将`127.0.0.1`替换成手机IP。
 
+#### 阅读设置
+
+Web 客户端启动时读取服务端保存的阅读配置；用户在阅读设置中更改后会同步保存。
+
+```
+GET  /getReadConfig
+POST /saveReadConfig
+Body = webReadConfig JSON
+```
+
 #### 插入单个书源
 
 请求BODY内容为`JSON`字符串，  
@@ -18,6 +53,7 @@
 
 ```
 URL = http://127.0.0.1:1234/saveBookSource
+URL = http://127.0.0.1:1234/saveRssSource
 Method = POST
 ```
 
@@ -66,7 +102,7 @@ key为书源搜索关键词，tag为源链接
 ```
 URL = ws://127.0.0.1:1235/bookSourceDebug
 URL = ws://127.0.0.1:1235/rssSourceDebug
-Message = { key: [String], tag: [String] }
+Message = {"key":"关键词","tag":"源链接"}
 ```
 
 #### 获取替换规则
@@ -112,7 +148,7 @@ Body = { rule: [ReplaceRule], text: [String] }
 
 ```
 URL = ws://127.0.0.1:1235/searchBook
-Message = { key: [String] }
+Message = {"key":"书名或作者"}
 ```
 
 #### 插入书籍

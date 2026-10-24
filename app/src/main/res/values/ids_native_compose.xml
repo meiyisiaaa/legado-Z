@@ -1,0 +1,6 @@
+<resources>
+    <item name="legado_ai_compose_root" type="id" />
+    <item name="legado_rss_compose_root" type="id" />
+    <item name="legado_rss_source_compose_root" type="id" />
+    <item name="legado_book_source_compose_root" type="id" />
+</resources>

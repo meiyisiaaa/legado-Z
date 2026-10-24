@@ -1,18 +1,30 @@
 package io.legado.app.ui.book.audio
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Build
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.PopupWindow
-import android.widget.SeekBar
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import io.legado.app.R
-import io.legado.app.databinding.PopupSeekBarBinding
 import io.legado.app.model.AudioPlay
 import io.legado.app.service.AudioPlayService
-import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.dialog.ComposePopupView
 import kotlin.math.roundToInt
 
 class SliderPopup(private val context: Context, private val name: Int) :
@@ -22,70 +34,102 @@ class SliderPopup(private val context: Context, private val name: Int) :
         const val SPEED = 2
     }
 
-    private val binding = PopupSeekBarBinding.inflate(LayoutInflater.from(context))
+    private val isTimer = name == TIMER
+    private val minimum = if (isTimer) 0 else 50
+    private val maximum = if (isTimer) 180 else 300
+    private val steps = if (isTimer) 179 else 24
+    private var progress by mutableIntStateOf(readServiceProgress())
+    private val composeView = ComposePopupView(context).apply {
+        setContent {
+            LegadoTheme {
+                SliderPopupContent(
+                    isTimer = isTimer,
+                    progress = progress,
+                    minimum = minimum,
+                    maximum = maximum,
+                    steps = steps,
+                    onProgressChange = ::updateProgress
+                )
+            }
+        }
+    }
+
     init {
-        contentView = binding.root
+        contentView = composeView
         isTouchable = true
         isOutsideTouchable = false
         isFocusable = true
-        setProcess()
-        binding.seekBar.setOnSeekBarChangeListener(object : SeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (name == TIMER) {
-                    setProcessTimerText(progress)
-                    if (fromUser) {
-                        AudioPlay.setTimer(progress)
-                    }
-                    return
-                }
-                val speed = (progress / 10f).roundToInt() / 10f
-                setProcessSpeedText(speed)
-                if (fromUser) {
-                    // 设置播放速度 (转换为0.5-3.0范围)
-                    AudioPlay.setSpeed(speed)
-                }
-            }
-        })
     }
 
     override fun showAsDropDown(anchor: View?, xoff: Int, yoff: Int, gravity: Int) {
+        syncProgressFromService()
         super.showAsDropDown(anchor, xoff, yoff, gravity)
-        if (name == TIMER) {
-            binding.seekBar.progress = AudioPlayService.timeMinute
-        } else {
-            binding.seekBar.progress = (AudioPlayService.playSpeed * 100).toInt()
-        }
     }
 
     override fun showAtLocation(parent: View?, gravity: Int, x: Int, y: Int) {
+        syncProgressFromService()
         super.showAtLocation(parent, gravity, x, y)
-        if (name == TIMER) {
-            binding.seekBar.progress = AudioPlayService.timeMinute
+    }
+
+    private fun readServiceProgress(): Int = if (isTimer) {
+        AudioPlayService.timeMinute.coerceIn(minimum, maximum)
+    } else {
+        (AudioPlayService.playSpeed * 100).toInt().coerceIn(minimum, maximum)
+    }
+
+    private fun syncProgressFromService() {
+        progress = readServiceProgress()
+    }
+
+    private fun updateProgress(value: Float) {
+        progress = if (isTimer) {
+            value.roundToInt().coerceIn(minimum, maximum)
         } else {
-            binding.seekBar.progress = (AudioPlayService.playSpeed * 100).toInt()
+            ((value / 10f).roundToInt() * 10).coerceIn(minimum, maximum)
+        }
+        if (isTimer) {
+            AudioPlay.setTimer(progress)
+        } else {
+            AudioPlay.setSpeed(progress / 100f)
         }
     }
+}
 
-    private fun setProcessTimerText(process: Int) {
-        binding.tvSeekValue.text = context.getString(R.string.timer_m, process)
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun setProcessSpeedText(speed: Float) {
-        binding.tvSeekValue.text = "%.1fX".format(speed)
-    }
-
-    private fun setProcess() {
-        if (name == TIMER) {
-            binding.seekBar.max = 180
-            setProcessTimerText(0)
-            return
+@Composable
+private fun SliderPopupContent(
+    isTimer: Boolean,
+    progress: Int,
+    minimum: Int,
+    maximum: Int,
+    steps: Int,
+    onProgressChange: (Float) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 6.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = if (isTimer) {
+                    stringResource(R.string.timer_m, progress)
+                } else {
+                    "%.1fX".format(progress / 100f)
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge
+            )
+            Slider(
+                value = progress.toFloat(),
+                onValueChange = onProgressChange,
+                valueRange = minimum.toFloat()..maximum.toFloat(),
+                steps = steps,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            binding.seekBar.min = 50
-        }
-        binding.seekBar.max = 300
-        binding.seekBar.progress = (AudioPlayService.playSpeed * 100).toInt()
-        setProcessSpeedText(AudioPlayService.playSpeed)
     }
 }

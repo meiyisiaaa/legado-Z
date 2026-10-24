@@ -2,42 +2,51 @@ package io.legado.app.ui.book.explore
 
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import android.view.ViewGroup
 import androidx.activity.viewModels
-import androidx.core.os.bundleOf
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ActivityExploreShowBinding
-import io.legado.app.databinding.ViewLoadMoreBinding
 import io.legado.app.ui.book.info.BookInfoActivity
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.number.NumberPickerDialog
-import io.legado.app.ui.widget.recycler.LoadMoreView
-import io.legado.app.ui.widget.recycler.VerticalDivider
-import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /**
  * 发现列表
  */
-class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreShowViewModel>(),
-    ExploreShowAdapter.CallBack {
+class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreShowViewModel>() {
     override val binding by viewBinding(ActivityExploreShowBinding::inflate)
     override val viewModel by viewModels<ExploreShowViewModel>()
 
-    private val adapter by lazy { ExploreShowAdapter(this, this) }
-    private val loadMoreView by lazy { LoadMoreView(this) }
-    private val loadMoreViewTop by lazy { LoadMoreView(this) }
+    private val listState = LazyListState()
+    private var books by mutableStateOf<List<SearchBook>>(emptyList())
+    private var listRevision by mutableIntStateOf(0)
+    private var currentPage by mutableIntStateOf(1)
+    private var bottomLoading by mutableStateOf(true)
+    private var topLoading by mutableStateOf(false)
+    private var bottomHasMore by mutableStateOf(true)
+    private var topHasMore by mutableStateOf(false)
+    private var bottomError by mutableStateOf<String?>(null)
+    private var topError by mutableStateOf<String?>(null)
+    private var failedTopPage: Int? = null
     private var oldPage = -1
-    private var isClearAll = false
     private val menuPage by lazy {
-        binding.titleBar.menu.add(getString(R.string.menu_page, 1)).apply {
+        binding.titleBar.menu.add(getString(R.string.menu_page, currentPage)).apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             setOnMenuItemClickListener {
-                val page = viewModel.pageLiveData.value ?: 1
+                val page = viewModel.pageLiveData.value ?: currentPage
                 NumberPickerDialog(this@ExploreShowActivity)
                     .setTitle(getString(R.string.change_page))
                     .setMaxValue(999)
@@ -45,24 +54,19 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
                     .setValue(page)
                     .show {
                         if (page != it) {
-                            if (oldPage == -1 && it != 1) { //初次添加头
-                                adapter.addHeaderView {
-                                    ViewLoadMoreBinding.bind(loadMoreViewTop)
-                                }
-                            } else if (it != 1) { //把头显示出来
-                                val layoutParams = loadMoreViewTop.layoutParams
-                                if (layoutParams?.height == 0) {
-                                    layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                                    loadMoreViewTop.layoutParams = layoutParams
-                                }
-                            }
                             oldPage = it
+                            topHasMore = it > 1
+                            topLoading = false
+                            topError = null
+                            failedTopPage = null
+                            bottomHasMore = true
+                            bottomLoading = false
+                            bottomError = null
+                            books = emptyList()
+                            listRevision++
                             viewModel.skipPage(it)
-                            isClearAll = true
-                            adapter.clearItems() //清空，然后会自动触发scrollToBottom
-                            if (!loadMoreView.hasMore) { //强制触发
-                                scrollToBottom(true)
-                            }
+                            lifecycleScope.launch { listState.scrollToItem(0) }
+                            scrollToBottom(true)
                         }
                     }
                 true
@@ -72,101 +76,114 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.title = intent.getStringExtra("exploreName")
-        initRecyclerView()
+        initComposeContent()
         viewModel.booksData.observe(this) { upData(it) }
         viewModel.addBooksData.observe(this) { upDataTop(it) }
-        viewModel.initData(intent)
         viewModel.errorLiveData.observe(this) {
-            loadMoreView.error(it)
+            bottomLoading = false
+            bottomHasMore = false
+            bottomError = it
         }
         viewModel.errorTopLiveData.observe(this) {
-            loadMoreViewTop.error(it)
+            topLoading = false
+            topHasMore = false
+            topError = it
+            failedTopPage = oldPage
         }
         viewModel.upAdapterLiveData.observe(this) {
-            adapter.notifyItemRangeChanged(0, adapter.itemCount, bundleOf(it to null))
+            listRevision++
         }
         viewModel.pageLiveData.observe(this) {
+            currentPage = it
             menuPage.title = getString(R.string.menu_page, it)
         }
+        viewModel.initData(intent)
     }
 
-    private fun initRecyclerView() {
-        binding.recyclerView.addItemDecoration(VerticalDivider(this))
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.applyNavigationBarPadding()
-        adapter.addFooterView {
-            ViewLoadMoreBinding.bind(loadMoreView)
-        }
-        loadMoreView.startLoad()
-        loadMoreView.setOnClickListener {
-            if (!loadMoreView.isLoading) {
-                scrollToBottom(true)
+    private fun initComposeContent() {
+        val composeView = LegadoComposeView(this).apply { id = View.generateViewId() }
+        binding.composeContainer.addView(
+            composeView,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        composeView.setContent {
+            LegadoTheme {
+                ExploreShowContent(
+                    books = books,
+                    listState = listState,
+                    revision = listRevision,
+                    page = currentPage,
+                    previousPage = oldPage.coerceAtLeast(1),
+                    bottomLoading = bottomLoading,
+                    topLoading = topLoading,
+                    bottomHasMore = bottomHasMore,
+                    topHasMore = topHasMore,
+                    bottomError = bottomError,
+                    topError = topError,
+                    isBookInShelf = viewModel::isInBookShelf,
+                    onBookClick = ::showBookInfo,
+                    onLoadBottom = { scrollToBottom() },
+                    onLoadTop = { scrollToTop() },
+                    onRetryBottom = { scrollToBottom(true) },
+                    onRetryTop = { scrollToTop(true) }
+                )
             }
         }
-        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                if (!recyclerView.canScrollVertically(1)) {
-                    scrollToBottom()
-                } else if (!recyclerView.canScrollVertically(-1) && dy < 0) {
-                    scrollToTop()
-                }
-            }
-        })
     }
 
     private fun scrollToBottom(forceLoad: Boolean = false) {
-        if ((loadMoreView.hasMore && !loadMoreView.isLoading && !loadMoreViewTop.isLoading) || forceLoad) {
-            loadMoreView.hasMore()
+        if (!bottomLoading && (bottomHasMore || forceLoad) && !topLoading) {
+            bottomLoading = true
+            bottomHasMore = true
+            bottomError = null
             viewModel.explore()
         }
     }
 
     private fun scrollToTop(forceLoad: Boolean = false) {
-        if ((oldPage > 1 && !loadMoreView.isLoading && !loadMoreViewTop.isLoading) || forceLoad) {
-            loadMoreViewTop.hasMore()
-            oldPage--
-            viewModel.explore(oldPage)
+        if (!topLoading && ((oldPage > 1 && topHasMore) || forceLoad) && !bottomLoading) {
+            topLoading = true
+            topHasMore = true
+            topError = null
+            val retryPage = if (forceLoad) failedTopPage else null
+            if (retryPage == null) oldPage--
+            else failedTopPage = null
+            viewModel.explore(retryPage ?: oldPage)
         }
     }
 
     private fun upData(books: List<SearchBook>) {
-        loadMoreView.stopLoad()
-        if (books.isEmpty() && adapter.isEmpty()) {
-            loadMoreView.noMore(getString(R.string.empty))
-        } else if (adapter.getActualItemCount() == books.size) {
-            loadMoreView.noMore()
+        bottomLoading = false
+        bottomError = null
+        if (books.isEmpty() && this.books.isEmpty()) {
+            bottomHasMore = false
+            this.books = emptyList()
+            listRevision++
+        } else if (this.books.size == books.size) {
+            bottomHasMore = false
         } else {
-            adapter.setItems(books)
-            if (isClearAll) { //全清空后,加了头,位置下移一个
-                val layoutManager = binding.recyclerView.layoutManager as LinearLayoutManager
-                layoutManager.scrollToPositionWithOffset(1, 0)
-                isClearAll = false
-            }
+            this.books = books.toList()
+            listRevision++
         }
     }
 
     private fun upDataTop(books: List<SearchBook>) {
-        loadMoreViewTop.stopLoad()
-        adapter.addItems(0, books)
-        val layoutManager = binding.recyclerView.layoutManager as LinearLayoutManager
-        if (layoutManager.findFirstVisibleItemPosition() <= 1) { //顶部刷新,未滚动，矫正位置
-            layoutManager.scrollToPositionWithOffset(books.size, 0)
+        topLoading = false
+        topError = null
+        failedTopPage = null
+        if (books.isEmpty()) {
+            topHasMore = false
+            return
         }
-        if (oldPage <= 1) { //已到顶,隐藏头
-            val layoutParams = loadMoreViewTop.layoutParams
-            if (layoutParams != null) {
-                layoutParams.height = 0
-                loadMoreViewTop.layoutParams = layoutParams
-            }
-        }
+        val firstVisible = listState.firstVisibleItemIndex
+        val offset = listState.firstVisibleItemScrollOffset
+        this.books = books + this.books
+        listRevision++
+        topHasMore = oldPage > 1
+        lifecycleScope.launch { listState.scrollToItem(firstVisible + books.size, offset) }
     }
 
-    override fun isInBookshelf(book: SearchBook): Boolean {
-        return viewModel.isInBookShelf(book)
-    }
-
-    override fun showBookInfo(book: SearchBook) {
+    private fun showBookInfo(book: SearchBook) {
         startActivity<BookInfoActivity> {
             putExtra("name", book.name)
             putExtra("author", book.author)

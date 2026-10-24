@@ -32,6 +32,7 @@ class ImportTxtTocRuleViewModel(app: Application) : BaseViewModel(app) {
     val allSources = arrayListOf<TxtTocRule>()
     val checkSources = arrayListOf<TxtTocRule?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -69,6 +70,8 @@ class ImportTxtTocRuleViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importSourceAwait(text.trim())
         }.onError {

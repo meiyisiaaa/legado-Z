@@ -11,6 +11,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.mapParallelSafe
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -108,7 +109,9 @@ class SearchModel(private val scope: CoroutineScope, private val callBack: CallB
             }.onCompletion {
                 if (it == null) callBack.onSearchFinish(searchBooks.isEmpty(), hasMore)
             }.catch {
+                if (it is CancellationException) throw it
                 AppLog.put("书源搜索出错\n${it.localizedMessage}", it)
+                callBack.onSearchCancel(it)
             }.collect()
         }
     }

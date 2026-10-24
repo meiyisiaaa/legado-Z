@@ -13,9 +13,12 @@ import android.text.style.ImageSpan
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import io.legado.app.R
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.printOnDebug
 
 
@@ -25,6 +28,16 @@ class SearchView @JvmOverloads constructor(
 ) : SearchView(context, attrs) {
     private var mSearchHintIcon: Drawable? = null
     private var textView: TextView? = null
+
+    init {
+        // AppCompat fixes the input at 36dp independently of the outer SearchView.
+        findViewById<TextView>(androidx.appcompat.R.id.search_src_text).layoutParams.height = 48.dpToPx()
+        findViewById<View>(androidx.appcompat.R.id.search_close_btn).minimumWidth = 48.dpToPx()
+        val searchFrameMargins = findViewById<View>(androidx.appcompat.R.id.search_edit_frame)
+            .layoutParams as ViewGroup.MarginLayoutParams
+        searchFrameMargins.leftMargin = 6.dpToPx()
+        searchFrameMargins.rightMargin = 6.dpToPx()
+    }
 
     @SuppressLint("UseCompatLoadingForDrawables")
     override fun onLayout(
@@ -42,6 +55,7 @@ class SearchView @JvmOverloads constructor(
             }
             // 改变字体
             textView!!.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            textView!!.setHintTextColor(textView!!.textColors)
             textView!!.gravity = Gravity.CENTER_VERTICAL
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 textView!!.isLocalePreferredLineHeightForMinimumUsed = false
@@ -97,6 +111,7 @@ class SearchView @JvmOverloads constructor(
         ) {
             // image to draw
             val b = drawable
+            b.setTint(paint.color)
             // font metrics of text to be replaced
             val fm = paint.fontMetricsInt
             val transY = ((y + fm.descent + y + fm.ascent) / 2

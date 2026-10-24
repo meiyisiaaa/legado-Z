@@ -595,6 +595,10 @@
     <string name="enable_selection">Ativar selecionados</string>
     <string name="disable_selection">Desativar selecionados</string>
     <string name="export_selection">Exportar selecionados</string>
+    <string name="export_main_js_file">Exportar arquivo JS único</string>
+    <string name="export_main_js_select_one">Selecione exatamente uma fonte de livro para exportar o arquivo JS.</string>
+    <string name="export_main_js_source_missing">A fonte de livro selecionada não foi encontrada.</string>
+    <string name="export_main_js_empty">A fonte selecionada não tem um script mainJs para exportar.</string>
     <string name="export">Exportar</string>
     <string name="load_toc">Carregar os capítulos</string>
     <string name="load_info">Carregar os detalhes do livro</string>

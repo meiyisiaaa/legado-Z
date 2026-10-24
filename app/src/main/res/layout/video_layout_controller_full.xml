@@ -48,6 +48,7 @@
             android:layout_marginStart="12dp"
             android:text="00:00"
             android:textColor="#ffffff"
+            android:visibility="gone"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:ignore="HardcodedText" />
@@ -58,6 +59,7 @@
             android:layout_height="wrap_content"
             android:text="/"
             android:textColor="#ffffff"
+            android:visibility="gone"
             app:layout_constraintStart_toEndOf="@+id/current"
             app:layout_constraintTop_toTopOf="parent"
             tools:ignore="HardcodedText" />
@@ -68,6 +70,7 @@
             android:layout_height="wrap_content"
             android:text="00:00"
             android:textColor="#ffffff"
+            android:visibility="gone"
             app:layout_constraintStart_toEndOf="@+id/sprit"
             app:layout_constraintTop_toTopOf="parent"
             tools:ignore="HardcodedText" />
@@ -84,6 +87,7 @@
             android:paddingBottom="8dp"
             android:progressDrawable="@drawable/video_seek_progress"
             android:thumb="@drawable/video_seek_thumb"
+            android:visibility="gone"
             app:layout_constraintTop_toBottomOf="@+id/sprit" />
 
         <ImageView
@@ -95,58 +99,21 @@
             android:layout_gravity="center_vertical"
             android:layout_marginStart="12dp"
             android:src="@drawable/ic_play_24dp"
+            android:visibility="gone"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/progress" />
 
-        <ImageView
-            android:id="@+id/next"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_centerHorizontal="true"
-            android:layout_centerVertical="true"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="12dp"
-            android:src="@drawable/ic_skip_next"
-            app:layout_constraintStart_toEndOf="@+id/start"
-            app:layout_constraintTop_toBottomOf="@+id/progress" />
-
-        <TextView
-            android:id="@+id/toggle_danmaku"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="16dp"
-            android:gravity="center"
-            android:minEms="2"
-            android:text="关弹幕"
-            android:textColor="#ffffff"
-            android:visibility="invisible"
-            app:layout_constraintEnd_toStartOf="@+id/episode_list"
-            app:layout_constraintTop_toBottomOf="@+id/progress"
-            tools:visibility="visible" />
-
-        <TextView
-            android:id="@+id/episode_list"
-            android:layout_width="wrap_content"
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/compose_actions"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:gravity="center"
-            android:minEms="2"
-            android:text="选集"
-            android:textColor="#ffffff"
-            app:layout_constraintEnd_toStartOf="@+id/playback_speed"
-            app:layout_constraintTop_toBottomOf="@+id/progress" />
-
-        <TextView
-            android:id="@+id/playback_speed"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="32dp"
-            android:gravity="center"
-            android:minEms="2"
-            android:text="倍速"
-            android:textColor="#ffffff"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:importantForAccessibility="yes"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/progress" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <ProgressBar
@@ -236,19 +203,12 @@
         android:layout_marginBottom="30dp"
         android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/tip_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerInParent="true"
-        android:layout_marginTop="50dp"
-        android:alpha="0"
-        android:background="@drawable/selector_fillet_btn_bg"
-        android:elevation="4dp"
-        android:gravity="center"
-        android:padding="12dp"
-        android:textColor="@android:color/white"
-        android:visibility="invisible" />
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/compose_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
 
 </RelativeLayout>

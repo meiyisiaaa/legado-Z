@@ -4,40 +4,43 @@ import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.PreferKey
-import io.legado.app.databinding.DialogClickActionConfigBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.utils.getCompatColor
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.putPrefInt
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 
-/**
- * 点击区域设置
- */
+/** Click-area mapping editor for the reader's nine touch regions. */
 class ClickActionConfigDialog : BaseDialogFragment(R.layout.dialog_click_action_config) {
-    private val binding by viewBinding(DialogClickActionConfigBinding::bind)
+
+    private var revision by mutableIntStateOf(0)
+    private var activeArea by mutableStateOf<ClickArea?>(null)
+
     private val actions by lazy {
-        linkedMapOf(
-            Pair(-1, getString(R.string.non_action)),
-            Pair(0, getString(R.string.menu)),
-            Pair(1, getString(R.string.next_page)),
-            Pair(2, getString(R.string.prev_page)),
-            Pair(3, getString(R.string.next_chapter)),
-            Pair(4, getString(R.string.previous_chapter)),
-            Pair(5, getString(R.string.read_aloud_prev_paragraph)),
-            Pair(6, getString(R.string.read_aloud_next_paragraph)),
-            Pair(7, getString(R.string.bookmark_add)),
-            Pair(8, getString(R.string.edit_content)),
-            Pair(9, getString(R.string.replace_state_change)),
-            Pair(10, getString(R.string.chapter_list)),
-            Pair(11, getString(R.string.search_content)),
-            Pair(12, getString(R.string.sync_book_progress_t)),
-            Pair(13, getString(R.string.read_aloud_pause_resume))
+        listOf(
+            -1 to getString(R.string.non_action),
+            0 to getString(R.string.menu),
+            1 to getString(R.string.next_page),
+            2 to getString(R.string.prev_page),
+            3 to getString(R.string.next_chapter),
+            4 to getString(R.string.previous_chapter),
+            5 to getString(R.string.read_aloud_prev_paragraph),
+            6 to getString(R.string.read_aloud_next_paragraph),
+            7 to getString(R.string.bookmark_add),
+            8 to getString(R.string.edit_content),
+            9 to getString(R.string.replace_state_change),
+            10 to getString(R.string.chapter_list),
+            11 to getString(R.string.search_content),
+            12 to getString(R.string.sync_book_progress_t),
+            13 to getString(R.string.read_aloud_pause_resume)
         )
     }
 
@@ -51,94 +54,42 @@ class ClickActionConfigDialog : BaseDialogFragment(R.layout.dialog_click_action_
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        (activity as ReadBookActivity).bottomDialog--
+        (activity as? ReadBookActivity)?.bottomDialog =
+            ((activity as? ReadBookActivity)?.bottomDialog ?: 1) - 1
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        (activity as ReadBookActivity).bottomDialog++
-        view.setBackgroundColor(getCompatColor(R.color.translucent))
-        initData()
-        initViewEvent()
-    }
-
-    private fun initData() = binding.run {
-        tvTopLeft.text = actions[AppConfig.clickActionTL]
-        tvTopCenter.text = actions[AppConfig.clickActionTC]
-        tvTopRight.text = actions[AppConfig.clickActionTR]
-        tvMiddleLeft.text = actions[AppConfig.clickActionML]
-        tvMiddleCenter.text = actions[AppConfig.clickActionMC]
-        tvMiddleRight.text = actions[AppConfig.clickActionMR]
-        tvBottomLeft.text = actions[AppConfig.clickActionBL]
-        tvBottomCenter.text = actions[AppConfig.clickActionBC]
-        tvBottomRight.text = actions[AppConfig.clickActionBR]
-    }
-
-    private fun initViewEvent() {
-        binding.ivClose.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
-        binding.tvTopLeft.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionTL, action)
-                (it as? TextView)?.text = actions[action]
+        (activity as? ReadBookActivity)?.bottomDialog =
+            ((activity as? ReadBookActivity)?.bottomDialog ?: 0) + 1
+        view.findViewById<ComposeView>(R.id.legado_compose_host).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                @Suppress("UNUSED_VARIABLE")
+                val currentRevision = revision
+                LegadoTheme {
+                    ClickActionContent(
+                        actions = actions,
+                        selected = ClickArea.entries.associateWith { actionValue(it) },
+                        onSelect = { activeArea = it },
+                        onDismiss = { dismissAllowingStateLoss() }
+                    )
+                    activeArea?.let { area ->
+                        val selectedIndex = actions.indexOfFirst { it.first == actionValue(area) }.coerceAtLeast(0)
+                        ReaderConfigChoiceDialog(
+                            title = getString(R.string.select_action),
+                            options = actions.map { it.second },
+                            selectedIndex = selectedIndex,
+                            onDismiss = { activeArea = null },
+                            onSelect = { index ->
+                                val action = actions[index].first
+                                putPrefInt(preferenceKey(area), action)
+                                activeArea = null
+                                revision++
+                            }
+                        )
+                    }
+                }
             }
-        }
-        binding.tvTopCenter.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionTC, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvTopRight.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionTR, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvMiddleLeft.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionML, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvMiddleCenter.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionMC, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvMiddleRight.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionMR, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvBottomLeft.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionBL, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvBottomCenter.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionBC, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-        binding.tvBottomRight.setOnClickListener {
-            selectAction { action ->
-                putPrefInt(PreferKey.clickActionBR, action)
-                (it as? TextView)?.text = actions[action]
-            }
-        }
-    }
-
-    private fun selectAction(success: (action: Int) -> Unit) {
-        context?.selector(
-            getString(R.string.select_action),
-            actions.values.toList()
-        ) { _, index ->
-            success.invoke(actions.keys.toList()[index])
         }
     }
 
@@ -147,4 +98,27 @@ class ClickActionConfigDialog : BaseDialogFragment(R.layout.dialog_click_action_
         AppConfig.detectClickArea()
     }
 
+    private fun actionValue(area: ClickArea): Int = when (area) {
+        ClickArea.TOP_LEFT -> AppConfig.clickActionTL
+        ClickArea.TOP_CENTER -> AppConfig.clickActionTC
+        ClickArea.TOP_RIGHT -> AppConfig.clickActionTR
+        ClickArea.MIDDLE_LEFT -> AppConfig.clickActionML
+        ClickArea.MIDDLE_CENTER -> AppConfig.clickActionMC
+        ClickArea.MIDDLE_RIGHT -> AppConfig.clickActionMR
+        ClickArea.BOTTOM_LEFT -> AppConfig.clickActionBL
+        ClickArea.BOTTOM_CENTER -> AppConfig.clickActionBC
+        ClickArea.BOTTOM_RIGHT -> AppConfig.clickActionBR
+    }
+
+    private fun preferenceKey(area: ClickArea): String = when (area) {
+        ClickArea.TOP_LEFT -> PreferKey.clickActionTL
+        ClickArea.TOP_CENTER -> PreferKey.clickActionTC
+        ClickArea.TOP_RIGHT -> PreferKey.clickActionTR
+        ClickArea.MIDDLE_LEFT -> PreferKey.clickActionML
+        ClickArea.MIDDLE_CENTER -> PreferKey.clickActionMC
+        ClickArea.MIDDLE_RIGHT -> PreferKey.clickActionMR
+        ClickArea.BOTTOM_LEFT -> PreferKey.clickActionBL
+        ClickArea.BOTTOM_CENTER -> PreferKey.clickActionBC
+        ClickArea.BOTTOM_RIGHT -> PreferKey.clickActionBR
+    }
 }

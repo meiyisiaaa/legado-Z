@@ -1,0 +1,364 @@
+classDiagram
+    direction TB
+
+    %% ==================== 共享模型 (pure) ====================
+    class AiChatOptions {
+        +String endpoint
+        +String apiKey
+        +String model
+        +Float temperature
+        +Int maxTokens
+        +Int timeoutSec
+        +Int htmlMaxChars
+        +Boolean autoRepair
+        +chatCompletionsUrl() String
+        +maskedKey() String
+    }
+
+    class IssueLevel {
+        <<enumeration>>
+        ERROR
+        WARNING
+    }
+
+    class ValidationIssue {
+        +String field
+        +IssueLevel level
+        +Int messageRes
+        +String detail
+    }
+
+    class ValidationResult {
+        +List~ValidationIssue~ issues
+        +hasError() Boolean
+        +errors() List~ValidationIssue~
+        +warnings() List~ValidationIssue~
+    }
+
+    class RulePreviewEntry {
+        +String key
+        +String value
+    }
+    class RulePreviewGroup {
+        +Int titleRes
+        +List~RulePreviewEntry~ entries
+    }
+    class RulePreview {
+        +List~RulePreviewGroup~ groups
+    }
+
+    class AiSourceOutcome {
+        +String rawReply
+        +String sourceJson
+        +String advice
+        +RulePreview preview
+        +ValidationResult validation
+        +Usage usage
+        +Int promptTokenEstimate
+        +canImport() Boolean
+    }
+
+    class GenerateInput {
+        +String url
+        +String html
+        +String intent
+        +Int maxHtmlChars
+    }
+    class DebugInput {
+        +String sourceJson
+        +String sampleHtml
+        +String symptom
+        +Int maxHtmlChars
+    }
+
+    ValidationResult o-- ValidationIssue
+    ValidationIssue o-- IssueLevel
+    RulePreview o-- RulePreviewGroup
+    RulePreviewGroup o-- RulePreviewEntry
+    AiSourceOutcome o-- RulePreview
+    AiSourceOutcome o-- ValidationResult
+
+    %% ==================== 错误类型 (pure) ====================
+    class AiError {
+        <<sealed>>
+        +Int messageRes
+        +String detail
+    }
+    class NotConfigured
+    class InvalidConfig
+    class NetworkFailure
+    class Timeout
+    class Unauthorized
+    class RateLimited
+    class ServerError
+    class EmptyResponse
+    class JsonNotFound
+    class JsonMalformed
+    class SchemaInvalid
+    class FetchFailed
+    class StreamNotSupported
+
+    AiError <|-- NotConfigured
+    AiError <|-- InvalidConfig
+    AiError <|-- NetworkFailure
+    AiError <|-- Timeout
+    AiError <|-- Unauthorized
+    AiError <|-- RateLimited
+    AiError <|-- ServerError
+    AiError <|-- EmptyResponse
+    AiError <|-- JsonNotFound
+    AiError <|-- JsonMalformed
+    AiError <|-- SchemaInvalid
+    AiError <|-- FetchFailed
+    AiError <|-- StreamNotSupported
+
+    %% ==================== 配置层 ====================
+    class AiConfigValidator {
+        <<object pure>>
+        +validate(AiChatOptions) ValidationResult
+        +normalizeEndpoint(String) String
+    }
+    class AiConfig {
+        <<object android>>
+        +snapshot() AiChatOptions
+        +save(AiChatOptions) ValidationResult
+        +isConfigured() Boolean
+        +clear() Unit
+    }
+    AiConfig ..> AiConfigValidator : 保存前校验
+    AiConfig ..> AiChatOptions : 读写
+    AiConfigValidator ..> ValidationResult
+
+    %% ==================== 客户端层 (pure) ====================
+    class ChatMessage {
+        +String role
+        +String content
+    }
+    class ChatRequest {
+        +String model
+        +List~ChatMessage~ messages
+        +Float temperature
+        +Int maxTokens
+        +Boolean stream
+    }
+    class Usage {
+        +Int promptTokens
+        +Int completionTokens
+        +Int totalTokens
+    }
+    class Choice {
+        +Int index
+        +ChatMessage message
+        +String finishReason
+    }
+    class ChatResponse {
+        +String id
+        +String model
+        +List~Choice~ choices
+        +Usage usage
+        +firstContent() String
+    }
+    class ChatDelta {
+        +String content
+        +Boolean done
+    }
+
+    class AiChatClient {
+        <<interface>>
+        +chat(AiChatOptions, List~ChatMessage~) ChatResponse
+        +chatStream(AiChatOptions, List~ChatMessage~) Flow~ChatDelta~
+        +ping(AiChatOptions) Boolean
+    }
+    class OpenAiClient {
+        -CallFactory callFactory
+        +chat(AiChatOptions, List~ChatMessage~) ChatResponse
+        +chatStream(AiChatOptions, List~ChatMessage~) Flow~ChatDelta~
+        +ping(AiChatOptions) Boolean
+        -buildRequest(AiChatOptions, ChatRequest) Request
+        -mapHttpError(Int, String) AiError
+    }
+    AiChatClient <|.. OpenAiClient
+    ChatRequest o-- ChatMessage
+    ChatResponse o-- Choice
+    ChatResponse o-- Usage
+    Choice o-- ChatMessage
+    OpenAiClient ..> ChatRequest
+    OpenAiClient ..> ChatResponse
+    OpenAiClient ..> AiError : throws
+
+    %% ==================== Prompt / HTML (pure) ====================
+    class PromptTemplates {
+        <<object pure>>
+        +String SYSTEM_GENERATE
+        +String SYSTEM_DEBUG
+        +String SYSTEM_REPAIR
+        +String RULE_FIELD_CHEATSHEET
+    }
+    class PromptBuilder {
+        <<object pure>>
+        +buildGenerate(GenerateInput, String) List~ChatMessage~
+        +buildDebug(DebugInput, String) List~ChatMessage~
+        +buildRepair(String, ValidationResult) List~ChatMessage~
+    }
+    class HtmlSnippetExtractor {
+        <<object pure>>
+        +extract(String, String, Int) String
+        -stripNoise(Document) Document
+        -locateByIntent(Document, String) Element
+        -truncateSafely(Element, Int) String
+    }
+    class TokenEstimator {
+        <<object pure>>
+        +estimate(String) Int
+        +estimateMessages(List~ChatMessage~) Int
+    }
+    PromptBuilder ..> PromptTemplates
+    PromptBuilder ..> ChatMessage
+    PromptBuilder ..> GenerateInput
+    PromptBuilder ..> DebugInput
+
+    %% ==================== 书源解析/校验 (pure) ====================
+    class BookSourceSchema {
+        <<object pure>>
+        +Set~String~ TOP_LEVEL_FIELDS
+        +Set~String~ REQUIRED_FIELDS
+        +Map~String~ RULE_OBJECT_FIELDS
+        +Set~String~ PREVIEW_GROUPS
+    }
+    class AiJsonExtractor {
+        <<object pure>>
+        +extract(String) String
+        +splitAdviceAndJson(String) Pair
+        -stripCodeFence(String) String
+        -firstBalancedObject(String) String
+    }
+    class BookSourceValidator {
+        <<object pure>>
+        +validate(JsonObject) ValidationResult
+        +validateRaw(String) ValidationResult
+    }
+    class SourceRulePreview {
+        <<object pure>>
+        +build(JsonObject) RulePreview
+    }
+    BookSourceValidator ..> BookSourceSchema
+    BookSourceValidator ..> ValidationResult
+    SourceRulePreview ..> BookSourceSchema
+    SourceRulePreview ..> RulePreview
+
+    %% ==================== 编排引擎 (pure) ====================
+    class PageFetcher {
+        <<interface>>
+        +fetch(String) String
+    }
+    class OkHttpPageFetcher {
+        -CallFactory callFactory
+        +fetch(String) String
+    }
+    PageFetcher <|.. OkHttpPageFetcher
+
+    class SourceGenEngine {
+        -AiChatClient client
+        -PageFetcher fetcher
+        +generate(AiChatOptions, GenerateInput) AiSourceOutcome
+        -resolveHtml(GenerateInput) String
+        -parseAndValidate(String) AiSourceOutcome
+    }
+    class SourceDebugEngine {
+        -AiChatClient client
+        +diagnose(AiChatOptions, DebugInput) AiSourceOutcome
+        -precheckSource(String) ValidationResult
+    }
+    SourceGenEngine o-- AiChatClient
+    SourceGenEngine o-- PageFetcher
+    SourceGenEngine ..> HtmlSnippetExtractor
+    SourceGenEngine ..> PromptBuilder
+    SourceGenEngine ..> AiJsonExtractor
+    SourceGenEngine ..> BookSourceValidator
+    SourceGenEngine ..> SourceRulePreview
+    SourceGenEngine ..> AiSourceOutcome
+    SourceDebugEngine o-- AiChatClient
+    SourceDebugEngine ..> PromptBuilder
+    SourceDebugEngine ..> AiJsonExtractor
+    SourceDebugEngine ..> BookSourceValidator
+    SourceDebugEngine ..> AiSourceOutcome
+
+    %% ==================== UI 层 (android) ====================
+    class AiSourceHelperDialog {
+        <<BaseDialogFragment>>
+        -AiSourceHelperViewModel viewModel
+        -RulePreviewAdapter adapter
+        +onFragmentCreated(View, Bundle) Unit
+        -onGenerateClick() Unit
+        -onDiagnoseClick() Unit
+        -onImportClick() Unit
+        -onCodeSave(String, String) Unit
+    }
+    class AiSourceHelperViewModel {
+        <<BaseViewModel>>
+        +MutableLiveData~AiSourceOutcome~ outcomeLive
+        +MutableLiveData~AiError~ errorLive
+        +MutableLiveData~Boolean~ loadingLive
+        -Coroutine task
+        +generate(GenerateInput) Unit
+        +diagnose(DebugInput) Unit
+        +revalidate(String) Unit
+        +cancel() Unit
+    }
+    class AiConfigDialog {
+        <<BaseDialogFragment>>
+        -AiConfigViewModel viewModel
+        +onMenuItemClick(MenuItem) Boolean
+    }
+    class AiConfigViewModel {
+        <<BaseViewModel>>
+        +MutableLiveData~ValidationResult~ validationLive
+        +MutableLiveData~Boolean~ pingLive
+        +save(AiChatOptions) Unit
+        +testConnection(AiChatOptions) Unit
+    }
+    class RulePreviewAdapter {
+        <<RecyclerAdapter>>
+    }
+
+    AiSourceHelperDialog --> AiSourceHelperViewModel
+    AiSourceHelperDialog --> RulePreviewAdapter
+    AiSourceHelperDialog ..> AiConfigDialog : 打开配置
+    AiSourceHelperViewModel ..> AiConfig : 读配置
+    AiSourceHelperViewModel --> SourceGenEngine
+    AiSourceHelperViewModel --> SourceDebugEngine
+    AiConfigDialog --> AiConfigViewModel
+    AiConfigViewModel ..> AiConfig
+    AiConfigViewModel ..> AiChatClient : ping
+
+    %% ==================== 复用的现有类 ====================
+    class BookSource {
+        <<existing Room entity>>
+        +String bookSourceUrl
+        +String bookSourceName
+        +SearchRule ruleSearch
+        +TocRule ruleToc
+        +ContentRule ruleContent
+    }
+    class ImportBookSourceDialog {
+        <<existing BaseDialogFragment>>
+        +ImportBookSourceDialog(String)
+    }
+    class BookSourceActivity {
+        <<existing VMBaseActivity>>
+        +onCompatOptionsItemSelected(MenuItem) Boolean
+    }
+    class CodeDialog {
+        <<existing widget>>
+        +CodeDialog(String, Boolean, String)
+    }
+    class okHttpClient {
+        <<existing OkHttpClient singleton>>
+    }
+
+    BookSourceActivity ..> AiSourceHelperDialog : 菜单入口 Q7
+    AiSourceHelperDialog ..> ImportBookSourceDialog : 一键导入 P0-4
+    AiSourceHelperDialog ..> CodeDialog : 编辑/复制 JSON Q4
+    BookSourceSchema ..> BookSource : 反射覆盖测试
+    OpenAiClient ..> okHttpClient : newBuilder 派生
+    OkHttpPageFetcher ..> okHttpClient : newBuilder NO_COOKIES

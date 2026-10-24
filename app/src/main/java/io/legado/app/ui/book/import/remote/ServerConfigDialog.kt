@@ -1,42 +1,33 @@
 package io.legado.app.ui.book.import.remote
 
 import android.os.Bundle
-import android.text.InputType
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.viewModels
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.data.entities.Server
-import io.legado.app.data.entities.rule.RowUi
-import io.legado.app.databinding.DialogWebdavServerBinding
-import io.legado.app.databinding.ItemSourceEditBinding
-import io.legado.app.lib.theme.primaryColor
+import io.legado.app.databinding.DialogServerConfigComposeBinding
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.GSON
-import io.legado.app.utils.applyTint
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import org.json.JSONObject
 
-class ServerConfigDialog() : BaseDialogFragment(R.layout.dialog_webdav_server, true),
-    Toolbar.OnMenuItemClickListener {
-
+class ServerConfigDialog() : BaseDialogFragment(R.layout.dialog_server_config_compose, true) {
     constructor(id: Long) : this() {
         arguments = Bundle().apply {
-            putLong("id", id)
+            putLong(ARG_SERVER_ID, id)
         }
     }
 
-    private val binding by viewBinding(DialogWebdavServerBinding::bind)
+    private val binding by viewBinding(DialogServerConfigComposeBinding::bind)
     private val viewModel by viewModels<ServerConfigViewModel>()
-
-    private val webDavServerUi = listOf(
-        RowUi("url"),
-        RowUi("username"),
-        RowUi("password", RowUi.Type.password)
-    )
+    private val formState = mutableStateOf(ServerConfigUiState())
+    private var isSaving by mutableStateOf(false)
 
     override fun onStart() {
         super.onStart()
@@ -44,88 +35,64 @@ class ServerConfigDialog() : BaseDialogFragment(R.layout.dialog_webdav_server, t
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.inflateMenu(R.menu.server_config)
-        binding.toolBar.menu.applyTint(requireContext())
-        binding.toolBar.setOnMenuItemClickListener(this)
-        viewModel.init(arguments?.getLong("id")) {
-            upConfigView(viewModel.mServer)
-        }
-    }
-
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_save -> getServer().let {
-                viewModel.save(it) {
-                    dismissAllowingStateLoss()
+        binding.composeContent.apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    ServerConfigContent(
+                        state = formState.value,
+                        isSaving = isSaving,
+                        onNameChange = { formState.value = formState.value.copy(name = it) },
+                        onUrlChange = { formState.value = formState.value.copy(url = it) },
+                        onUsernameChange = { formState.value = formState.value.copy(username = it) },
+                        onPasswordChange = { formState.value = formState.value.copy(password = it) },
+                        onSave = ::saveServer,
+                        onDismiss = ::dismissAllowingStateLoss
+                    )
                 }
             }
         }
-        return true
-    }
-
-    private fun upConfigView(server: Server?) {
-        binding.etName.setText(server?.name)
-        binding.spType.setSelection(
-            when (server?.type) {
-                else -> 0
-            }
-        )
-        when (server?.type) {
-            else -> upWebDavServerUi(server?.getConfigJsonObject())
+        viewModel.init(arguments?.getLong(ARG_SERVER_ID)) {
+            formState.value = viewModel.mServer.toUiState()
         }
     }
 
-    private fun upWebDavServerUi(config: JSONObject?) {
-        webDavServerUi.forEachIndexed { index, rowUi ->
-            when (rowUi.type) {
-                RowUi.Type.text -> ItemSourceEditBinding.inflate(
-                    layoutInflater,
-                    binding.root,
-                    false
-                ).let {
-                    binding.flexbox.addView(it.root)
-                    it.root.id = index + 1000
-                    it.textInputLayout.hint = rowUi.name
-                    it.editText.setText(config?.getString(rowUi.name))
-                }
-                RowUi.Type.password -> ItemSourceEditBinding.inflate(
-                    layoutInflater,
-                    binding.root,
-                    false
-                ).let {
-                    binding.flexbox.addView(it.root)
-                    it.root.id = index + 1000
-                    it.textInputLayout.hint = rowUi.name
-                    it.editText.inputType =
-                        InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
-                    it.editText.setText(config?.getString(rowUi.name))
-                }
-            }
-        }
-    }
-
-    private fun getServer(): Server {
+    private fun saveServer() {
+        val state = formState.value
+        if (!state.isLoaded || isSaving) return
         val server = viewModel.mServer?.copy() ?: Server()
-        server.name = binding.etName.text.toString()
-        server.type = when (binding.spType.selectedItemPosition) {
-            else -> Server.TYPE.WEBDAV
-        }
-        server.config = when (server.type) {
-            else -> GSON.toJson(getWebDavConfig())
-        }
-        return server
+        server.name = state.name
+        server.type = Server.TYPE.WEBDAV
+        server.config = GSON.toJson(
+            hashMapOf(
+                "url" to state.url,
+                "username" to state.username,
+                "password" to state.password
+            )
+        )
+        isSaving = true
+        viewModel.save(
+            server = server,
+            onSuccess = {
+                isSaving = false
+                dismissAllowingStateLoss()
+            },
+            onError = { isSaving = false }
+        )
     }
 
-    private fun getWebDavConfig(): HashMap<String, String> {
-        val data = hashMapOf<String, String>()
-        webDavServerUi.forEachIndexed { index, rowUi ->
-            val rowView = binding.root.findViewById<View>(index + 1000)
-            ItemSourceEditBinding.bind(rowView).editText.text?.let {
-                data[rowUi.name] = it.toString()
-            }
-        }
-        return data
+    private fun Server?.toUiState(): ServerConfigUiState {
+        val config = this?.getConfigJsonObject()
+        return ServerConfigUiState(
+            name = this?.name.orEmpty(),
+            url = config?.optString("url").orEmpty(),
+            username = config?.optString("username").orEmpty(),
+            password = config?.optString("password").orEmpty(),
+            isLoaded = true
+        )
     }
 
+    companion object {
+        private const val ARG_SERVER_ID = "id"
+    }
 }

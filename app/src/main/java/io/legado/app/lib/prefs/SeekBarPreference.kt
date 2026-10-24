@@ -15,6 +15,12 @@ class SeekBarPreference(context: Context, attrs: AttributeSet) : Preference(cont
     private var mMinValue = 0
     private var mMaxValue = 1000
 
+    val minValue: Int
+        get() = mMinValue
+
+    val maxValue: Int
+        get() = mMaxValue
+
     private var mSeekBar: SeekBar? = null
     private var mValueText: TextView? = null
 
@@ -25,7 +31,7 @@ class SeekBarPreference(context: Context, attrs: AttributeSet) : Preference(cont
         set(value) {
             field = value.coerceIn(mMinValue, mMaxValue)
             persistInt(field)
-            mSeekBar?.progress = field
+            mSeekBar?.progress = field - mMinValue
             mValueText?.text = field.toString()
         }
 
@@ -39,12 +45,33 @@ class SeekBarPreference(context: Context, attrs: AttributeSet) : Preference(cont
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
-        mSeekBar = holder.findViewById(R.id.seek_bar) as? SeekBar
-        mValueText = holder.findViewById(R.id.tv_seek_value) as? TextView
-        seekPlus = holder.findViewById(R.id.iv_seek_plus) as? ImageView
-        seekReduce = holder.findViewById(R.id.iv_seek_reduce) as? ImageView
-        (holder.findViewById(R.id.preference_title) as? TextView)?.text = title
-        (holder.findViewById(R.id.preference_desc) as? TextView)?.text = summary
+        bindLegacyView(holder.itemView)
+    }
+
+    /** Updates the persisted value and notifies Compose-backed preference rows. */
+    fun updateValue(value: Int) {
+        val next = value.coerceIn(mMinValue, mMaxValue)
+        if (this.value != next) {
+            this.value = next
+            notifyChanged()
+        }
+    }
+
+    /** Preserves the legacy SeekBar listener timing after the thumb is released. */
+    fun finishValueChange() {
+        val currentValue = value
+        if (callChangeListener(currentValue)) {
+            updateValue(currentValue)
+        }
+    }
+
+    private fun bindLegacyView(view: android.view.View) {
+        mSeekBar = view.findViewById(R.id.seek_bar)
+        mValueText = view.findViewById(R.id.tv_seek_value)
+        seekPlus = view.findViewById(R.id.iv_seek_plus)
+        seekReduce = view.findViewById(R.id.iv_seek_reduce)
+        (view.findViewById<TextView>(R.id.preference_title))?.text = title
+        (view.findViewById<TextView>(R.id.preference_desc))?.text = summary
         mSeekBar?.apply {
             max = mMaxValue - mMinValue
             progress = value - mMinValue

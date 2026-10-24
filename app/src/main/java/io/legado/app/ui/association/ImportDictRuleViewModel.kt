@@ -32,6 +32,7 @@ class ImportDictRuleViewModel(app: Application) : BaseViewModel(app) {
     val allSources = arrayListOf<DictRule>()
     val checkSources = arrayListOf<DictRule?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -69,6 +70,8 @@ class ImportDictRuleViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importSourceAwait(text.trim())
         }.onError {

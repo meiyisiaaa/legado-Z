@@ -1,22 +1,20 @@
 package io.legado.app.ui.about
 
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
-import androidx.annotation.StringRes
-import androidx.lifecycle.lifecycleScope
-import androidx.preference.Preference
-import androidx.preference.PreferenceFragmentCompat
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
 import io.legado.app.R
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.update.AppUpdate
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.createFileIfNotExist
@@ -28,97 +26,53 @@ import io.legado.app.utils.list
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.openOutputStream
 import io.legado.app.utils.openUrl
-import io.legado.app.utils.sendMail
-import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.showHelp
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.delay
 import splitties.init.appCtx
 import java.io.File
 
-class AboutFragment : PreferenceFragmentCompat() {
+private const val PROJECT_REPOSITORY_URL = "https://github.com/meiyisiaaa/legado-Z"
+private const val API_DOCUMENTATION_URL = "$PROJECT_REPOSITORY_URL/blob/main/api.md"
+private const val UPDATE_HISTORY_URL = "$PROJECT_REPOSITORY_URL/commits/main"
 
-    private val waitDialog by lazy {
-        WaitDialog(requireContext())
-    }
+class AboutFragment : Fragment() {
 
-    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        addPreferencesFromResource(R.xml.about)
-        findPreference<Preference>("update_log")?.summary =
-            "${getString(R.string.version)} ${appInfo.versionName}"
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        listView.overScrollMode = View.OVER_SCROLL_NEVER
-    }
-
-    override fun onPreferenceTreeClick(preference: Preference): Boolean {
-        when (preference.key) {
-            "contributors" -> openUrl(R.string.contributors_url)
-            "update_log" -> showMdFile(getString(R.string.update_log), "updateLog.md")
-            "check_update" -> checkUpdate()
-            "mail" -> requireContext().sendMail(getString(R.string.email))
-            "license" -> showMdFile(getString(R.string.license), "LICENSE.md")
-            "disclaimer" -> showMdFile(getString(R.string.disclaimer), "disclaimer.md")
-            "privacyPolicy" -> showMdFile(getString(R.string.privacy_policy), "privacyPolicy.md")
-            "gzGzh" -> requireContext().sendToClip(getString(R.string.legado_gzh))
-            "crashLog" -> showDialogFragment<CrashLogsDialog>()
-            "saveLog" -> saveLog()
-            "createHeapDump" -> createHeapDump()
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View = LegadoComposeView(requireContext()).apply {
+        setContent {
+            LegadoTheme {
+                AboutContent(
+                    state = AboutUiState(versionName = appInfo.versionName),
+                    onAction = ::handleAction
+                )
+            }
         }
-        return super.onPreferenceTreeClick(preference)
     }
 
-    @Suppress("SameParameterValue")
-    private fun openUrl(@StringRes addressID: Int) {
-        requireContext().openUrl(getString(addressID))
+    private fun handleAction(action: AboutAction) {
+        when (action) {
+            AboutAction.OpenRepository -> requireContext().openUrl(PROJECT_REPOSITORY_URL)
+            AboutAction.OpenHelp -> showHelp("appHelp")
+            AboutAction.OpenApiDocumentation -> requireContext().openUrl(API_DOCUMENTATION_URL)
+            AboutAction.OpenUpdateHistory -> requireContext().openUrl(UPDATE_HISTORY_URL)
+            AboutAction.ShowCrashLogs -> showDialogFragment<CrashLogsDialog>()
+            AboutAction.SaveLogs -> saveLog()
+            AboutAction.CreateHeapDump -> createHeapDump()
+            AboutAction.ShowPrivacyPolicy -> showMdFile(getString(R.string.privacy_policy), "privacyPolicy.md")
+            AboutAction.ShowLicense -> showMdFile(getString(R.string.license), "LICENSE.md")
+            AboutAction.ShowDisclaimer -> showMdFile(getString(R.string.disclaimer), "disclaimer.md")
+        }
     }
 
-    /**
-     * 显示md文件
-     */
+    /** Displays a bundled Markdown document in the existing reader dialog. */
     private fun showMdFile(title: String, fileName: String) {
         val mdText = String(requireContext().assets.open(fileName).readBytes())
         showDialogFragment(TextDialog(title, mdText, TextDialog.Mode.MD))
-    }
-
-    /**
-     * 检测更新
-     */
-    private fun checkUpdate() {
-        waitDialog.show()
-        AppUpdate.giteeUpdate.run {
-            check(lifecycleScope)
-                .onSuccess {
-                    showDialogFragment(
-                        UpdateDialog(it)
-                    )
-                }.onError {
-                    appCtx.toastOnUi("${getString(R.string.check_update)}\n${it.localizedMessage}")
-                }.onFinally {
-                    waitDialog.dismiss()
-                }
-        }
-    }
-
-
-    /**
-     * 加入qq群
-     */
-    private fun joinQQGroup(key: String): Boolean {
-        val intent = Intent()
-        intent.data =
-            Uri.parse("mqqopensdkapi://bizAgent/qm/qr?url=http%3A%2F%2Fqm.qq.com%2Fcgi-bin%2Fqm%2Fqr%3Ffrom%3Dapp%26p%3Dandroid%26k%3D$key")
-        // 此Flag可根据具体产品需要自定义，如设置，则在加群界面按返回，返回手Q主界面，不设置，按返回会返回到呼起产品界面
-        // intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        kotlin.runCatching {
-            startActivity(intent)
-            return true
-        }.onFailure {
-            toastOnUi("添加失败,请手动添加")
-        }
-        return false
     }
 
     private fun saveLog() {
@@ -210,5 +164,4 @@ class AboutFragment : PreferenceFragmentCompat() {
             AppLog.put("保存Logcat失败\n$e", e)
         }
     }
-
 }

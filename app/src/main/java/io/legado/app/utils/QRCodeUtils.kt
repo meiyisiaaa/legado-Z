@@ -26,6 +26,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.king.zxing.DecodeFormatManager
 import java.util.EnumMap
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 
 @Suppress("MemberVisibilityCanBePrivate", "unused")
@@ -194,7 +195,13 @@ object QRCodeUtils {
         hints: Map<DecodeHintType?, Any?> = DecodeFormatManager.ALL_HINTS
     ): Result? {
         if (bitmap.width > reqWidth || bitmap.height > reqHeight) {
-            val bm = bitmap.resizeAndRecycle(reqWidth, reqHeight)
+            val scale = minOf(
+                reqWidth.toDouble() / bitmap.width,
+                reqHeight.toDouble() / bitmap.height
+            )
+            val scaledWidth = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
+            val scaledHeight = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
+            val bm = bitmap.resizeAndRecycle(scaledWidth, scaledHeight)
             return parseCodeResult(getRGBLuminanceSource(bm), hints)
         }
         return parseCodeResult(getRGBLuminanceSource(bitmap), hints)

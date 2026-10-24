@@ -63,6 +63,8 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 
+private const val TAG = "App"
+
 class App : Application() {
 
     private lateinit var oldConfig: Configuration
@@ -168,7 +170,7 @@ class App : Application() {
                 .getMethod("insertProvider", Context::class.java)
                 .invoke(null, gms)
         } catch (e: java.lang.Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
     }
 

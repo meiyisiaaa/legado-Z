@@ -1,33 +1,38 @@
 package io.legado.app.ui.book.read.config
 
-import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.SeekBar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.EventBus
-import io.legado.app.databinding.DialogReadAloudBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.ReadBookActivity
-import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
-import io.legado.app.utils.*
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.utils.observeEvent
+import io.legado.app.utils.setLayout
+import io.legado.app.utils.toastOnUi
 
 class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
+
     private val callBack: CallBack? get() = activity as? CallBack
-    private val binding by viewBinding(DialogReadAloudBinding::bind)
+    private var playing by mutableStateOf(false)
+    private var timerValue by mutableIntStateOf(0)
+    private var speechRate by mutableIntStateOf(AppConfig.ttsSpeechRate)
+    private var followSystem by mutableStateOf(AppConfig.ttsFlowSys)
+    private var showTimerPresets by mutableStateOf(false)
 
     override fun onStart() {
         super.onStart()
@@ -35,182 +40,114 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setBackgroundDrawableResource(R.color.background)
             decorView.setPadding(0, 0, 0, 0)
-            val attr = attributes
-            attr.dimAmount = 0.0f
-            attr.gravity = Gravity.BOTTOM
-            attributes = attr
+            attributes = attributes.apply {
+                dimAmount = 0f
+                gravity = Gravity.BOTTOM
+            }
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        (activity as ReadBookActivity).bottomDialog--
+        (activity as? ReadBookActivity)?.bottomDialog =
+            ((activity as? ReadBookActivity)?.bottomDialog ?: 1) - 1
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        val bottomDialog = (activity as ReadBookActivity).bottomDialog++
+        val readerActivity = activity as? ReadBookActivity
+        val bottomDialog = readerActivity?.bottomDialog ?: 0
+        if (readerActivity != null) readerActivity.bottomDialog = bottomDialog + 1
         if (bottomDialog > 0) {
             dismiss()
             return
         }
-        val bg = requireContext().bottomBackground
-        val isLight = ColorUtils.isColorLight(bg)
-        val textColor = requireContext().getPrimaryTextColor(isLight)
-        binding.run {
-            rootView.setBackgroundColor(bg)
-            tvPre.setTextColor(textColor)
-            tvNext.setTextColor(textColor)
-            ivPlayPrev.setColorFilter(textColor)
-            ivPlayPause.setColorFilter(textColor)
-            ivPlayNext.setColorFilter(textColor)
-            ivStop.setColorFilter(textColor)
-            ivTimer.setColorFilter(textColor)
-            tvTimer.setTextColor(textColor)
-            ivTtsSpeechReduce.setColorFilter(textColor)
-            tvTtsSpeed.setTextColor(textColor)
-            tvTtsSpeedValue.setTextColor(textColor)
-            ivTtsSpeechAdd.setColorFilter(textColor)
-            ivCatalog.setColorFilter(textColor)
-            tvCatalog.setTextColor(textColor)
-            ivMainMenu.setColorFilter(textColor)
-            tvMainMenu.setTextColor(textColor)
-            ivToBackstage.setColorFilter(textColor)
-            tvToBackstage.setTextColor(textColor)
-            ivSetting.setColorFilter(textColor)
-            tvSetting.setTextColor(textColor)
-            cbTtsFollowSys.setTextColor(textColor)
-        }
-        initData()
-        initEvent()
-    }
-
-    private fun initData() = binding.run {
-        upPlayState()
-        upTimerText(BaseReadAloudService.timeMinute)
-        cbTtsFollowSys.isChecked = requireContext().getPrefBoolean("ttsFollowSys", true)
-        upTtsSpeechRateEnabled(!cbTtsFollowSys.isChecked)
-        upSeekTimer()
-    }
-
-    private fun initEvent() = binding.run {
-        llMainMenu.setOnClickListener {
-            callBack?.showMenuBar()
-            dismissAllowingStateLoss()
-        }
-        llSetting.setOnClickListener {
-            ReadAloudConfigDialog().show(childFragmentManager, "readAloudConfigDialog")
-        }
-        tvPre.setOnClickListener { ReadBook.moveToPrevChapter(upContent = true, toLast = false) }
-        tvNext.setOnClickListener { ReadBook.moveToNextChapter(true) }
-        ivStop.setOnClickListener {
-            ReadAloud.stop(requireContext())
-            dismissAllowingStateLoss()
-        }
-        ivPlayPause.setOnClickListener { callBack?.onClickReadAloud() }
-        ivPlayPrev.setOnClickListener { ReadAloud.prevParagraph(requireContext()) }
-        ivPlayNext.setOnClickListener { ReadAloud.nextParagraph(requireContext()) }
-        llCatalog.setOnClickListener { callBack?.openChapterList() }
-        llToBackstage.setOnClickListener { callBack?.finish() }
-        cbTtsFollowSys.setOnCheckedChangeListener { _, isChecked ->
-            AppConfig.ttsFlowSys = isChecked
-            upTtsSpeechRateEnabled(!isChecked)
-            upTtsSpeechRate()
-        }
-        ivTtsSpeechReduce.setOnClickListener {
-            seekTtsSpeechRate.progress = AppConfig.ttsSpeechRate - 1
-            AppConfig.ttsSpeechRate -= 1
-            upTtsSpeechRate()
-        }
-        ivTtsSpeechAdd.setOnClickListener {
-            seekTtsSpeechRate.progress = AppConfig.ttsSpeechRate + 1
-            AppConfig.ttsSpeechRate += 1
-            upTtsSpeechRate()
-        }
-        ivTimer.setOnClickListener {
-            AppConfig.ttsTimer = seekTimer.progress
-            toastOnUi("保存设定时间成功！")
-        }
-        tvTimer.setOnClickListener {
-            val times = intArrayOf(0, 5, 10, 15, 30, 60, 90, 180)
-            val timeKeys = times.map { "$it 分钟" }
-            context?.selector("设定时间", timeKeys) { _, index ->
-                ReadAloud.setTimer(requireContext(), times[index])
-            }
-        }
-        //设置保存的默认值
-        seekTtsSpeechRate.progress = AppConfig.ttsSpeechRate
-        seekTtsSpeechRate.setOnSeekBarChangeListener(object : SeekBarChangeListener {
-
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                super.onProgressChanged(seekBar, progress, fromUser)
-                upTtsSpeechRateText(progress)
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                AppConfig.ttsSpeechRate = seekBar.progress
-                upTtsSpeechRate()
-            }
-        })
-        seekTimer.setOnSeekBarChangeListener(object : SeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                upTimerText(progress)
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                ReadAloud.setTimer(requireContext(), seekTimer.progress)
-            }
-        })
-    }
-
-    private fun upTtsSpeechRateEnabled(enabled: Boolean) {
-        binding.run {
-            upTtsSpeechRateText(AppConfig.ttsSpeechRate)
-            tvTtsSpeedValue.visible(enabled)
-            seekTtsSpeechRate.isEnabled = enabled
-            ivTtsSpeechReduce.isEnabled = enabled
-            ivTtsSpeechAdd.isEnabled = enabled
-        }
-    }
-
-    private fun upPlayState() {
-        if (!BaseReadAloudService.pause) {
-            binding.ivPlayPause.setImageResource(R.drawable.ic_pause_24dp)
-            binding.ivPlayPause.contentDescription = getString(R.string.pause)
-        } else {
-            binding.ivPlayPause.setImageResource(R.drawable.ic_play_24dp)
-            binding.ivPlayPause.contentDescription = getString(R.string.audio_play)
-        }
-        val bg = requireContext().bottomBackground
-        val isLight = ColorUtils.isColorLight(bg)
-        val textColor = requireContext().getPrimaryTextColor(isLight)
-        binding.ivPlayPause.setColorFilter(textColor)
-    }
-
-    private fun upSeekTimer() {
-        binding.seekTimer.post {
-            if (BaseReadAloudService.timeMinute > 0) {
-                binding.seekTimer.progress = BaseReadAloudService.timeMinute
-            } else {
-                binding.seekTimer.progress = AppConfig.ttsTimer
+        playing = !BaseReadAloudService.pause
+        timerValue = (BaseReadAloudService.timeMinute.takeIf { it > 0 } ?: AppConfig.ttsTimer).coerceIn(0, 180)
+        speechRate = AppConfig.ttsSpeechRate.coerceIn(0, 45)
+        followSystem = AppConfig.ttsFlowSys
+        view.findViewById<ComposeView>(R.id.legado_compose_host).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    ReadAloudContent(
+                        playing = playing,
+                        timerValue = timerValue,
+                        speechRate = speechRate,
+                        followSystem = followSystem,
+                        onPreviousChapter = { ReadBook.moveToPrevChapter(upContent = true, toLast = false) },
+                        onNextChapter = { ReadBook.moveToNextChapter(true) },
+                        onPreviousParagraph = { ReadAloud.prevParagraph(requireContext()) },
+                        onNextParagraph = { ReadAloud.nextParagraph(requireContext()) },
+                        onPlayPause = {
+                            callBack?.onClickReadAloud()
+                            playing = !BaseReadAloudService.pause
+                        },
+                        onStop = {
+                            ReadAloud.stop(requireContext())
+                            dismissAllowingStateLoss()
+                        },
+                        onTimerChange = { timerValue = it.coerceIn(0, 180) },
+                        onTimerChangeFinished = { ReadAloud.setTimer(requireContext(), timerValue) },
+                        onTimerPresetClick = { showTimerPresets = true },
+                        onSaveTimer = {
+                            AppConfig.ttsTimer = timerValue
+                            requireContext().toastOnUi("保存设定时间成功！")
+                        },
+                        onFollowSystemChange = { enabled ->
+                            followSystem = enabled
+                            AppConfig.ttsFlowSys = enabled
+                            updateSpeechRate()
+                        },
+                        onSpeechRateChange = { speechRate = it.coerceIn(0, 45) },
+                        onSpeechRateChangeFinished = { commitSpeechRate() },
+                        onPreviousSpeed = {
+                            speechRate = (speechRate - 1).coerceAtLeast(0)
+                            commitSpeechRate()
+                        },
+                        onNextSpeed = {
+                            speechRate = (speechRate + 1).coerceAtMost(45)
+                            commitSpeechRate()
+                        },
+                        onCatalog = { callBack?.openChapterList() },
+                        onMainMenu = {
+                            callBack?.showMenuBar()
+                            dismissAllowingStateLoss()
+                        },
+                        onBackground = { callBack?.finish() },
+                        onSettings = {
+                            ReadAloudConfigDialog().show(childFragmentManager, "readAloudConfigDialog")
+                        },
+                        onRoleTts = {
+                            RoleTtsDialog().show(childFragmentManager, "roleTtsDialog")
+                        }
+                    )
+                    if (showTimerPresets) {
+                        val timerOptions = intArrayOf(0, 5, 10, 15, 30, 60, 90, 180)
+                        ReaderConfigChoiceDialog(
+                            title = getString(R.string.set_timer),
+                            options = timerOptions.map { getString(R.string.timer_m, it) },
+                            selectedIndex = timerOptions.indexOf(timerValue).takeIf { it >= 0 },
+                            onDismiss = { showTimerPresets = false },
+                            onSelect = { index ->
+                                val selectedMinutes = timerOptions[index]
+                                timerValue = selectedMinutes
+                                ReadAloud.setTimer(requireContext(), selectedMinutes)
+                                showTimerPresets = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
 
-    private fun upTimerText(timeMinute: Int) {
-        if (timeMinute < 0) {
-            binding.tvTimer.text = requireContext().getString(R.string.timer_m, 0)
-        } else {
-            binding.tvTimer.text = requireContext().getString(R.string.timer_m, timeMinute)
-        }
+    private fun commitSpeechRate() {
+        AppConfig.ttsSpeechRate = speechRate.coerceIn(0, 45)
+        updateSpeechRate()
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun upTtsSpeechRateText(value: Int) {
-        binding.tvTtsSpeedValue.text = ((value + 5) / 10f).toString()
-    }
-
-    private fun upTtsSpeechRate() {
+    private fun updateSpeechRate() {
         ReadAloud.upTtsSpeechRate(requireContext())
         if (!BaseReadAloudService.pause) {
             ReadAloud.pause(requireContext())
@@ -219,8 +156,8 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
     }
 
     override fun observeLiveBus() {
-        observeEvent<Int>(EventBus.ALOUD_STATE) { upPlayState() }
-        observeEvent<Int>(EventBus.READ_ALOUD_DS) { binding.seekTimer.progress = it }
+        observeEvent<Int>(EventBus.ALOUD_STATE) { playing = !BaseReadAloudService.pause }
+        observeEvent<Int>(EventBus.READ_ALOUD_DS) { timerValue = it.coerceIn(0, 180) }
     }
 
     interface CallBack {

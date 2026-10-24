@@ -51,6 +51,7 @@ import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -116,15 +117,16 @@ object Restore {
                 }
                 if (appDb.bookDao.has(book.bookUrl)) {
                     try {
-                        appDb.bookDao.update(book)
+                        // A full restore deliberately restores the backed-up private note too.
+                        appDb.bookDao.updateEntities(book)
                     } catch (_: SQLiteConstraintException) {
-                        appDb.bookDao.insert(book)
+                        appDb.bookDao.insertEntities(book)
                     }
                 } else {
                     newBooks.add(book)
                 }
             }
-            appDb.bookDao.insert(*newBooks.toTypedArray())
+            appDb.bookDao.insertEntities(*newBooks.toTypedArray())
         }
         fileToListT<Bookmark>(path, "bookmark.json")?.let {
             appDb.bookmarkDao.insert(*it.toTypedArray())
@@ -132,12 +134,13 @@ object Restore {
         fileToListT<BookGroup>(path, "bookGroup.json")?.let {
             appDb.bookGroupDao.insert(*it.toTypedArray())
         }
-        fileToListT<BookSource>(path, "bookSource.json")?.let {
-            appDb.bookSourceDao.insert(*it.toTypedArray())
-        } ?: run {
-            val bookSourceFile = File(path, "bookSource.json")
-            if (bookSourceFile.exists()) {
-                val json = bookSourceFile.readText()
+        val bookSourceFile = File(path, "bookSource.json")
+        if (bookSourceFile.exists()) {
+            val json = bookSourceFile.readText()
+            val normalizedSources = BookSourceBackupCodec.decode(json, currentCoroutineContext())
+            if (normalizedSources != null) {
+                appDb.bookSourceDao.insert(*normalizedSources.toTypedArray())
+            } else {
                 ImportOldData.importOldSource(json)
             }
         }

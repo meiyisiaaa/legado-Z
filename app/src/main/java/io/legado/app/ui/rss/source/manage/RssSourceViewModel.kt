@@ -55,14 +55,15 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
         execute { appDb.rssSourceDao.update(*rssSource) }
     }
 
-    fun upOrder() {
-        execute {
-            val sources = appDb.rssSourceDao.all
-            for ((index: Int, source: RssSource) in sources.withIndex()) {
-                source.customOrder = index + 1
-            }
-            appDb.rssSourceDao.update(*sources.toTypedArray())
-        }
+    fun move(
+        sourceUrl: String,
+        targetUrl: String,
+        after: Boolean,
+        onFinally: () -> Unit = {}
+    ) {
+        executeLazy {
+            appDb.rssSourceDao.moveRelativeTo(sourceUrl, targetUrl, after)
+        }.onFinally { onFinally() }.start()
     }
 
     fun enableSelection(sources: List<RssSource>) {

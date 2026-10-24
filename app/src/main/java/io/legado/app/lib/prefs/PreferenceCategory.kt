@@ -17,7 +17,15 @@ import io.legado.app.utils.ColorUtils
 class PreferenceCategory(context: Context, attrs: AttributeSet) :
     PreferenceCategory(context, attrs) {
 
+    // AndroidX 1.2 exposes divider flags only on its ViewHolder, so Compose reads the same XML values.
+    val allowDividerAbove: Boolean
+    val allowDividerBelow: Boolean
+
     init {
+        val style = context.obtainStyledAttributes(attrs, androidx.preference.R.styleable.Preference)
+        allowDividerAbove = style.getBoolean(androidx.preference.R.styleable.Preference_allowDividerAbove, isSelectable)
+        allowDividerBelow = style.getBoolean(androidx.preference.R.styleable.Preference_allowDividerBelow, isSelectable)
+        style.recycle()
         isPersistent = true
         layoutResource = R.layout.view_preference_category
     }

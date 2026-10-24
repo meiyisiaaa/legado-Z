@@ -37,6 +37,8 @@ import io.legado.app.utils.setNavigationBarColorAuto
 import io.legado.app.utils.setStatusBarColorAuto
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.windowSize
+import io.legado.app.utils.LogUtils
+private const val TAG = "BaseActivity"
 
 abstract class BaseActivity<VB : ViewBinding>(
     val fullScreen: Boolean = true,
@@ -48,6 +50,9 @@ abstract class BaseActivity<VB : ViewBinding>(
 ) : AppCompatActivity() {
 
     protected abstract val binding: VB
+
+    var hasImageBackground = false
+        private set
 
     val isInMultiWindow: Boolean
         @SuppressLint("ObsoleteSdkInt")
@@ -84,7 +89,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         setContentView(binding.root)
         upBackgroundImage()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            findViewById<TitleBar>(R.id.title_bar)
+            (findViewById<View>(R.id.title_bar) as? TitleBar)
                 ?.onMultiWindowModeChanged(isInMultiWindowMode, fullScreen)
         }
         onBackPressedDispatcher.addCallback(this) {
@@ -97,14 +102,14 @@ abstract class BaseActivity<VB : ViewBinding>(
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
-        findViewById<TitleBar>(R.id.title_bar)
+        (findViewById<View>(R.id.title_bar) as? TitleBar)
             ?.onMultiWindowModeChanged(isInMultiWindowMode, fullScreen)
         setupSystemBar()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        findViewById<TitleBar>(R.id.title_bar)
+        (findViewById<View>(R.id.title_bar) as? TitleBar)
             ?.onMultiWindowModeChanged(isInMultiWindow, fullScreen)
         setupSystemBar()
     }
@@ -159,10 +164,12 @@ abstract class BaseActivity<VB : ViewBinding>(
     }
 
     open fun upBackgroundImage() {
+        hasImageBackground = false
         if (imageBg) {
             try {
                 ThemeConfig.getBgImage(this, windowManager.windowSize)?.let { drawable ->
                    window.decorView.background = drawable
+                   hasImageBackground = true
                 }
             } catch (_: OutOfMemoryError) {
                 toastOnUi("背景图片太大,内存溢出")
@@ -203,7 +210,7 @@ abstract class BaseActivity<VB : ViewBinding>(
         return try {
             super.dispatchTouchEvent(ev)
         } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             false
         }
     }

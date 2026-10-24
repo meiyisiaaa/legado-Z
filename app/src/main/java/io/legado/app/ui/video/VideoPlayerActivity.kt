@@ -11,21 +11,26 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.textclassifier.TextClassifier
+import android.widget.FrameLayout
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.view.doOnAttach
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.LinearSmoothScroller
-import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
 import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack
@@ -52,7 +57,6 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.VideoPlay
 import io.legado.app.service.VideoPlayService
@@ -65,12 +69,13 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.rss.favorites.RssFavoritesDialog
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.video.config.SettingsDialog
+import io.legado.app.ui.widget.TitleBar
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.PhotoDialog
+import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.ui.widget.text.ScrollTextView
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.dpToPx
-import io.legado.app.utils.gone
-import io.legado.app.utils.invisible
 import io.legado.app.utils.longSnackbar
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.observeEventSticky
@@ -84,7 +89,6 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.toggleSystemBar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
@@ -97,13 +101,52 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     SettingsDialog.CallBack,RssFavoritesDialog.Callback {
     override val binding by viewBinding(ActivityVideoPlayerBinding::inflate)
     override val viewModel by viewModels<VideoPlayerViewModel>()
-    private val playerView: VideoPlayer by lazy { binding.playerView }
+    private val titleBar: TitleBar by lazy {
+        TitleBar(this).apply {
+            id = R.id.title_bar
+            title = VideoPlay.videoTitle
+        }
+    }
+    private val playerView: VideoPlayer by lazy {
+        VideoPlayer(this).apply { id = View.generateViewId() }
+    }
+    private val playerContainer: FrameLayout by lazy {
+        FrameLayout(this).apply {
+            addView(
+                playerView,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+    }
+    private val coverView: CoverImageView by lazy {
+            CoverImageView(this).apply {
+                id = View.generateViewId()
+            contentDescription = getString(R.string.img_cover)
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.image_cover_default)
+        }
+    }
+    private val introContainer by lazy { FrameLayout(this).apply { id = View.generateViewId() } }
+    private val introScrollView by lazy {
+        NestedScrollView(this).apply {
+            addView(
+                introContainer,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+    }
     private var starMenuItem: MenuItem? = null
     private var initIntroView = false
     private val introTextView by lazy {
         initIntroView = true
         val inflater = LayoutInflater.from(this)
-        val view = inflater.inflate(R.layout.view_book_intro, binding.tvIntroContainer, false) as ScrollTextView
+        val view = inflater.inflate(R.layout.view_book_intro, introContainer, false) as ScrollTextView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
             view.revealOnFocusHint = false
         }
@@ -136,6 +179,15 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     private var isNew = true
     private var isFullScreen = false
     private var orientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    private var playerAttached = false
+    private var playerHeightPx by mutableStateOf(0)
+    private var bookName by mutableStateOf<String?>(null)
+    private var bookAuthor by mutableStateOf<String?>(null)
+    private var videoVolumes by mutableStateOf<List<BookChapter>>(emptyList())
+    private var videoEpisodes by mutableStateOf<List<BookChapter>>(emptyList())
+    private var selectedVolume by mutableStateOf(-1)
+    private var selectedEpisode by mutableStateOf(-1)
+    private var showBookSections by mutableStateOf(true)
     private var menuCustomBtn: MenuItem? = null
     private val bookSourceEditResult =
         registerForActivityResult(StartActivityContract(BookSourceEditActivity::class.java)) {
@@ -159,14 +211,9 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                 VideoPlay.durVolumeIndex = it[3] as Int
                 VideoPlay.chapterInVolumeIndex = it[4] as Int
                 VideoPlay.upEpisodes()
+                playerView.refreshControllerActions()
                 VideoPlay.saveRead(durChapterPos)
-                if (VideoPlay.episodes.isNullOrEmpty()) {
-                    binding.chapters.visibility = View.GONE
-                } else {
-                    binding.chapters.visibility = View.VISIBLE
-                    val adapter = binding.chapters.adapter as? ChapterAdapter
-                    adapter?.updateData(VideoPlay.episodes)
-                }
+                syncEpisodeUi()
                 upView()
                 VideoPlay.startPlay(playerView)
             }
@@ -183,7 +230,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                 VideoPlay.singleUrl = true
             }
             intent.getStringExtra("videoTitle")?.let {
-                binding.titleBar.title = it
+                titleBar.title = it
                 VideoPlay.videoTitle = it
             }
             val sourceKey = intent.getStringExtra("sourceKey")
@@ -195,17 +242,50 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                 finish()
                 return
             }
-            VideoPlay.startPlay(playerView)
-            VideoPlay.saveRead()
+            playerView.refreshControllerActions()
         } else {
-            VideoPlay.clonePlayState(playerView)
-            playerView.setSurfaceToPlay()
-            playerView.startAfterPrepared()
-            binding.titleBar.title = VideoPlay.videoTitle
+            titleBar.title = VideoPlay.videoTitle
         }
-        setupPlayerView()
         initView()
-        upView()
+        playerHeightPx = initialPlayerHeightPx()
+        binding.root.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.root.setContent {
+            LegadoTheme {
+                VideoPlayerContent(
+                    titleBar = titleBar,
+                    playerContainer = playerContainer,
+                    playerHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                        playerHeightPx.coerceAtLeast(1).toDp()
+                    },
+                    bookName = bookName,
+                    bookAuthor = bookAuthor,
+                    coverView = coverView.takeIf { bookName != null },
+                    introScrollView = introScrollView.takeIf { bookName != null },
+                    volumes = videoVolumes,
+                    episodes = videoEpisodes,
+                    selectedVolume = selectedVolume,
+                    selectedEpisode = selectedEpisode,
+                    showBookSections = showBookSections,
+                    onVolumeSelected = ::selectVolume,
+                    onEpisodeSelected = ::selectEpisode,
+                    onChapterListClick = ::openChapterList
+                )
+            }
+        }
+        playerView.doOnAttach {
+            if (playerAttached) return@doOnAttach
+            playerAttached = true
+            setupPlayerView()
+            if (isNew) {
+                VideoPlay.startPlay(playerView)
+                VideoPlay.saveRead()
+            } else {
+                VideoPlay.clonePlayState(playerView)
+                playerView.setSurfaceToPlay()
+                playerView.startAfterPrepared()
+            }
+            upView()
+        }
         onBackPressedDispatcher.addCallback(this) {
             if (isFullScreen) {
                 toggleFullScreen()
@@ -217,37 +297,24 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
 
     private fun initView() {
         viewModel.upStarMenuData.observe(this) { upStarMenu() }
-        binding.root.setBackgroundColor(backgroundColor)
         val book = VideoPlay.book
         if (book == null) {
-            binding.data.invisible()
-            binding.chaptersContainer.invisible()
+            showBookSections = false
             return
         }
+        showBookSections = true
+        bookName = book.name
+        bookAuthor = book.getRealAuthor().takeIf { it.isNotEmpty() }
+        videoVolumes = VideoPlay.volumes.toList()
+        videoEpisodes = VideoPlay.episodes.orEmpty()
+        selectedVolume = VideoPlay.durVolumeIndex
+        selectedEpisode = VideoPlay.chapterInVolumeIndex
         showBook(book)
-        if (VideoPlay.episodes.isNullOrEmpty()) {
-            binding.chapters.gone()
-        } else {
-            binding.chapters.visible()
-            showToc(VideoPlay.episodes!!)
-        }
-        if (VideoPlay.volumes.isEmpty()) {
-            binding.volumes.gone()
-        } else {
-            binding.volumes.visible()
-            showVolumes(VideoPlay.volumes)
-        }
     }
 
     private fun showBook(book: Book) {
-        binding.run {
-            showCover(book)
-            tvName.text = book.name
-            book.getRealAuthor().takeIf { it.isNotEmpty() }?.let {
-                tvAuthor.text = it
-            } ?: tvAuthor.gone()
-            showBookIntro(book)
-        }
+        showCover(book)
+        showBookIntro(book)
     }
 
     inner class CustomWebViewClient : WebViewClient() {
@@ -284,7 +351,8 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
             view?.post {
-                binding.tvIntroContainer.requestLayout()
+                introScrollView.requestLayout()
+                introContainer.requestLayout()
             }
         }
     }
@@ -315,8 +383,8 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
             if (initIntroView || this.pooledWebView == null) {
                 initIntroView = false
                 this.pooledWebView = pooledWebView
-                binding.tvIntroContainer.removeAllViews()
-                binding.tvIntroContainer.addView(webView)
+                introContainer.removeAllViews()
+                introContainer.addView(webView)
             }
             val bookUrl = VideoPlay.book?.bookUrl
                 ?.takeIf { it.startsWith("http", true) }
@@ -326,8 +394,8 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         }
         if (!initIntroView || pooledWebView != null) {
             destroyWeb()
-            binding.tvIntroContainer.removeAllViews()
-            binding.tvIntroContainer.addView(introTextView)
+            introContainer.removeAllViews()
+            introContainer.addView(introTextView)
         }
         if (intro.isNullOrBlank()) {
             return
@@ -395,87 +463,50 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     private fun showCover(book: Book) {
-        binding.ivCover.load(book, false)
+        coverView.load(book, false)
     }
 
-    private fun showToc(toc: List<BookChapter>) {
-        binding.ivChapter.setOnClickListener {
-            VideoPlay.book?.bookUrl?.let {
-                tocActivityResult.launch(it)
-            }
-        }
-        val recyclerView = binding.chapters
-        val layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        recyclerView.layoutManager = layoutManager
-        val adapter = ChapterAdapter(toc,VideoPlay.chapterInVolumeIndex, false) { chapter, index ->
-            if (index != VideoPlay.chapterInVolumeIndex) {
-                VideoPlay.chapterInVolumeIndex = index
-                VideoPlay.saveRead(0)
-                upEpisodesView()
-                VideoPlay.startPlay(playerView)
-            }
-        }
-        recyclerView.adapter = adapter
-        scrollToDurChapter(recyclerView, VideoPlay.chapterInVolumeIndex)
+    private fun openChapterList() {
+        VideoPlay.book?.bookUrl?.let { tocActivityResult.launch(it) }
     }
 
-    private fun showVolumes(volumes: List<BookChapter>) {
-        val recyclerView = binding.volumes
-        val layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        recyclerView.layoutManager = layoutManager
-        val adapter = ChapterAdapter(volumes,VideoPlay.durVolumeIndex, true) { chapter, index ->
-            if (index != VideoPlay.durVolumeIndex) {
-                VideoPlay.durVolumeIndex = index
-                VideoPlay.chapterInVolumeIndex = 0
-                VideoPlay.upEpisodes()
-                if (VideoPlay.episodes.isNullOrEmpty()) {
-                    binding.chapters.visibility = View.GONE
-                } else {
-                    binding.chapters.visibility = View.VISIBLE
-                    val adapter = binding.chapters.adapter as? ChapterAdapter
-                    adapter?.updateData(VideoPlay.episodes)
-                }
-                VideoPlay.saveRead(0)
-                upVolumesView()
-                VideoPlay.startPlay(playerView)
-            }
-        }
-        recyclerView.adapter = adapter
-        scrollToDurChapter(recyclerView, VideoPlay.durVolumeIndex)
+    private fun selectEpisode(index: Int) {
+        if (index == VideoPlay.chapterInVolumeIndex) return
+        VideoPlay.chapterInVolumeIndex = index
+        selectedEpisode = index
+        VideoPlay.saveRead(0)
+        VideoPlay.startPlay(playerView)
     }
 
-    private fun scrollToDurChapter(recyclerView: RecyclerView, index: Int) {
-        recyclerView.postDelayed({
-            val layoutManager = recyclerView.layoutManager as? LinearLayoutManager
-            layoutManager?.run {
-                val smoothScroller = object : LinearSmoothScroller(this@VideoPlayerActivity) {
-                    override fun getHorizontalSnapPreference(): Int {
-                        return SNAP_TO_START // 滚动到最左边
-                    }
-                }
-                smoothScroller.targetPosition = index
-                this.startSmoothScroll(smoothScroller)
-            }
-            val adapter = recyclerView.adapter as? ChapterAdapter
-            adapter?.updateSelectedPosition(index)
-        }, 200)
+    private fun selectVolume(index: Int) {
+        if (index == VideoPlay.durVolumeIndex) return
+        VideoPlay.durVolumeIndex = index
+        VideoPlay.chapterInVolumeIndex = 0
+        VideoPlay.upEpisodes()
+        playerView.refreshControllerActions()
+        syncEpisodeUi()
+        VideoPlay.saveRead(0)
+        VideoPlay.startPlay(playerView)
     }
 
     private fun upView() {
-        upEpisodesView()
-        upVolumesView()
+        videoVolumes = VideoPlay.volumes.toList()
+        selectedVolume = VideoPlay.durVolumeIndex.takeIf { it in videoVolumes.indices } ?: -1
+        syncEpisodeUi()
     }
 
     private fun upEpisodesView() {
-        if (!VideoPlay.episodes.isNullOrEmpty()) {
-            scrollToDurChapter(binding.chapters, VideoPlay.chapterInVolumeIndex)
-        }
+        syncEpisodeUi()
     }
 
     private fun upVolumesView() {
-        if (!VideoPlay.volumes.isEmpty()) {
-            scrollToDurChapter(binding.volumes, VideoPlay.durVolumeIndex)
-        }
+        videoVolumes = VideoPlay.volumes.toList()
+        selectedVolume = VideoPlay.durVolumeIndex.takeIf { it in videoVolumes.indices } ?: -1
+    }
+
+    private fun syncEpisodeUi() {
+        videoEpisodes = VideoPlay.episodes.orEmpty()
+        selectedEpisode = VideoPlay.chapterInVolumeIndex.takeIf { it in videoEpisodes.indices } ?: -1
     }
 
     private fun toggleFullScreen() {
@@ -489,16 +520,12 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE //横屏
             }
             supportActionBar?.hide()
-            binding.chaptersContainer.gone()
-            binding.data.gone()
+            showBookSections = false
             playerView.startWindowFullscreen(this, false, false)
         } else {
             requestedOrientation = orientation
             supportActionBar?.show()
-            if (VideoPlay.book != null) {
-                binding.chaptersContainer.visible()
-                binding.data.visible()
-            }
+            showBookSections = VideoPlay.book != null
             playerView.postDelayed({
                 playerView.backFromFull(this)
             }, if (VideoPlay.isPortraitVideo) 300 else 0)
@@ -533,17 +560,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     private fun setupPlayerView() {
-        val displayMetrics = resources.displayMetrics
-        val screenWidth = displayMetrics.widthPixels
-        val screenHeight = displayMetrics.heightPixels
-        val layoutParams = playerView.layoutParams
-        layoutParams.width = screenWidth
-        val videoWidth = playerView.currentVideoWidth
-        val videoHeight = playerView.currentVideoHeight
-        val height = if (videoWidth > 0 && videoHeight > 0) (screenWidth * videoHeight / videoWidth) else (screenWidth * 9 / 16) //默认16:9
-        //高度不超过一半屏幕
-        layoutParams.height = if (height < screenHeight / 2) height else screenHeight / 2
-        playerView.layoutParams = layoutParams
+        playerHeightPx = initialPlayerHeightPx()
         playerView.isNeedOrientationUtils = false //关闭自带的屏幕方向控制
         playerView.fullscreenButton.setOnClickListener { toggleFullScreen() }
         playerView.setBackFromFullScreenListener { toggleFullScreen() }
@@ -560,7 +577,6 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                     val videoWidth = playerView.currentVideoWidth
                     val videoHeight = playerView.currentVideoHeight
                     if (videoWidth > 0 && videoHeight > 0) {
-                        val layoutParams = playerView.layoutParams
                         val parentWidth = playerView.width
                         val aspectRatio = videoHeight.toFloat() / videoWidth.toFloat()
                         val isPortraitVideo = if (aspectRatio > 1.2) true else false
@@ -573,16 +589,19 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                             toggleFullScreen()
                             return@post
                         }
-                        val height = (parentWidth * aspectRatio).toInt()
                         val displayMetrics = resources.displayMetrics
                         val screenHeight = displayMetrics.heightPixels
-                        //高度不超过一半屏幕
-                        layoutParams.height = if (height < screenHeight / 2) height else screenHeight / 2
-                        playerView.layoutParams = layoutParams
+                        playerHeightPx = minOf((parentWidth * aspectRatio).toInt(), screenHeight / 2)
+                        playerView.requestLayout()
                     }
                 }
             }
         })
+    }
+
+    private fun initialPlayerHeightPx(): Int {
+        val metrics = resources.displayMetrics
+        return minOf(metrics.widthPixels * 9 / 16, metrics.heightPixels / 2)
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -594,6 +613,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         menuCustomBtn = menu.findItem(R.id.menu_custom_btn)?.also {
             it.isVisible = (VideoPlay.source as? BookSource)?.customButton == true
         }
+        menu.findItem(R.id.menu_rss_media_download)?.isVisible = VideoPlay.source is RssSource
         starMenuItem = menu.findItem(R.id.menu_rss_star)
         upStarMenu()
         return super.onPrepareOptionsMenu(menu)
@@ -622,6 +642,11 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.menu_rss_media_download -> {
+                val article = VideoPlay.rssStar?.toRssArticle() ?: VideoPlay.rssRecord?.toRssArticle()
+                if (article != null) io.legado.app.ui.rss.media.RssMediaUi.show(this, listOf(article), captured =
+                    VideoPlay.videoUrl?.let { listOf(io.legado.app.model.rss.media.RssMediaCandidate(article, it, "video", thumbnail = article.image)) }.orEmpty())
+            }
             R.id.menu_custom_btn -> {
                 (VideoPlay.source as? BookSource)?.let {source ->
                     VideoPlay.book?.let { book ->
@@ -718,7 +743,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     override fun observeLiveBus() {
 
         observeEventSticky<String>(EventBus.VIDEO_SUB_TITLE) {
-            binding.titleBar.title = it
+            titleBar.title = it
         }
 
         observeEvent<ArrayList<Int>>(EventBus.UP_VIDEO_INFO) {

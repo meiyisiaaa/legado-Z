@@ -2,12 +2,41 @@ package io.legado.app.ui.font
 
 import android.net.Uri
 import android.os.Bundle
-import android.view.MenuItem
 import android.view.View
-import androidx.appcompat.widget.Toolbar
 import androidx.documentfile.provider.DocumentFile
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
@@ -18,12 +47,11 @@ import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
-import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.RealPathUtil
-import io.legado.app.utils.applyTint
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getPrefString
@@ -40,15 +68,11 @@ import java.io.File
 /**
  * 字体选择对话框
  */
-class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
-    Toolbar.OnMenuItemClickListener,
-    FontAdapter.CallBack {
+class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select), FontAdapter.CallBack {
     private val fontRegex = Regex("(?i).*\\.[ot]tf")
     private val binding by viewBinding(DialogFontSelectBinding::bind)
-    private val adapter by lazy {
-        val curFontPath = callBack?.curFontPath ?: ""
-        FontAdapter(requireContext(), curFontPath, this)
-    }
+    private val fonts = mutableStateListOf<FileDoc>()
+    private var loading by mutableStateOf(false)
     private val selectFontDir = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -76,13 +100,18 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.setTitle(R.string.select_font)
-        binding.toolBar.inflateMenu(R.menu.font_select)
-        binding.toolBar.menu.applyTint(requireContext())
-        binding.toolBar.setOnMenuItemClickListener(this)
-        binding.recyclerView.layoutManager = LinearLayoutManager(context)
-        binding.recyclerView.adapter = adapter
+        binding.composeView.setContent {
+            LegadoTheme {
+                FontSelectContent(
+                    fonts = fonts,
+                    loading = loading,
+                    currentFontPath = callBack?.curFontPath.orEmpty(),
+                    onDefaultFont = ::selectSystemFont,
+                    onChooseFolder = ::openFolder,
+                    onSelect = ::onFontSelect
+                )
+            }
+        }
 
         val fontPath = getPrefString(PreferKey.fontFolder)
         if (fontPath.isNullOrEmpty()) {
@@ -101,25 +130,15 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
         }
     }
 
-    override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
-            R.id.menu_default -> {
-                val requireContext = requireContext()
-                alert(titleResource = R.string.system_typeface) {
-                    items(
-                        requireContext.resources.getStringArray(R.array.system_typefaces).toList()
-                    ) { _, i ->
-                        AppConfig.systemTypefaces = i
-                        onDefaultFontChange()
-                        dismissAllowingStateLoss()
-                    }
-                }
-            }
-            R.id.menu_other -> {
-                openFolder()
+    private fun selectSystemFont() {
+        val context = requireContext()
+        alert(titleResource = R.string.system_typeface) {
+            items(context.resources.getStringArray(R.array.system_typefaces).toList()) { _, index ->
+                AppConfig.systemTypefaces = index
+                onDefaultFontChange()
+                dismissAllowingStateLoss()
             }
         }
-        return true
     }
 
     private fun openFolder() {
@@ -151,16 +170,20 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     }
 
     private fun loadFontFiles(fileDoc: FileDoc) {
+        loading = true
         execute {
             val fontItems = fileDoc.list {
                 it.name.matches(fontRegex)
             } ?: ArrayList()
             mergeFontItems(fontItems, getLocalFonts())
         }.onSuccess {
-            adapter.setItems(it)
+            fonts.clear()
+            fonts.addAll(it)
         }.onError {
             AppLog.put("加载字体文件失败\n${it.localizedMessage}", it)
             toastOnUi("getFontFiles:${it.localizedMessage}")
+        }.onFinally {
+            loading = false
         }
     }
 
@@ -204,5 +227,123 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     interface CallBack {
         fun selectFont(path: String)
         val curFontPath: String
+    }
+}
+@Composable
+private fun FontSelectContent(
+    fonts: List<FileDoc>,
+    loading: Boolean,
+    currentFontPath: String,
+    onDefaultFont: () -> Unit,
+    onChooseFolder: () -> Unit,
+    onSelect: (FileDoc) -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val currentName = remember(currentFontPath) {
+        runCatching { java.net.URLDecoder.decode(currentFontPath, "utf-8") }
+            .getOrNull()?.substringAfterLast(File.separator)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(R.string.select_font),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge
+            )
+            IconButton(onClick = onDefaultFont, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings),
+                    contentDescription = stringResource(R.string.default_font),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_more_vert),
+                        contentDescription = stringResource(R.string.more_menu),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.other_folder)) },
+                        leadingIcon = {
+                            Icon(painterResource(R.drawable.ic_folder_open), contentDescription = null)
+                        },
+                        onClick = { menuExpanded = false; onChooseFolder() }
+                    )
+                }
+            }
+        }
+        if (loading) {
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        if (fonts.isEmpty() && !loading) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    stringResource(R.string.empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 0.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                items(fonts, key = { it.toString() }) { font ->
+                    val selected = font.name == currentName
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clickable { onSelect(font) }
+                            .padding(5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = font.name,
+                            modifier = Modifier.weight(1f).padding(5.dp),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (selected) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check),
+                                contentDescription = stringResource(R.string.default_font),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        } else {
+                            androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }

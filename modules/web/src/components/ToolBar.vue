@@ -1,18 +1,26 @@
 <template>
-  <div class="menu flex-column-center">
+  <div class="menu" role="group" aria-label="源管理操作">
     <el-button
       v-for="button in buttons"
-      size="large"
+      size="default"
       :key="button.name"
+      :type="button.type"
+      :icon="button.icon"
+      :aria-label="button.name"
+      :aria-busy="button.name === '保存源' && isSavingSource"
+      :disabled="button.name === '保存源' && isSavingSource"
+      :loading="button.name === '保存源' && isSavingSource"
       @click="button.action"
     >
-      {{ button.name }}
+      <span>{{ button.name }}</span>
+      <kbd v-if="button.hotKeys.length">{{ button.hotKeys.join(' + ') }}</kbd>
     </el-button>
-    <el-button size="large" @click="() => (hotkeysDialogVisible = true)"
-      >快捷键</el-button
+    <el-button size="default" :icon="Setting" @click="() => (hotkeysDialogVisible = true)"
+      >快捷键设置</el-button
     >
   </div>
   <el-dialog
+    class="hotkeys-dialog"
     v-model="hotkeysDialogVisible"
     :show-close="false"
     :before-close="stopRecordKeyDown"
@@ -66,7 +74,19 @@
 
 <script setup lang="ts">
 import API from '@api'
-import { CircleCheckFilled, Edit } from '@element-plus/icons-vue'
+import {
+  CircleCheckFilled,
+  Delete,
+  DocumentAdd,
+  Edit,
+  EditPen,
+  Promotion,
+  Refresh,
+  RefreshLeft,
+  Setting,
+  VideoPlay,
+} from '@element-plus/icons-vue'
+import type { Component } from 'vue'
 import hotkeys from 'hotkeys-js'
 import { getSourceName, isInvaildSource, normalizeSource } from '../utils/souce'
 
@@ -124,7 +144,7 @@ const push = () => {
           } 条\n成功: ${okData.length} 条\n失败: ${
             sources.length - okData.length
           } 条${failMsg}`,
-          type: 'success',
+          type: sources.length > okData.length ? 'warning' : 'success',
         })
       }
     } else {
@@ -165,12 +185,16 @@ const redo = () => {
   })
 }
 
-const saveSource = () => {
+const isSavingSource = ref(false)
+const saveSource = async () => {
+  if (isSavingSource.value) return
   const source = store.currentSource
   if (isInvaildSource(source)) {
     normalizeSource(source)
-    API.saveSource(source).then(({ data }) => {
-      const sourceName = getSourceName(source)
+    const sourceName = getSourceName(source)
+    isSavingSource.value = true
+    try {
+      const { data } = await API.saveSource(source)
       if (data.isSuccess) {
         ElMessage({
           message: `源《${sourceName}》已成功保存到「阅读3.0APP」`,
@@ -184,7 +208,14 @@ const saveSource = () => {
           type: 'error',
         })
       }
-    })
+    } catch (error) {
+      ElMessage({
+        message: `源《${sourceName}》保存失败!\nErrorMsg: ${error instanceof Error ? error.message : '请求失败'}`,
+        type: 'error',
+      })
+    } finally {
+      isSavingSource.value = false
+    }
   } else {
     ElMessage({
       message: `请检查<必填>项是否全部填写`,
@@ -197,19 +228,23 @@ const debug = () => {
   store.startDebug()
 }
 
-const buttons = ref<{ name: string; hotKeys: string[]; action: () => void }[]>(
-  Array.of(
-    { name: '⇈推送源', hotKeys: [], action: push },
-    { name: '⇊拉取源', hotKeys: [], action: pull },
-    { name: '⋙生成源', hotKeys: [], action: conver2Tab },
-    { name: '⋘编辑源', hotKeys: [], action: conver2Source },
-    { name: '✗清空表单', hotKeys: [], action: clearEdit },
-    { name: '↶撤销操作', hotKeys: [], action: undo },
-    { name: '↷重做操作', hotKeys: [], action: redo },
-    { name: '⇏调试源', hotKeys: [], action: debug },
-    { name: '✓保存源', hotKeys: [], action: saveSource },
-  ),
-)
+const buttons = ref<{
+  name: string
+  hotKeys: string[]
+  action: () => void
+  icon: Component
+  type?: 'primary' | 'danger'
+}[]>([
+  { name: '推送源', hotKeys: [], action: push, icon: Promotion, type: 'primary' },
+  { name: '拉取源', hotKeys: [], action: pull, icon: Refresh },
+  { name: '生成源', hotKeys: [], action: conver2Tab, icon: DocumentAdd },
+  { name: '编辑源', hotKeys: [], action: conver2Source, icon: EditPen },
+  { name: '清空表单', hotKeys: [], action: clearEdit, icon: Delete, type: 'danger' },
+  { name: '撤销操作', hotKeys: [], action: undo, icon: RefreshLeft },
+  { name: '清空历史', hotKeys: [], action: redo, icon: Delete },
+  { name: '调试源', hotKeys: [], action: debug, icon: VideoPlay },
+  { name: '保存源', hotKeys: [], action: saveSource, icon: CircleCheckFilled, type: 'primary' },
+])
 const hotkeysDialogVisible = ref(true)
 
 const recordKeyDowning = ref(false)
@@ -322,10 +357,56 @@ onMounted(() => {
   justify-content: center;
 }
 
-.menu > .el-button {
-  margin: 4px;
-  padding: 1em;
-  width: 6em;
+.menu {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu :deep(.el-button) {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  border-radius: 9px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.menu :deep(kbd) {
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  padding: 1px 4px;
+  color: var(--app-ink-muted);
+  background: var(--app-panel);
+  font: 9px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@media (max-width: 1023px) {
+  .menu {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .menu :deep(.el-button) {
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+    margin: 0;
+    padding: 6px 3px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .menu :deep(kbd) {
+    display: none;
+  }
 }
 
 .hotkeys-item {
@@ -344,6 +425,44 @@ onMounted(() => {
     }
     span {
       margin: 0.5em;
+    }
+  }
+}
+
+@media (max-width: 479px) {
+  :global(.hotkeys-dialog) {
+    width: calc(100vw - 24px) !important;
+    max-width: 560px;
+  }
+
+  :global(.hotkeys-dialog .el-dialog__body) {
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+  }
+
+  .hotkeys-header {
+    gap: 8px;
+  }
+
+  .hotkeys-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+    gap: 8px;
+    align-items: center;
+
+    .title {
+      width: auto;
+      justify-content: flex-start;
+      margin-right: 0;
+    }
+
+    .hotkeys-item__content {
+      min-width: 0;
+      justify-content: flex-start;
+
+      div {
+        margin-bottom: 0;
+      }
     }
   }
 }

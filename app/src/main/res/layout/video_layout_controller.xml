@@ -40,11 +40,12 @@
 
         <TextView
             android:id="@+id/current"
-            android:layout_width="wrap_content"
+            android:layout_width="76dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:text="00:00"
-            android:textColor="#ffffff" />
+            android:textColor="#ffffff"
+            android:visibility="gone" />
 
         <SeekBar
             android:id="@+id/progress"
@@ -59,7 +60,8 @@
             android:paddingTop="8dp"
             android:paddingBottom="8dp"
             android:progressDrawable="@drawable/video_seek_progress"
-            android:thumb="@drawable/video_seek_thumb" />
+            android:thumb="@drawable/video_seek_thumb"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/total"
@@ -67,18 +69,15 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
             android:text="00:00"
-            android:textColor="#ffffff" />
-
-        <TextView
-            android:id="@+id/toggle_danmaku"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:minEms="2"
-            android:text="关弹幕"
             android:textColor="#ffffff"
-            android:visibility="gone"
-            tools:visibility="visible" />
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/compose_actions"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:importantForAccessibility="yes" />
 
         <ImageView
             android:id="@+id/fullscreen"
@@ -131,19 +130,12 @@
         android:layout_marginBottom="30dp"
         android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/tip_view"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerInParent="true"
-        android:layout_marginTop="50dp"
-        android:alpha="0"
-        android:background="@drawable/selector_fillet_btn_bg"
-        android:elevation="4dp"
-        android:gravity="center"
-        android:padding="12dp"
-        android:textColor="@android:color/white"
-        android:visibility="invisible" />
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/compose_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
 
 </RelativeLayout>

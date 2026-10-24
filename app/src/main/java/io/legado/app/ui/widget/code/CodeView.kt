@@ -18,6 +18,8 @@ import java.util.*
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import kotlin.math.roundToInt
+import io.legado.app.utils.LogUtils
+private const val TAG = "CodeView"
 
 @Suppress("unused")
 class CodeView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) :
@@ -225,7 +227,7 @@ class CodeView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             highlightErrorLines(editable)
             highlightSyntax(editable)
         } catch (e: IllegalStateException) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
         return editable
     }

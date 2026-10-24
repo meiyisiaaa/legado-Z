@@ -1,0 +1,16 @@
+{
+  "method": "Built-in imagegen; three independent portrait Android book-detail concepts",
+  "prompt_record": "Normalized direction summary; exact full prompts were unavailable after the context transition",
+  "shared_frame": "Front-on Android app screen with back/edit/overflow, book cover, title/author/source/group, current/latest chapter, table of contents, description, private note, shelf action and read action. Fictional Chinese book 北岸来信 by 林青遥, lighthouse cover, chapter 12/28. Same functional content in all concepts.",
+  "directions": [
+    {"key":"A", "name":"矿绿书衣", "prompt":"Deep mineral-green upper book-cloth field, asymmetric large cover at left and serif book identity at right, citron bookmark tab, paper lower surface, fine rules and confident green read button; restrained, refined Android reading tool."},
+    {"key":"B", "name":"深蓝夜航", "prompt":"Deep navy immersive book-detail screen, large centered cover, white sans title, lower slate information plane, ice-blue reading action; careful contrast and clear chapter/source/group/note organization."},
+    {"key":"C", "name":"现代书目", "prompt":"Cool-white contemporary catalogue screen, oversized bold sans title at left and smaller cover at right, compact aligned metadata index, charcoal typography, fine dividers, orange index marker and primary reading action."}
+  ],
+  "material_asset": {
+    "path":"app/src/main/res/drawable-nodpi/mineral_cloth.png",
+    "method":"Built-in imagegen, copied without edits",
+    "prompt":"Create a production bitmap material texture, a flat seamless monochrome swatch of fine linen bookbinding cloth viewed perfectly front-on. It will be color-multiplied with a mineral green Android app background. The whole square is uniform near-white (#F8F8F8) with delicate visible cotton weave and a few natural microscopic thread variations; whites range only from #E8E8E8 to #FFFFFF. Elegant tightly woven book cloth, not coarse burlap. Even diffuse light, absolutely no directional shading, no folds, no seams, no vignette, no border, no gradient, no objects, no words or letters, no illustrations. The weave should be tangible when viewed close, calm and almost invisible behind UI text. Fill every edge with the same material. Large square repeatable texture."
+  },
+  "status":"A selected by user; generated mockups are static design concepts, not native runtime evidence"
+}

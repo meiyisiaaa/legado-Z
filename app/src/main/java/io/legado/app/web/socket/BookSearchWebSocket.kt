@@ -10,6 +10,7 @@ import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.isJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.MainScope
@@ -51,7 +52,7 @@ class BookSearchWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
 
     override fun onMessage(message: NanoWSD.WebSocketFrame) {
         launch(IO) {
-            kotlin.runCatching {
+            try {
                 if (!message.textPayload.isJson()) {
                     send("数据必须为Json格式")
                     close(normalClosure, SEARCH_FINISH, false)
@@ -67,7 +68,14 @@ class BookSearchWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
                         return@launch
                     }
                     searchModel.search(System.currentTimeMillis(), key)
+                } else {
+                    send("数据必须为Json格式")
+                    close(normalClosure, SEARCH_FINISH, false)
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onSearchCancel(e)
             }
         }
     }
@@ -77,7 +85,8 @@ class BookSearchWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
     }
 
     override fun onException(exception: IOException) {
-
+        cancel()
+        searchModel.close()
     }
 
     override fun getSearchScope(): SearchScope = SearchScope(AppConfig.searchScope)
@@ -92,6 +101,12 @@ class BookSearchWebSocket(handshakeRequest: NanoHTTPD.IHTTPSession) :
 
     override fun onSearchFinish(isEmpty: Boolean, hasMore: Boolean) = close(normalClosure, SEARCH_FINISH, false)
 
-    override fun onSearchCancel(exception: Throwable?) = close(normalClosure, exception?.toString() ?: SEARCH_FINISH, false)
+    override fun onSearchCancel(exception: Throwable?) {
+        try {
+            exception?.let { send(it.toString()) }
+        } finally {
+            close(normalClosure, SEARCH_FINISH, false)
+        }
+    }
 
 }

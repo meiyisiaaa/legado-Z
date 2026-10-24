@@ -22,6 +22,7 @@ import io.legado.app.data.dao.KeyboardAssistsDao
 import io.legado.app.data.dao.ReadRecordDao
 import io.legado.app.data.dao.ReplaceRuleDao
 import io.legado.app.data.dao.RssArticleDao
+import io.legado.app.data.dao.RssMediaDownloadDao
 import io.legado.app.data.dao.RssReadRecordDao
 import io.legado.app.data.dao.RssSourceDao
 import io.legado.app.data.dao.RssStarDao
@@ -44,6 +45,7 @@ import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.entities.RssArticle
+import io.legado.app.data.entities.RssMediaDownloadTask
 import io.legado.app.data.entities.RssReadRecord
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssStar
@@ -67,12 +69,12 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 89,
+    version = 92,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
         RssSource::class, Bookmark::class, RssArticle::class, RssReadRecord::class,
-        RssStar::class, TxtTocRule::class, ReadRecord::class, HttpTTS::class, Cache::class,
+        RssStar::class, RssMediaDownloadTask::class, TxtTocRule::class, ReadRecord::class, HttpTTS::class, Cache::class,
         RuleSub::class, DictRule::class, KeyboardAssist::class, Server::class],
     views = [BookSourcePart::class],
     autoMigrations = [
@@ -137,6 +139,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val bookmarkDao: BookmarkDao
     abstract val rssArticleDao: RssArticleDao
     abstract val rssStarDao: RssStarDao
+    abstract val rssMediaDownloadDao: RssMediaDownloadDao
     abstract val rssReadRecordDao: RssReadRecordDao
     abstract val cookieDao: CookieDao
     abstract val txtTocRuleDao: TxtTocRuleDao
@@ -217,6 +220,13 @@ abstract class AppDatabase : RoomDatabase() {
                     where not exists (select * from book_groups where groupId = ${BookGroup.IdVideo})
                     """.trimIndent()
                 db.execSQL(insertBookGroupVideoSql)
+                @Language("sql")
+                val insertBookGroupImageSql = """
+                    insert into book_groups(groupId, groupName, 'order', show)
+                    select ${BookGroup.IdImage}, '漫画', -4, 1
+                    where not exists (select * from book_groups where groupId = ${BookGroup.IdImage})
+                """.trimIndent()
+                db.execSQL(insertBookGroupImageSql)
                 @Language("sql")
                 val insertBookGroupErrorSql = """
                     insert into book_groups(groupId, groupName, 'order', show) 

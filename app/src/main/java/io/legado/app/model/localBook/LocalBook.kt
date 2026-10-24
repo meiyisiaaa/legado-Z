@@ -59,6 +59,7 @@ import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.regex.Pattern
+import java.util.concurrent.Callable
 import androidx.core.net.toUri
 import kotlinx.coroutines.currentCoroutineContext
 
@@ -475,13 +476,20 @@ object LocalBook {
     //文件类书源 合并在线书籍信息 在线 > 本地
     fun mergeBook(localBook: Book, onLineBook: Book?): Book {
         onLineBook ?: return localBook
-        localBook.name = onLineBook.name.ifBlank { localBook.name }
-        localBook.author = onLineBook.author.ifBlank { localBook.author }
-        localBook.coverUrl = onLineBook.coverUrl
-        localBook.intro =
-            if (onLineBook.intro.isNullOrBlank()) localBook.intro else onLineBook.intro
-        localBook.save()
-        return localBook
+        return appDb.runInTransaction(Callable {
+            val noteOwner = appDb.bookDao.getBook(localBook.bookUrl)
+                ?: appDb.bookDao.getBook(onLineBook.bookUrl)
+            // A persisted null is an explicit empty note, not a missing record.
+            localBook.userNote = if (noteOwner != null) noteOwner.userNote
+                else localBook.userNote ?: onLineBook.userNote
+            localBook.name = onLineBook.name.ifBlank { localBook.name }
+            localBook.author = onLineBook.author.ifBlank { localBook.author }
+            localBook.coverUrl = onLineBook.coverUrl
+            localBook.intro =
+                if (onLineBook.intro.isNullOrBlank()) localBook.intro else onLineBook.intro
+            localBook.save()
+            localBook
+        })
     }
 
     //下载book对应的远程文件 并更新Book

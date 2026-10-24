@@ -11,8 +11,8 @@
         android:layout_height="wrap_content"
         app:title="@string/scan_qr_code" />
 
-    <FrameLayout
-        android:id="@+id/fl_content"
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/compose_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

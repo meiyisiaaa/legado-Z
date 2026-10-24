@@ -6,16 +6,20 @@ import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.MenuItem
 import android.view.ViewGroup
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.activity.addCallback
+import androidx.core.view.ViewGroupCompat
 import androidx.activity.viewModels
-import androidx.core.view.get
 import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager.widget.ViewPager
-import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -23,7 +27,6 @@ import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityMainBinding
-import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.book.BookHelp
@@ -45,7 +48,8 @@ import io.legado.app.ui.main.explore.ExploreFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.ui.widget.text.BadgeView
+import io.legado.app.ui.widget.compose.LegadoTheme
+import io.legado.app.ui.widget.compose.LegadoComposeView
 import io.legado.app.utils.isCreated
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
@@ -75,8 +79,6 @@ import kotlin.time.Duration.Companion.hours
  */
 @Suppress("PrivatePropertyName")
 class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
-    BottomNavigationView.OnNavigationItemSelectedListener,
-    BottomNavigationView.OnNavigationItemReselectedListener,
     MainViewModel.CallBack {
 
     override val binding by viewBinding(ActivityMainBinding::inflate)
@@ -90,15 +92,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var exitTime: Long = 0
     private var bookshelfReselected: Long = 0
     private var exploreReselected: Long = 0
-    private var pagePosition = 0
+    private var pagePosition by mutableIntStateOf(0)
+    private var visiblePages by mutableStateOf(listOf(0, 1, 2, 3))
+    private var updatingBooks by mutableIntStateOf(0)
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = 4
     private val EXIT_INTERVAL = 2000L
     private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idMy)
-    private val adapter by lazy {
-        TabFragmentPageAdapter(supportFragmentManager)
-    }
-    private var onUpBooksBadgeView: BadgeView? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         upBottomMenu()
@@ -106,7 +106,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         upHomePage()
         onBackPressedDispatcher.addCallback(this) {
             if (pagePosition != 0) {
-                binding.viewPagerMain.currentItem = 0
+                binding.viewPagerMain.setCurrentItem(0, false)
                 return@addCallback
             }
             (fragmentMap[getFragmentId(0)] as? BookshelfFragment2)?.let {
@@ -159,26 +159,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    override fun onNavigationItemSelected(item: MenuItem): Boolean = binding.run {
-        when (item.itemId) {
-            R.id.menu_bookshelf ->
-                viewPagerMain.setCurrentItem(0, false)
-
-            R.id.menu_discovery ->
-                viewPagerMain.setCurrentItem(realPositions.indexOf(idExplore), false)
-
-            R.id.menu_rss ->
-                viewPagerMain.setCurrentItem(realPositions.indexOf(idRss), false)
-
-            R.id.menu_my_config ->
-                viewPagerMain.setCurrentItem(realPositions.indexOf(idMy), false)
-        }
-        return false
-    }
-
-    override fun onNavigationItemReselected(item: MenuItem) {
-        when (item.itemId) {
-            R.id.menu_bookshelf -> {
+    private fun onDestinationReselected(page: Int) {
+        when (page) {
+            idBookshelf -> {
                 if (System.currentTimeMillis() - bookshelfReselected > 300) {
                     bookshelfReselected = System.currentTimeMillis()
                 } else {
@@ -186,7 +169,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 }
             }
 
-            R.id.menu_discovery -> {
+            idExplore -> {
                 if (System.currentTimeMillis() - exploreReselected > 300) {
                     exploreReselected = System.currentTimeMillis()
                 } else {
@@ -197,19 +180,21 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun initView() = binding.run {
+        // Before Android 11, an offscreen Compose page can consume insets needed by its siblings.
+        ViewGroupCompat.installCompatInsetsDispatch(root)
         viewPagerMain.setEdgeEffectColor(primaryColor)
         viewPagerMain.offscreenPageLimit = 3
-        viewPagerMain.adapter = adapter
+        viewPagerMain.adapter = TabFragmentPageAdapter(supportFragmentManager)
         viewPagerMain.addOnPageChangeListener(PageChangeCallback())
-        bottomNavigationView.setOnNavigationItemSelectedListener(this@MainActivity)
-        bottomNavigationView.setOnNavigationItemReselectedListener(this@MainActivity)
-        if (AppConfig.isEInkMode) {
-            bottomNavigationView.setBackgroundResource(R.drawable.bg_eink_border_top)
-        }
-        bottomNavigationView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
-            val height = windowInsets.navigationBarHeight
-            view.bottomPadding = height
-            windowInsets.inset(0, 0, 0, height)
+        bottomNavigationView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        bottomNavigationView.setContent {
+            LegadoTheme {
+                MainNavigation(visiblePages, realPositions[pagePosition], updatingBooks) { page ->
+                    val position = visiblePages.indexOf(page)
+                    if (position == pagePosition) onDestinationReselected(page)
+                    else if (position >= 0) viewPagerMain.setCurrentItem(position, false)
+                }
+            }
         }
     }
 
@@ -281,18 +266,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             block.resume(null)
             return@sc
         }
+        var password = ""
         alert(R.string.set_local_password, R.string.set_local_password_summary) {
-            val editTextBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = "password"
-            }
             customView {
-                editTextBinding.root
+                LegadoComposeView(this@MainActivity).apply {
+                    setContent { LegadoTheme { LocalPasswordContent { password = it } } }
+                }
             }
             onDismiss {
                 block.resume(null)
             }
             okButton {
-                LocalConfig.password = editTextBinding.editView.text.toString()
+                LocalConfig.password = password
             }
             cancelButton {
                 LocalConfig.password = ""
@@ -364,21 +349,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     override fun observeLiveBus() {
         viewModel.onUpBooksLiveData.observe(this) {
-            if (onUpBooksBadgeView == null) {
-                onUpBooksBadgeView = binding.bottomNavigationView.addBadgeView(0)
-            }
-            onUpBooksBadgeView!!.setBadgeCount(it)
+            updatingBooks = it
         }
         observeEvent<String>(EventBus.RECREATE) {
             recreate()
         }
         observeEvent<Boolean>(EventBus.NOTIFY_MAIN) {
             binding.apply {
-                if (it) {
-                    bottomNavigationView.menu.clear()
-                    bottomNavigationView.inflateMenu(R.menu.main_bnv)
-                    onUpBooksBadgeView = null
-                }
                 upBottomMenu()
                 if (it) {
                     viewPagerMain.setCurrentItem(bottomMenuCount - 1, false)
@@ -391,12 +368,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun upBottomMenu() {
+        val previousPages = visiblePages
+        val selectedPage = visiblePages.getOrNull(pagePosition) ?: idBookshelf
         val showDiscovery = AppConfig.showDiscovery
         val showRss = AppConfig.showRSS
-        binding.bottomNavigationView.menu.let { menu ->
-            menu.findItem(R.id.menu_discovery).isVisible = showDiscovery
-            menu.findItem(R.id.menu_rss).isVisible = showRss
-        }
         var index = 0
         if (showDiscovery) {
             index++
@@ -409,7 +384,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         index++
         realPositions[index] = idMy
         bottomMenuCount = index + 1
-        adapter.notifyDataSetChanged()
+        visiblePages = realPositions.take(bottomMenuCount)
+        val targetPosition = visiblePages.indexOf(selectedPage).coerceAtLeast(0)
+        pagePosition = targetPosition
+        val currentAdapter = binding.viewPagerMain.adapter as? TabFragmentPageAdapter
+        if (currentAdapter != null) {
+            if (previousPages != visiblePages || currentAdapter.groupStyle != AppConfig.bookGroupStyle) {
+                fragmentMap.clear()
+                binding.viewPagerMain.adapter = TabFragmentPageAdapter(supportFragmentManager)
+            } else currentAdapter.notifyDataSetChanged()
+            binding.viewPagerMain.setCurrentItem(targetPosition, false)
+        }
     }
 
     private fun upHomePage() {
@@ -439,7 +424,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
         override fun onPageSelected(position: Int) {
             pagePosition = position
-            binding.bottomNavigationView.menu[realPositions[position]].isChecked = true
         }
 
     }
@@ -448,23 +432,24 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private inner class TabFragmentPageAdapter(fm: FragmentManager) :
         FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
+        val groupStyle = AppConfig.bookGroupStyle
+
         private fun getId(position: Int): Int {
             return getFragmentId(position)
         }
 
         override fun getItemPosition(any: Any): Int {
-            val position = (any as MainFragmentInterface).position
-                ?: return POSITION_NONE
-            val fragmentId = getId(position)
-            if ((fragmentId == idBookshelf1 && any is BookshelfFragment1)
-                || (fragmentId == idBookshelf2 && any is BookshelfFragment2)
-                || (fragmentId == idExplore && any is ExploreFragment)
-                || (fragmentId == idRss && any is RssFragment)
-                || (fragmentId == idMy && any is MyFragment)
-            ) {
-                return POSITION_UNCHANGED
+            val page = when (any) {
+                is BookshelfFragment1 -> if (AppConfig.bookGroupStyle != 1) idBookshelf else return POSITION_NONE
+                is BookshelfFragment2 -> if (AppConfig.bookGroupStyle == 1) idBookshelf else return POSITION_NONE
+                is ExploreFragment -> idExplore
+                is RssFragment -> idRss
+                is MyFragment -> idMy
+                else -> return POSITION_NONE
             }
-            return POSITION_NONE
+            val position = visiblePages.indexOf(page)
+            if (position < 0) return POSITION_NONE
+            return if ((any as MainFragmentInterface).position == position) POSITION_UNCHANGED else POSITION_NONE
         }
 
         override fun getItem(position: Int): Fragment {

@@ -65,6 +65,8 @@ import io.legado.app.ui.book.read.page.entities.column.TextBaseColumn
 import io.legado.app.ui.book.read.page.provider.ChapterProvider.reviewChar
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.LogUtils
+private const val TAG = "TextChapterLayout"
 
 class TextChapterLayout(
     scope: CoroutineScope,
@@ -173,7 +175,7 @@ class TextChapterLayout(
         try {
             listener?.onLayoutPageCompleted(textPages.lastIndex, textPage)
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             AppLog.put("调用布局进度监听回调出错\n${e.localizedMessage}", e)
         }
     }
@@ -183,7 +185,7 @@ class TextChapterLayout(
         try {
             listener?.onLayoutCompleted()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             AppLog.put("调用布局进度监听回调出错\n${e.localizedMessage}", e)
         } finally {
             listener = null
@@ -199,7 +201,7 @@ class TextChapterLayout(
         try {
             listener?.onLayoutException(e)
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             AppLog.put("调用布局进度监听回调出错\n${e.localizedMessage}", e)
         } finally {
             listener = null

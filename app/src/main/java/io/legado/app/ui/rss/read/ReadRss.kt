@@ -78,7 +78,7 @@ object ReadRss {
             val ruleContent = s.ruleContent
             if (ruleContent.isNullOrBlank()) {
                 when (type) {
-                    1 -> fragment.showDialogFragment(PhotoDialog(rssArticle.link))
+                    1 -> fragment.showDialogFragment(PhotoDialog(rssArticle.link, rssArticle.origin, rssArticle = rssArticle))
                 }
             } else {
                 Rss.getContent(fragment.viewLifecycleOwner.lifecycleScope, rssArticle, ruleContent, s)
@@ -88,7 +88,7 @@ object ReadRss {
                         }
                         val url = NetworkUtils.getAbsoluteURL(rssArticle.link, body)
                         when (type) {
-                            1 -> fragment.showDialogFragment(PhotoDialog(url))
+                            1 -> fragment.showDialogFragment(PhotoDialog(url, rssArticle.origin, rssArticle = rssArticle))
                         }
                     }.onError {
                         AppLog.put("加载为链接的正文失败", it, true)
@@ -103,14 +103,14 @@ object ReadRss {
             val ruleContent = s.ruleContent
             if (ruleContent.isNullOrBlank()) {
                 when (type) {
-                    1 -> activity.showDialogFragment(PhotoDialog(record.record))
+                    1 -> activity.showDialogFragment(PhotoDialog(record.record, record.origin, rssArticle = record.toRssArticle()))
                 }
             } else {
                 Rss.getContent(activity.lifecycleScope, record.toRssArticle(), ruleContent, s)
                     .onSuccess(IO) { body ->
                         val url = NetworkUtils.getAbsoluteURL(record.record, body)
                         when (type) {
-                            1 -> activity.showDialogFragment(PhotoDialog(url))
+                            1 -> activity.showDialogFragment(PhotoDialog(url, record.origin, rssArticle = record.toRssArticle()))
                         }
                     }.onError {
                         AppLog.put("加载为链接的正文失败", it, true)

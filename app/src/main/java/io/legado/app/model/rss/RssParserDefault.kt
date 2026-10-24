@@ -2,6 +2,8 @@ package io.legado.app.model.rss
 
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.model.Debug
+import io.legado.app.model.rss.media.RssMediaAttachment
+import io.legado.app.utils.GSON
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
@@ -20,6 +22,7 @@ object RssParserDefault {
 
         val articleList = mutableListOf<RssArticle>()
         var currentArticle = RssArticle()
+        val attachments = mutableListOf<RssMediaAttachment>()
 
         val factory = XmlPullParserFactory.newInstance()
         factory.isNamespaceAware = false
@@ -47,10 +50,22 @@ object RssParserDefault {
                     xmlPullParser.name.equals(RSS_ITEM_THUMBNAIL, true) ->
                         if (insideItem) currentArticle.image =
                             xmlPullParser.getAttributeValue(null, RSS_ITEM_URL)
-                    xmlPullParser.name.equals(RSS_ITEM_ENCLOSURE, true) ->
+                    (xmlPullParser.name.equals(RSS_ITEM_ENCLOSURE, true)
+                        || xmlPullParser.name.equals("media:content", true)) ->
                         if (insideItem) {
                             val type =
                                 xmlPullParser.getAttributeValue(null, RSS_ITEM_TYPE)
+                            xmlPullParser.getAttributeValue(null, RSS_ITEM_URL)
+                                ?.takeIf { it.isNotBlank() }?.let { url ->
+                                    attachments += RssMediaAttachment(
+                                        url = url,
+                                        mimeType = type,
+                                        size = (xmlPullParser.getAttributeValue(null, "length")
+                                            ?: xmlPullParser.getAttributeValue(null, "fileSize"))?.toLongOrNull(),
+                                        label = xmlPullParser.getAttributeValue(null, "title"),
+                                        kind = xmlPullParser.getAttributeValue(null, "medium")
+                                    )
+                                }
                             if (type != null && type.contains("image/")) {
                                 currentArticle.image =
                                     xmlPullParser.getAttributeValue(null, RSS_ITEM_URL)
@@ -93,8 +108,10 @@ object RssParserDefault {
                 insideItem = false
                 currentArticle.origin = sourceUrl
                 currentArticle.sort = sortName
+                currentArticle.enclosureJson = GSON.toJson(attachments)
                 articleList.add(currentArticle)
                 currentArticle = RssArticle()
+                attachments.clear()
             }
             eventType = xmlPullParser.next()
         }

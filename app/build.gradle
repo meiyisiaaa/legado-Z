@@ -8,6 +8,7 @@ plugins {
 
     alias libs.plugins.android.application
     alias libs.plugins.kotlin.android
+    alias libs.plugins.compose.compiler
     alias libs.plugins.kotlin.parcelize
     alias libs.plugins.room
     alias libs.plugins.ksp
@@ -48,7 +49,7 @@ android {
     }
     defaultConfig {
         applicationId "io.legado.app"
-        minSdk 21
+        minSdk 26
         targetSdk 36
         versionCode 10000 + gitCommits
         versionName version
@@ -69,6 +70,7 @@ android {
         }
     }
     buildFeatures {
+        compose = true
         buildConfig = true
         viewBinding = true
     }
@@ -150,6 +152,11 @@ android {
     lint {
         checkDependencies = true
     }
+    testOptions {
+        // 防御性配置：JVM 单测正常路径不应触碰 android.jar 桩方法
+        // （io.legado.app.ai 内核层已做到零 Android 依赖），此项仅兜底避免 "not mocked" 崩溃
+        unitTests.returnDefaultValues = true
+    }
     tasks.withType(JavaCompile).tap {
         configureEach {
             //options.compilerArgs << "-Xlint:unchecked"
@@ -161,18 +168,30 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.compose.bom))
+    androidTestImplementation(platform(libs.compose.bom))
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.tooling.preview)
+    implementation(libs.compose.runtime.livedata)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.runtime.compose)
+    debugImplementation(libs.compose.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(libs.compose.ui.test.junit4)
     //compileOnly "com.android.tools.build:gradle:$agp_version"
     //noinspection GradleDependency,GradlePackageUpdate
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
     coreLibraryDesugaring(libs.desugar)
     testImplementation(libs.junit)
+    testImplementation(libs.mockwebserver)
+    testImplementation(libs.kotlinx.coroutines.test)
+    // 仅 AiConfigTest 需要：AiConfig 触碰 appCtx/SharedPreferences，必须真实 Context
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.bundles.androidTest)
     //kotlin
     //noinspection GradleDependency,DifferentStdlibGradleVersion
     implementation(libs.kotlin.stdlib)
-    //Kotlin反射
-    //noinspection GradleDependency,DifferentStdlibGradleVersion
-    //implementation(libs.kotlin.reflect)
 
 
     //协程
@@ -209,12 +228,11 @@ dependencies {
     implementation(libs.media.media)
     // For media playback using ExoPlayer
     implementation(libs.media3.exoplayer)
-    //implementation(libs.media3.exoplayer.hls)
-    //implementation(libs.media3.ui)
+    implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.exoplayer.dash)
+    implementation(libs.media3.transformer)
     // For loading data using the OkHttp network stack
     implementation(libs.media3.datasource.okhttp)
-    // For exposing and controlling media sessions
-    //implementation "androidx.media3:media3-session:$media3_version"
 
     //videoPlayer
     implementation(libs.gsyVideoPlayer.java)
@@ -263,7 +281,10 @@ dependencies {
 
     //webServer
     implementation(libs.nanohttpd.nanohttpd)
-    implementation(libs.nanohttpd.websocket)
+    implementation('io.modelcontextprotocol:kotlin-sdk-server:0.14.0')
+    implementation('io.ktor:ktor-server-cio:3.4.3')
+    androidTestImplementation('io.modelcontextprotocol:kotlin-sdk-client:0.14.0')
+    androidTestImplementation('io.ktor:ktor-client-cio:3.4.3')
 
     //二维码
     //noinspection GradleDependency

@@ -2,6 +2,16 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!--
+        本文件的排列顺序 == 选区菜单的实际顺序。
+        TextActionMenu 只把前 TextActionMenu.VISIBLE_MENU_ITEM_COUNT（= 6）项显示为常驻行，
+        其余一律折进「更多」。因此「放到末尾就不会被折叠」是错误的 —— 恰恰相反，
+        排在阈值之后的项一定会被收进「更多」。
+        为让「AI 赏析」与「字典」平级直接可见，这里把它插在「字典」之后（第 6 项），
+        并把阈值同步从 5 提到 6：既有 8 项的相对顺序保持原样，没有任何一项被降级折叠，
+        「朗读」这类高频 TTS 入口仍留在常驻行。
+        「AI 提问」留在最末尾（折进「更多」），它只针对当前选区，不提供全书入口。
+    -->
     <item
         android:id="@+id/menu_replace"
         android:title="@string/replace" />
@@ -23,6 +33,11 @@
         android:title="@string/dict" />
 
     <item
+        android:id="@+id/menu_ai_explain"
+        android:title="@string/menu_ai_explain"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_search_content"
         android:title="@string/search_content"
         app:showAsAction="never" />
@@ -35,5 +50,10 @@
     <item
         android:id="@+id/menu_share_str"
         android:title="@string/share"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_ai_qa"
+        android:title="@string/menu_ai_qa"
         app:showAsAction="never" />
 </menu>

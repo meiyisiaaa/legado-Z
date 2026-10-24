@@ -5,10 +5,13 @@ import android.text.TextUtils
 import io.legado.app.api.ReturnData
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.source.BookSourceImport
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 
 object BookSourceController {
 
@@ -21,38 +24,75 @@ object BookSourceController {
             } else returnData.setData(bookSources)
         }
 
-    fun saveSource(postData: String?): ReturnData {
+    suspend fun saveSource(postData: String?): ReturnData {
         val returnData = ReturnData()
         postData ?: return returnData.setErrorMsg("数据不能为空")
-        val bookSource = GSON.fromJsonObject<BookSource>(postData).getOrNull()
-        if (bookSource != null) {
-            if (TextUtils.isEmpty(bookSource.bookSourceName) || TextUtils.isEmpty(bookSource.bookSourceUrl)) {
-                returnData.setErrorMsg("源名称和URL不能为空")
-            } else {
-                appDb.bookSourceDao.insert(bookSource)
-                returnData.setData("")
-            }
+        val bookSource = try {
+            BookSourceImport.parse(postData, currentCoroutineContext())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return returnData.setErrorMsg(e.localizedMessage ?: "转换源失败")
+        }
+        if (TextUtils.isEmpty(bookSource.bookSourceName) || TextUtils.isEmpty(bookSource.bookSourceUrl)) {
+            returnData.setErrorMsg("源名称和URL不能为空")
         } else {
-            returnData.setErrorMsg("转换源失败")
+            appDb.bookSourceDao.insert(bookSource)
+            returnData.setData("")
         }
         return returnData
     }
 
-    fun saveSources(postData: String?): ReturnData {
+    suspend fun parseBookSource(postData: String?): ReturnData {
+        if (postData.isNullOrBlank()) return ReturnData().setErrorMsg("数据不能为空")
+        val text = try {
+            GSON.fromJsonObject<Map<String, String>>(postData).getOrThrow()["text"]
+        } catch (e: Exception) {
+            return ReturnData().setErrorMsg(e.localizedMessage ?: "书源内容格式错误")
+        }
+        if (text.isNullOrBlank()) return ReturnData().setErrorMsg("书源内容不能为空")
+
+        val bookSource = try {
+            BookSourceImport.parse(text, currentCoroutineContext())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return ReturnData().setErrorMsg(e.localizedMessage ?: "转换源失败")
+        }
+        if (bookSource.bookSourceName.isBlank() || bookSource.bookSourceUrl.isBlank()) {
+            return ReturnData().setErrorMsg("源名称和URL不能为空")
+        }
+        return ReturnData().setData(bookSource)
+    }
+
+    suspend fun saveSources(postData: String?): ReturnData {
         postData ?: return ReturnData().setErrorMsg("数据为空")
-        val okSources = arrayListOf<BookSource>()
         val bookSources = GSON.fromJsonArray<BookSource>(postData).getOrNull()
         if (bookSources.isNullOrEmpty()) {
             return ReturnData().setErrorMsg("转换源失败")
         }
-        bookSources.forEach { bookSource ->
+        val normalizedSources = try {
+            val coroutineContext = currentCoroutineContext()
+            val canonicalized = ArrayList<BookSource>(bookSources.size)
+            for (bookSource in bookSources) {
+                canonicalized.add(BookSourceImport.canonicalize(bookSource, coroutineContext))
+            }
+            canonicalized
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return ReturnData().setErrorMsg(e.localizedMessage ?: "转换源失败")
+        }
+        val okSources = normalizedSources.filter { bookSource ->
             if (bookSource.bookSourceName.isNotBlank()
                 && bookSource.bookSourceUrl.isNotBlank()
             ) {
-                appDb.bookSourceDao.insert(bookSource)
-                okSources.add(bookSource)
+                true
+            } else {
+                false
             }
         }
+        appDb.bookSourceDao.insert(*okSources.toTypedArray())
         return ReturnData().setData(okSources)
     }
 

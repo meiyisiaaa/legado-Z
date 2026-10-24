@@ -1,0 +1,14 @@
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-TARGETDURATION:3
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXT-X-MAP:URI="../split-audio/init.mp4"
+#EXTINF:2.020136,
+../split-audio/segment00.m4s
+#EXTINF:1.996916,
+../split-audio/segment01.m4s
+#EXTINF:1.996916,
+../split-audio/segment02.m4s
+#EXTINF:0.023220,
+../split-audio/segment03.m4s
+#EXT-X-ENDLIST

@@ -6,39 +6,33 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import androidx.core.view.get
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.EventBus
-import io.legado.app.databinding.DialogReadBookStyleBinding
-import io.legado.app.databinding.ItemReadStyleBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
-import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.bottomBackground
-import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.font.FontSelectDialog
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ChineseUtils
-import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.dpToPx
-import io.legado.app.utils.getIndexById
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import splitties.views.onLongClick
 
-class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
-    FontSelectDialog.CallBack {
+class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style), FontSelectDialog.CallBack {
 
-    private val binding by viewBinding(DialogReadBookStyleBinding::bind)
+    private enum class Choice { TextWeight, ChineseMode, Indent }
+
     private val callBack get() = activity as? ReadBookActivity
-    private lateinit var styleAdapter: StyleAdapter
+    private var revision by mutableIntStateOf(0)
+    private var choice by mutableStateOf<Choice?>(null)
 
     override fun onStart() {
         super.onStart()
@@ -46,19 +40,68 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
             clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setBackgroundDrawableResource(R.color.background)
             decorView.setPadding(0, 0, 0, 0)
-            val attr = attributes
-            attr.dimAmount = 0.0f
-            attr.gravity = Gravity.BOTTOM
-            attributes = attr
+            val attributes = attributes
+            attributes.dimAmount = 0f
+            attributes.gravity = Gravity.BOTTOM
+            this.attributes = attributes
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         (activity as ReadBookActivity).bottomDialog++
-        initView()
-        initData()
-        initViewEvent()
+        view.findViewById<ComposeView>(R.id.legado_compose_host).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                LegadoTheme {
+                    ReadStyleContent(
+                        state = currentUiState(revision),
+                        onTextSizeChange = { value ->
+                            ReadBookConfig.textSize = value
+                            postConfig(8, 5)
+                        },
+                        onLetterSpacingChange = { value ->
+                            ReadBookConfig.letterSpacing = value
+                            postConfig(8, 5)
+                        },
+                        onLineSpacingChange = { value ->
+                            ReadBookConfig.lineSpacingExtra = value
+                            postConfig(8, 5)
+                        },
+                        onParagraphSpacingChange = { value ->
+                            ReadBookConfig.paragraphSpacing = value
+                            postConfig(8, 5)
+                        },
+                        onPageAnimChange = { value ->
+                            ReadBook.book?.setPageAnim(-1)
+                            ReadBookConfig.pageAnim = value
+                            callBack?.upPageAnim()
+                            ReadBook.loadContent(false)
+                            revision++
+                        },
+                        onShareLayoutChange = { checked ->
+                            ReadBookConfig.shareLayout = checked
+                            postConfig(1, 2, 5)
+                        },
+                        onTextBoldClick = { choice = Choice.TextWeight },
+                        onFontClick = { showDialogFragment<FontSelectDialog>() },
+                        onIndentClick = { choice = Choice.Indent },
+                        onPaddingClick = {
+                            dismissAllowingStateLoss()
+                            callBack?.showPaddingConfig()
+                        },
+                        onTipClick = {
+                            TipConfigDialog().show(childFragmentManager, "tipConfigDialog")
+                        },
+                        onChineseClick = { choice = Choice.ChineseMode },
+                        onStyleSelect = ::changeBgTextConfig,
+                        onStyleEdit = ::showBgTextConfig,
+                        onAddStyle = ::addStyle
+                    )
+                    renderChoiceDialog()
+                }
+            }
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
@@ -67,135 +110,87 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
         (activity as ReadBookActivity).bottomDialog--
     }
 
-    private fun initView() = binding.run {
-        val bg = requireContext().bottomBackground
-        val isLight = ColorUtils.isColorLight(bg)
-        val textColor = requireContext().getPrimaryTextColor(isLight)
-        rootView.setBackgroundColor(bg)
-        tvPageAnim.setTextColor(textColor)
-        tvBgTs.setTextColor(textColor)
-        tvShareLayout.setTextColor(textColor)
-        dsbTextSize.valueFormat = {
-            (it + 5).toString()
-        }
-        dsbTextLetterSpacing.valueFormat = {
-            ((it - 50) / 100f).toString()
-        }
-        dsbLineSize.valueFormat = { ((it - 10) / 10f).toString() }
-        dsbParagraphSpacing.valueFormat = { (it / 10f).toString() }
-        styleAdapter = StyleAdapter()
-        rvStyle.adapter = styleAdapter
-        styleAdapter.addFooterView {
-            ItemReadStyleBinding.inflate(layoutInflater, it, false).apply {
-                ivStyle.setPadding(6.dpToPx(), 6.dpToPx(), 6.dpToPx(), 6.dpToPx())
-                ivStyle.setText(null)
-                ivStyle.setColorFilter(textColor)
-                ivStyle.borderColor = textColor
-                ivStyle.setImageResource(R.drawable.ic_add)
-                root.setOnClickListener {
-                    ReadBookConfig.configList.add(ReadBookConfig.Config())
-                    showBgTextConfig(ReadBookConfig.configList.lastIndex)
+    private fun currentUiState(@Suppress("UNUSED_PARAMETER") revision: Int) = ReadStyleUiState(
+        textSize = ReadBookConfig.textSize,
+        letterSpacing = ReadBookConfig.letterSpacing,
+        lineSpacingExtra = ReadBookConfig.lineSpacingExtra,
+        paragraphSpacing = ReadBookConfig.paragraphSpacing,
+        pageAnim = ReadBook.pageAnim(),
+        shareLayout = ReadBookConfig.shareLayout,
+        styleSelect = ReadBookConfig.styleSelect,
+        textBold = ReadBookConfig.textBold,
+        chineseConverterType = AppConfig.chineseConverterType,
+        textFont = ReadBookConfig.textFont,
+        paragraphIndent = ReadBookConfig.paragraphIndent.length,
+        configs = ReadBookConfig.configList.map { it.copy() }
+    )
+
+    private fun postConfig(vararg values: Int) {
+        postEvent(EventBus.UP_CONFIG, values.toCollection(ArrayList<Int>()))
+        revision++
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun renderChoiceDialog() {
+        when (choice) {
+            Choice.TextWeight -> ReaderConfigChoiceDialog(
+                title = getString(R.string.text_font_weight_converter),
+                options = resources.getStringArray(R.array.text_font_weight).toList(),
+                selectedIndex = ReadBookConfig.textBold,
+                onDismiss = { choice = null },
+                onSelect = { index ->
+                    ReadBookConfig.textBold = index
+                    choice = null
+                    postConfig(8, 9, 6)
                 }
-            }
-        }
-    }
-
-    private fun initData() {
-        binding.cbShareLayout.isChecked = ReadBookConfig.shareLayout
-        upView()
-        styleAdapter.setItems(ReadBookConfig.configList)
-    }
-
-    private fun initViewEvent() = binding.run {
-        chineseConverter.onChanged {
-            ChineseUtils.unLoad(*TransType.entries.toTypedArray())
-            postEvent(EventBus.UP_CONFIG, arrayListOf(5))
-        }
-        textFontWeightConverter.onChanged {
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 9, 6))
-        }
-        tvTextFont.setOnClickListener {
-            showDialogFragment<FontSelectDialog>()
-        }
-        tvTextIndent.setOnClickListener {
-            context?.selector(
+            )
+            Choice.ChineseMode -> ReaderConfigChoiceDialog(
+                title = getString(R.string.chinese_converter),
+                options = resources.getStringArray(R.array.chinese_mode).toList(),
+                selectedIndex = AppConfig.chineseConverterType,
+                onDismiss = { choice = null },
+                onSelect = { index ->
+                    AppConfig.chineseConverterType = index
+                    choice = null
+                    ChineseUtils.unLoad(*TransType.entries.toTypedArray())
+                    postConfig(5)
+                }
+            )
+            Choice.Indent -> ReaderConfigChoiceDialog(
                 title = getString(R.string.text_indent),
-                items = resources.getStringArray(R.array.indent).toList()
-            ) { _, index ->
-                ReadBookConfig.paragraphIndent = "　".repeat(index)
-                postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
-            }
-        }
-        tvPadding.setOnClickListener {
-            dismissAllowingStateLoss()
-            callBack?.showPaddingConfig()
-        }
-        tvTip.setOnClickListener {
-            TipConfigDialog().show(childFragmentManager, "tipConfigDialog")
-        }
-        rgPageAnim.setOnCheckedChangeListener { _, checkedId ->
-            ReadBook.book?.setPageAnim(-1)
-            ReadBookConfig.pageAnim = binding.rgPageAnim.getIndexById(checkedId)
-            callBack?.upPageAnim()
-            ReadBook.loadContent(false)
-        }
-        cbShareLayout.onCheckedChangeListener = { _, isChecked ->
-            ReadBookConfig.shareLayout = isChecked
-            upView()
-            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
-        }
-        dsbTextSize.onChanged = {
-            ReadBookConfig.textSize = it + 5
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
-        }
-        dsbTextLetterSpacing.onChanged = {
-            ReadBookConfig.letterSpacing = (it - 50) / 100f
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
-        }
-        dsbLineSize.onChanged = {
-            ReadBookConfig.lineSpacingExtra = it
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
-        }
-        dsbParagraphSpacing.onChanged = {
-            ReadBookConfig.paragraphSpacing = it
-            postEvent(EventBus.UP_CONFIG, arrayListOf(8, 5))
+                options = resources.getStringArray(R.array.indent).toList(),
+                selectedIndex = ReadBookConfig.paragraphIndent.length,
+                onDismiss = { choice = null },
+                onSelect = { index ->
+                    ReadBookConfig.paragraphIndent = "　".repeat(index)
+                    choice = null
+                    postConfig(8, 5)
+                }
+            )
+            null -> Unit
         }
     }
 
     private fun changeBgTextConfig(index: Int) {
         val oldIndex = ReadBookConfig.styleSelect
-        if (index != oldIndex) {
-            ReadBookConfig.styleSelect = index
-            upView()
-            styleAdapter.notifyItemChanged(oldIndex)
-            styleAdapter.notifyItemChanged(index)
-            postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
-            if (AppConfig.readBarStyleFollowPage) {
-                postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
-            }
+        if (index == oldIndex) return
+        ReadBookConfig.styleSelect = index
+        revision++
+        postEvent(EventBus.UP_CONFIG, arrayListOf(1, 2, 5))
+        if (AppConfig.readBarStyleFollowPage) {
+            postEvent(EventBus.UPDATE_READ_ACTION_BAR, true)
         }
     }
 
-    private fun showBgTextConfig(index: Int): Boolean {
+    private fun addStyle() {
+        ReadBookConfig.configList.add(ReadBookConfig.Config())
+        showBgTextConfig(ReadBookConfig.configList.lastIndex)
+    }
+
+    private fun showBgTextConfig(index: Int) {
         dismissAllowingStateLoss()
         changeBgTextConfig(index)
         callBack?.showBgTextConfig()
-        return true
-    }
-
-    private fun upView() = binding.run {
-        textFontWeightConverter.upUi(ReadBookConfig.textBold)
-        ReadBook.pageAnim().let {
-            if (it >= 0 && it < rgPageAnim.childCount) {
-                rgPageAnim.check(rgPageAnim[it].id)
-            }
-        }
-        ReadBookConfig.let {
-            dsbTextSize.progress = it.textSize - 5
-            dsbTextLetterSpacing.progress = (it.letterSpacing * 100).toInt() + 50
-            dsbLineSize.progress = it.lineSpacingExtra
-            dsbParagraphSpacing.progress = it.paragraphSpacing
-        }
     }
 
     override val curFontPath: String
@@ -204,51 +199,7 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
     override fun selectFont(path: String) {
         if (path != ReadBookConfig.textFont || path.isEmpty()) {
             ReadBookConfig.textFont = path
-            postEvent(EventBus.UP_CONFIG, arrayListOf(2, 5))
+            postConfig(2, 5)
         }
-    }
-
-    inner class StyleAdapter :
-        RecyclerAdapter<ReadBookConfig.Config, ItemReadStyleBinding>(requireContext()) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemReadStyleBinding {
-            return ItemReadStyleBinding.inflate(inflater, parent, false)
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemReadStyleBinding,
-            item: ReadBookConfig.Config,
-            payloads: MutableList<Any>
-        ) {
-            binding.apply {
-                ivStyle.setText(item.name.ifBlank { "文字" })
-                ivStyle.setTextColor(item.curTextColor())
-                ivStyle.setImageDrawable(item.curBgDrawable(100, 150))
-                if (ReadBookConfig.styleSelect == holder.layoutPosition) {
-                    ivStyle.borderColor = accentColor
-                    ivStyle.setTextBold(true)
-                } else {
-                    ivStyle.borderColor = item.curTextColor()
-                    ivStyle.setTextBold(false)
-                }
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemReadStyleBinding) {
-            binding.apply {
-                ivStyle.setOnClickListener {
-                    if (ivStyle.isInView) {
-                        changeBgTextConfig(holder.layoutPosition)
-                    }
-                }
-                ivStyle.onLongClick(ivStyle.isInView) {
-                    if (ivStyle.isInView) {
-                        showBgTextConfig(holder.layoutPosition)
-                    }
-                }
-            }
-        }
-
     }
 }

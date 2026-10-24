@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_no_results">没有搜索结果</string>
+    <string name="search_no_results_hint">试试其他关键词，或检查已启用的书源。</string>
+    <string name="search_paused">搜索已暂停</string>
+    <string name="search_paused_hint">继续搜索可接着扫描剩余书源。</string>
+    <string name="search_resume">继续搜索</string>
+    <string name="search_scanning_sources">正在扫描书源…</string>
+    <string name="search_already_on_shelf">已在书架</string>
+    <string name="search_result_sources">%1$d 个来源</string>
+</resources>

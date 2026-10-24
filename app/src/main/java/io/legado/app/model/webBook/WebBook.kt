@@ -1,5 +1,6 @@
 package io.legado.app.model.webBook
 
+import com.google.gson.JsonElement
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -13,6 +14,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.source.getBookType
 import io.legado.app.model.Debug
+import io.legado.app.model.jsSource.JsSourceBook
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl
@@ -53,6 +55,9 @@ object WebBook {
         filter: ((name: String, author: String, kind: String?) -> Boolean)? = null,
         shouldBreak: ((size: Int) -> Boolean)? = null
     ): ArrayList<SearchBook> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.searchAwait(bookSource, key, page, filter, shouldBreak)
+        }
         val searchUrl = bookSource.searchUrl
         if (searchUrl.isNullOrBlank()) {
             throw NoStackTraceException("搜索url不能为空")
@@ -126,6 +131,9 @@ object WebBook {
         url: String,
         page: Int? = 1,
     ): ArrayList<SearchBook> {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.exploreAwait(bookSource, url, page)
+        }
         val ruleData = RuleData()
         val sourceUrl = bookSource.bookSourceUrl
         val exploreInfoMap = exploreInfoMapList[sourceUrl]
@@ -196,6 +204,9 @@ object WebBook {
     ): Book {
         book.removeAllBookType()
         book.addType(bookSource.getBookType())
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.getBookInfoAwait(bookSource, book, canReName)
+        }
         if (!book.infoHtml.isNullOrEmpty()) {
             BookInfo.analyzeBookInfo(
                 bookSource = bookSource,
@@ -251,6 +262,22 @@ object WebBook {
         return book
     }
 
+    /** Dispatches a single-file JS source's review summary function. */
+    suspend fun getReviewSummaryAwait(bookSource: BookSource, book: Book): String? {
+        if (!bookSource.isJsSource()) {
+            throw NoStackTraceException("传统书源暂不支持 getReviewSummary")
+        }
+        return JsSourceBook.getReviewSummaryAwait(bookSource, book)
+    }
+
+    /** Dispatches a single-file JS source's review detail function for one summary item. */
+    suspend fun getReviewDetailAwait(bookSource: BookSource, review: JsonElement): String? {
+        if (!bookSource.isJsSource()) {
+            throw NoStackTraceException("传统书源暂不支持 getReviewDetail")
+        }
+        return JsSourceBook.getReviewDetailAwait(bookSource, review)
+    }
+
     /**
      * 目录
      */
@@ -290,6 +317,9 @@ object WebBook {
         book.removeAllBookType()
         book.addType(bookSource.getBookType())
         return kotlin.runCatching {
+            if (bookSource.isJsSource()) {
+                return@runCatching JsSourceBook.getChapterListAwait(bookSource, book)
+            }
             if (runPerJs) {
                 runPreUpdateJs(bookSource, book, isFromBookInfo).getOrThrow()
             }
@@ -383,6 +413,15 @@ object WebBook {
         nextChapterUrl: String? = null,
         needSave: Boolean = true
     ): String {
+        if (bookSource.isJsSource()) {
+            return JsSourceBook.getContentAwait(
+                bookSource,
+                book,
+                bookChapter,
+                nextChapterUrl,
+                needSave
+            )
+        }
         val contentRule = bookSource.getContentRule()
         if (contentRule.content.isNullOrEmpty()) {
             Debug.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接:${bookChapter.url}")

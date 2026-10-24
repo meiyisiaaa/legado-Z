@@ -9,6 +9,11 @@ import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.tabs.TabLayout
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
@@ -32,14 +37,21 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
+import io.legado.app.ui.book.source.edit.SourceEditAction
+import io.legado.app.ui.book.source.edit.SourceEditChoice
+import io.legado.app.ui.book.source.edit.SourceEditContent
+import io.legado.app.ui.book.source.edit.SourceEditSwitch
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.recycler.NoChildScrollLinearLayoutManager
 import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.GSON
@@ -77,6 +89,16 @@ class BookSourceEditActivity :
     private val infoEntities: ArrayList<EditEntity> = ArrayList()
     private val tocEntities: ArrayList<EditEntity> = ArrayList()
     private val contentEntities: ArrayList<EditEntity> = ArrayList()
+    private val composeEntities = mutableStateListOf<EditEntity>()
+    private var selectedEditTab by mutableStateOf(0)
+    private var sourceEnabled by mutableStateOf(true)
+    private var exploreEnabled by mutableStateOf(true)
+    private var cookieEnabled by mutableStateOf(true)
+    private var eventListenerEnabled by mutableStateOf(false)
+    private var customButtonEnabled by mutableStateOf(false)
+    private var autoCompleteEnabled by mutableStateOf(false)
+    private var sourceTypeIndex by mutableStateOf(0)
+    private var composeRoot: ComposeView? = null
 
     //    private val reviewEntities: ArrayList<EditEntity> = ArrayList()
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
@@ -96,12 +118,79 @@ class BookSourceEditActivity :
     }
 
     private val softKeyboardTool by lazy {
-        KeyboardToolPop(this, lifecycleScope, binding.root, this)
+        KeyboardToolPop(this, lifecycleScope, composeRoot ?: binding.root, this)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        autoCompleteEnabled = viewModel.autoComplete
+        val root = LegadoComposeView(this).apply {
+            id = R.id.legado_book_source_compose_root
+        }
+        composeRoot = root
+        setSupportActionBar(null)
+        setContentView(root)
+        root.setContent {
+            LegadoTheme {
+                SourceEditContent(
+                    title = getString(R.string.edit_book_source),
+                    tabs = listOf(
+                        R.string.source_tab_base,
+                        R.string.source_tab_search,
+                        R.string.source_tab_find,
+                        R.string.source_tab_info,
+                        R.string.source_tab_toc,
+                        R.string.source_tab_content
+                    ).map { getString(it) },
+                    selectedTab = selectedEditTab,
+                    entities = composeEntities,
+                    switches = listOf(
+                        SourceEditSwitch("enabled", getString(R.string.is_enable), sourceEnabled),
+                        SourceEditSwitch("explore", getString(R.string.discovery), exploreEnabled),
+                        SourceEditSwitch("cookie", getString(R.string.auto_save_cookie), cookieEnabled),
+                        SourceEditSwitch("event", getString(R.string.is_event_listener), eventListenerEnabled),
+                        SourceEditSwitch("button", getString(R.string.custom_button), customButtonEnabled)
+                    ),
+                    choices = listOf(
+                        SourceEditChoice(
+                            key = "type",
+                            label = getString(R.string.book_type),
+                            options = resources.getStringArray(R.array.book_type).toList(),
+                            selected = sourceTypeIndex
+                        )
+                    ),
+                    quickActions = listOf(
+                        SourceEditAction(R.id.menu_fullscreen_edit, R.string.edit_content, R.drawable.ic_code),
+                        SourceEditAction(R.id.menu_save, R.string.action_save, R.drawable.ic_save),
+                        SourceEditAction(R.id.menu_debug_source, R.string.debug_source, R.drawable.ic_bug_report)
+                    ),
+                    menuActions = listOfNotNull(
+                        viewModel.bookSource?.loginUrl?.takeIf(String::isNotBlank)?.let { SourceEditAction(R.id.menu_login, R.string.login) },
+                        SourceEditAction(R.id.menu_search, R.string.search),
+                        SourceEditAction(R.id.menu_clear_cookie, R.string.cookie),
+                        SourceEditAction(R.id.menu_auto_complete, R.string.auto_complete, checked = autoCompleteEnabled),
+                        SourceEditAction(R.id.menu_copy_source, R.string.copy_source),
+                        SourceEditAction(R.id.menu_paste_source, R.string.paste_source),
+                        SourceEditAction(R.id.menu_set_source_variable, R.string.set_source_variable),
+                        SourceEditAction(R.id.menu_qr_code_camera, R.string.import_by_qr_code),
+                        SourceEditAction(R.id.menu_share_qr, R.string.qr_share),
+                        SourceEditAction(R.id.menu_share_str, R.string.str_share),
+                        SourceEditAction(R.id.menu_log, R.string.log),
+                        SourceEditAction(R.id.menu_help, R.string.help)
+                    ),
+                    onBack = { onBackPressedDispatcher.onBackPressed() },
+                    onTabSelected = ::setEditEntities,
+                    onSwitchChange = ::onSourceSwitchChanged,
+                    onChoiceChange = { _, index ->
+                        sourceTypeIndex = index
+                    },
+                    onAction = ::performAction
+                )
+            }
+        }
         softKeyboardTool.attachToWindow(window)
-        initView()
+        root.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus is EditText) newFocus.postDelayed({ sendText("") }, 120)
+        }
         viewModel.initData(intent) {
             upSourceView(viewModel.bookSource)
         }
@@ -126,13 +215,16 @@ class BookSourceEditActivity :
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val editedText = CodeTextTransfer.readResult(this, result.data) {
+            toastOnUi(R.string.error_read_file)
+        }
         if (result.resultCode == RESULT_OK) {
             val view = window.decorView.findFocus()
             if (view is EditText) {
-                result.data?.getStringExtra("text")?.let {
+                editedText?.let {
                     view.setText(it)
                 }
-                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
+                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0..view.text.length }?.let {
                     view.setSelection(it)
                 }
             } else {
@@ -147,11 +239,10 @@ class BookSourceEditActivity :
             val hint = findParentTextInputLayout(view)?.hint?.toString()
             val currentText = view.text.toString()
             val intent = Intent(this, CodeEditActivity::class.java).apply {
-                putExtra("text", currentText)
                 putExtra("title", hint)
                 putExtra("cursorPosition", view.selectionStart)
             }
-            textEditLauncher.launch(intent)
+            CodeTextTransfer.launch(this, intent, currentText) { textEditLauncher.launch(it) }
         }
         else {
             toastOnUi(R.string.please_focus_cursor_on_textbox)
@@ -159,7 +250,12 @@ class BookSourceEditActivity :
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
+        performAction(item.itemId)
+        return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun performAction(actionId: Int) {
+        when (actionId) {
             R.id.menu_fullscreen_edit -> onFullEditClicked()
 
             R.id.menu_save -> viewModel.save(getSource()) {
@@ -174,7 +270,10 @@ class BookSourceEditActivity :
             }
 
             R.id.menu_clear_cookie -> viewModel.clearCookie(getSource().bookSourceUrl)
-            R.id.menu_auto_complete -> viewModel.autoComplete = !viewModel.autoComplete
+            R.id.menu_auto_complete -> {
+                viewModel.autoComplete = !viewModel.autoComplete
+                autoCompleteEnabled = viewModel.autoComplete
+            }
             R.id.menu_copy_source -> sendToClip(GSON.toJson(getSource()))
             R.id.menu_paste_source -> viewModel.pasteSource { upSourceView(it) }
             R.id.menu_qr_code_camera -> qrCodeResult.launch()
@@ -200,7 +299,16 @@ class BookSourceEditActivity :
             }
 
         }
-        return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun onSourceSwitchChanged(key: String, value: Boolean) {
+        when (key) {
+            "enabled" -> sourceEnabled = value
+            "explore" -> exploreEnabled = value
+            "cookie" -> cookieEnabled = value
+            "event" -> eventListenerEnabled = value
+            "button" -> customButtonEnabled = value
+        }
     }
 
     private fun initView() {
@@ -277,7 +385,8 @@ class BookSourceEditActivity :
     }
 
     private fun setEditEntities(tabPosition: Int?) {
-        adapter.editEntities = when (tabPosition) {
+        selectedEditTab = tabPosition ?: 0
+        val selected = when (tabPosition) {
             1 -> searchEntities
             2 -> exploreEntities
             3 -> infoEntities
@@ -286,27 +395,26 @@ class BookSourceEditActivity :
 //            6 -> reviewEntities
             else -> sourceEntities
         }
-        binding.recyclerView.scrollToPosition(0)
+        composeEntities.clear()
+        composeEntities.addAll(selected)
         window.decorView.rootView.clearFocus()
     }
 
     private fun upSourceView(bookSource: BookSource?) {
         val bs = bookSource ?: BookSource()
         bs.let {
-            binding.cbIsEnable.isChecked = it.enabled
-            binding.cbIsEnableExplore.isChecked = it.enabledExplore
-            binding.cbIsEnableCookie.isChecked = it.enabledCookieJar ?: false
-            binding.spType.setSelection(
-                when (it.bookSourceType) {
-                    BookSourceType.video -> 4
-                    BookSourceType.file -> 3
-                    BookSourceType.image -> 2
-                    BookSourceType.audio -> 1
-                    else -> 0
-                }
-            )
-            binding.cbIsEventListener.isChecked = it.eventListener
-            binding.cbIsCustomButton.isChecked = it.customButton
+            sourceEnabled = it.enabled
+            exploreEnabled = it.enabledExplore
+            cookieEnabled = it.enabledCookieJar ?: false
+            sourceTypeIndex = when (it.bookSourceType) {
+                BookSourceType.video -> 4
+                BookSourceType.file -> 3
+                BookSourceType.image -> 2
+                BookSourceType.audio -> 1
+                else -> 0
+            }
+            eventListenerEnabled = it.eventListener
+            customButtonEnabled = it.customButton
         }
         // 基本信息
         sourceEntities.clear()
@@ -324,6 +432,7 @@ class BookSourceEditActivity :
             add(EditEntity("variableComment", bs.variableComment, R.string.variable_comment))
             add(EditEntity("concurrentRate", bs.concurrentRate, R.string.concurrent_rate))
             add(EditEntity("jsLib", bs.jsLib, "jsLib"))
+            add(EditEntity("mainJs", bs.mainJs, "单文件JS（完整脚本）"))
         }
         // 搜索
         val sr = bs.getSearchRule()
@@ -418,24 +527,23 @@ class BookSourceEditActivity :
 //            add(EditEntity("postQuoteUrl", rr.postQuoteUrl, R.string.post_quote_url))
 //            add(EditEntity("deleteUrl", rr.deleteUrl, R.string.delete_review_url))
 //        }
-        binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
         setEditEntities(0)
     }
 
     private fun getSource(): BookSource {
         val source = viewModel.bookSource?.copy() ?: BookSource()
-        source.enabled = binding.cbIsEnable.isChecked
-        source.enabledExplore = binding.cbIsEnableExplore.isChecked
-        source.enabledCookieJar = binding.cbIsEnableCookie.isChecked
-        source.bookSourceType = when (binding.spType.selectedItemPosition) {
+        source.enabled = sourceEnabled
+        source.enabledExplore = exploreEnabled
+        source.enabledCookieJar = cookieEnabled
+        source.bookSourceType = when (sourceTypeIndex) {
             4 -> BookSourceType.video
             3 -> BookSourceType.file
             2 -> BookSourceType.image
             1 -> BookSourceType.audio
             else -> BookSourceType.default
         }
-        source.eventListener = binding.cbIsEventListener.isChecked
-        source.customButton = binding.cbIsCustomButton.isChecked
+        source.eventListener = eventListenerEnabled
+        source.customButton = customButtonEnabled
         val searchRule = SearchRule()
         val exploreRule = ExploreRule()
         val bookInfoRule = BookInfoRule()
@@ -458,6 +566,7 @@ class BookSourceEditActivity :
                 "concurrentRate" -> source.concurrentRate = it.value
                 "variableComment" -> source.variableComment = it.value
                 "jsLib" -> source.jsLib = it.value
+                "mainJs" -> source.mainJs = it.value
             }
         }
         searchEntities.forEach {

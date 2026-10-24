@@ -33,6 +33,33 @@ import kotlinx.coroutines.currentCoroutineContext
  */
 object BookChapterList {
 
+    /** Updates in-memory book metadata for an already parsed chapter list. */
+    suspend fun updateBookTocInfo(book: Book, list: List<BookChapter>) {
+        if (list.isEmpty()) throw TocEmptyException(appCtx.getString(R.string.chapter_list_empty))
+        list.forEachIndexed { index, chapter -> chapter.index = index }
+        val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
+        val replaceBook = book.toReplaceBook()
+        book.durChapterTitle = list.getOrElse(book.durChapterIndex) { list.last() }
+            .getDisplayTitle(
+                replaceRules,
+                book.getUseReplaceRule(),
+                replaceBook = replaceBook
+            )
+        if (book.totalChapterNum < list.size) {
+            book.lastCheckCount = list.size - book.totalChapterNum
+            book.latestChapterTime = System.currentTimeMillis()
+        }
+        book.lastCheckTime = System.currentTimeMillis()
+        book.totalChapterNum = list.size
+        book.latestChapterTitle = list.getOrElse(book.simulatedTotalChapterNum() - 1) { list.last() }
+            .getDisplayTitle(
+                replaceRules,
+                book.getUseReplaceRule(),
+                replaceBook = replaceBook
+            )
+        currentCoroutineContext().ensureActive()
+    }
+
     suspend fun analyzeChapterList(
         bookSource: BookSource,
         book: Book,
@@ -155,28 +182,7 @@ object BookChapterList {
                 }
             }
         }
-        val replaceRules = ContentProcessor.get(book).getTitleReplaceRules()
-        val replaceBook = book.toReplaceBook()
-        book.durChapterTitle = list.getOrElse(book.durChapterIndex) { list.last() }
-            .getDisplayTitle(
-                replaceRules,
-                book.getUseReplaceRule(),
-                replaceBook = replaceBook
-            )
-        if (book.totalChapterNum < list.size) {
-            book.lastCheckCount = list.size - book.totalChapterNum
-            book.latestChapterTime = System.currentTimeMillis()
-        }
-        book.lastCheckTime = System.currentTimeMillis()
-        book.totalChapterNum = list.size
-        book.latestChapterTitle =
-            list.getOrElse(book.simulatedTotalChapterNum() - 1) { list.last() }
-                .getDisplayTitle(
-                    replaceRules,
-                    book.getUseReplaceRule(),
-                    replaceBook = replaceBook
-                )
-        currentCoroutineContext().ensureActive()
+        updateBookTocInfo(book, list)
         upChapterInfo(list, book)
         return list
     }

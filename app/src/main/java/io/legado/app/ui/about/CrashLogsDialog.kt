@@ -3,23 +3,20 @@ package io.legado.app.ui.about
 import android.app.Application
 import android.net.Uri
 import android.os.Bundle
-import android.view.MenuItem
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.base.BaseViewModel
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.Item1lineTextBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
@@ -30,81 +27,39 @@ import io.legado.app.utils.list
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
-import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.isActive
 import java.io.FileFilter
 
-class CrashLogsDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
-    Toolbar.OnMenuItemClickListener {
-
-    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
+class CrashLogsDialog : BaseDialogFragment(0) {
     private val viewModel by viewModels<CrashViewModel>()
-    private val adapter by lazy { LogAdapter() }
-
-    override fun onStart() {
-        super.onStart()
-        setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
-        binding.toolBar.setTitle(R.string.crash_log)
-        binding.toolBar.inflateMenu(R.menu.crash_log)
-        binding.toolBar.setOnMenuItemClickListener(this)
-        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerView.adapter = adapter
-        viewModel.logLiveData.observe(viewLifecycleOwner) {
-            adapter.setItems(it)
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View =
+        LegadoComposeView(requireContext()).apply {
+            setContent { LegadoTheme {
+                val files by viewModel.logLiveData.observeAsState(emptyList())
+                val loading by viewModel.loading.observeAsState(false)
+                val error by viewModel.loadError.observeAsState()
+                DiagnosticsContent(getString(R.string.crash_log), files.map { DiagnosticItem(it.name) },
+                    loading, error, viewModel::clearCrashLog, { index -> files.getOrNull(index)?.let(::showLogFile) },
+                    viewModel::initData, ::dismiss)
+            } }
         }
-        viewModel.initData()
-    }
-
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_clear -> viewModel.clearCrashLog()
-        }
-        return true
-    }
-
+    override fun onStart() { super.onStart(); setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT) }
+    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) { viewModel.initData() }
     private fun showLogFile(fileDoc: FileDoc) {
         viewModel.readFile(fileDoc) {
-            if (lifecycleScope.isActive) {
-                showDialogFragment(TextDialog(fileDoc.name, it))
-            }
+            if (lifecycleScope.isActive) showDialogFragment(TextDialog(fileDoc.name, it))
         }
-
-    }
-
-    inner class LogAdapter : RecyclerAdapter<FileDoc, Item1lineTextBinding>(requireContext()) {
-
-        override fun getViewBinding(parent: ViewGroup): Item1lineTextBinding {
-            return Item1lineTextBinding.inflate(inflater, parent, false)
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: Item1lineTextBinding) {
-            binding.root.setOnClickListener {
-                getItemByLayoutPosition(holder.layoutPosition)?.let { item ->
-                    showLogFile(item)
-                }
-            }
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: Item1lineTextBinding,
-            item: FileDoc,
-            payloads: MutableList<Any>
-        ) {
-            binding.textView.text = item.name
-        }
-
     }
 
     class CrashViewModel(application: Application) : BaseViewModel(application) {
 
         val logLiveData = MutableLiveData<List<FileDoc>>()
+        val loading = MutableLiveData(false)
+        val loadError = MutableLiveData<String?>(null)
 
         fun initData() {
+            loading.postValue(true)
+            loadError.postValue(null)
             execute {
                 val list = arrayListOf<FileDoc>()
                 context.externalCacheDir
@@ -127,6 +82,10 @@ class CrashLogsDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
                 return@execute list.sortedByDescending { it.name }.distinctBy { it.name }
             }.onSuccess {
                 logLiveData.postValue(it)
+            }.onError {
+                loadError.postValue(it.localizedMessage ?: "崩溃日志读取失败")
+            }.onFinally {
+                loading.postValue(false)
             }
         }
 

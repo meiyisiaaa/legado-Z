@@ -88,7 +88,12 @@ open class RssJsExtensions(
 
     @JavascriptInterface
     fun showPhoto(src: String) {
-        activityRef.get()?.showDialogFragment(PhotoDialog(src, getSource()?.getKey()))
+        activityRef.get()?.let { activity ->
+            activity.runOnUiThread {
+                activity.showDialogFragment(PhotoDialog(src, getSource()?.getKey(),
+                    rssArticle = (activity as? ReadRssActivity)?.currentArticleForMedia()))
+            }
+        }
     }
 
 

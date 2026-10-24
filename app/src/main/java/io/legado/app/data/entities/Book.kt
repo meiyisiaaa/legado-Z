@@ -67,6 +67,8 @@ data class Book(
     var intro: String? = null,
     // 简介内容(用户修改)
     var customIntro: String? = null,
+    // 书目备注(用户私有，不参与书源简介和脚本变量)
+    var userNote: String? = null,
     // 自定义字符集名称(仅适用于本地书籍)
     var charset: String? = null,
     // 类型,详见BookType
@@ -171,6 +173,12 @@ data class Book(
     fun getDisplayCover() = if (customCoverUrl.isNullOrEmpty()) coverUrl else customCoverUrl
 
     fun getDisplayIntro() = if (customIntro.isNullOrEmpty()) intro else customIntro
+
+    fun toShareJson(): String {
+        val json = GSON.toJsonTree(this).asJsonObject
+        json.remove("userNote")
+        return GSON.toJson(json)
+    }
 
     //自定义简介有自动更新的需求时，可通过更新intro再调用upCustomIntro()完成
     @Suppress("unused")
@@ -411,6 +419,7 @@ data class Book(
         newBook.order = order
         newBook.customCoverUrl = customCoverUrl
         newBook.customIntro = customIntro
+        newBook.userNote = userNote
         newBook.customTag = customTag
         newBook.canUpdate = canUpdate
         newBook.readConfig = readConfig
@@ -433,10 +442,19 @@ data class Book(
     }
 
     fun delete() {
+        clearActiveReader()
+        appDb.bookDao.delete(this)
+    }
+
+    fun replaceWith(newBook: Book) {
+        appDb.bookDao.replace(this, newBook)
+        clearActiveReader()
+    }
+
+    private fun clearActiveReader() {
         if (ReadBook.book?.bookUrl == bookUrl) {
             ReadBook.book = null
         }
-        appDb.bookDao.delete(this)
     }
 
     @Suppress("ConstPropertyName")
@@ -466,7 +484,9 @@ data class Book(
         var openCredits: Int = 0,       //音频片头
         var closeCredits: Int = 0,       //音频片尾
         var playMode: Int = 0,           //音频播放模式
-        var playSpeed: Float = 1.0f      //音频播放速度
+        var playSpeed: Float = 1.0f,     //音频播放速度
+        var roleTtsEnabled: Boolean = false,
+        var roleTtsConfigJson: String? = null
     ) : Parcelable
 
     class Converters {

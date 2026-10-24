@@ -31,6 +31,7 @@ interface BookGroupDao {
         and (
             (groupId >= 0  and exists (select 1 from books where `group` & book_groups.groupId > 0))
             or groupId = -1
+            or groupId = ${BookGroup.IdImage}
             or (groupId = -2 and exists (select 1 from books where type & ${BookType.local} > 0))
             or (groupId = -3 and exists (select 1 from books where type & ${BookType.audio} > 0))
             or (groupId = -6 and exists (select 1 from books where type & ${BookType.video} > 0))

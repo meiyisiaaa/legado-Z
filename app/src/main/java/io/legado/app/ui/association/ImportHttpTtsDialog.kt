@@ -1,32 +1,26 @@
 package io.legado.app.ui.association
 
-import android.annotation.SuppressLint
-import android.content.Context
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.mutableStateListOf
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemSourceImportBinding
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.widget.dialog.CodeDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.GSON
+import io.legado.app.utils.gone
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
-import splitties.views.onClick
 
-class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
-    CodeDialog.Callback {
+class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view), CodeDialog.Callback {
 
     constructor(source: String, finishOnDismiss: Boolean = false) : this() {
         arguments = Bundle().apply {
@@ -37,7 +31,7 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
 
     private val binding by viewBinding(DialogRecyclerViewBinding::bind)
     private val viewModel by viewModels<ImportHttpTtsViewModel>()
-    private val adapter by lazy { SourcesAdapter(requireContext()) }
+    private val rows = mutableStateListOf<AssociationImportRow>()
 
     override fun onStart() {
         super.onStart()
@@ -46,22 +40,26 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        if (arguments?.getBoolean("finishOnDismiss") == true) {
-            activity?.finish()
-        }
+        if (arguments?.getBoolean("finishOnDismiss") == true) activity?.finish()
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.setTitle(R.string.import_tts)
         binding.rotateLoading.visible()
-        binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerView.adapter = adapter
+        installAssociationImportContent(
+            requireContext(), binding.recyclerView, rows,
+            onSelectionChange = { index, selected ->
+                if (index in viewModel.selectStatus.indices) {
+                    viewModel.selectStatus[index] = selected
+                    rows[index] = rows[index].copy(selected = selected)
+                    upSelectText()
+                }
+            },
+            onOpen = ::openItem
+        )
         binding.tvCancel.visible()
-        binding.tvCancel.setOnClickListener {
-            dismissAllowingStateLoss()
-        }
+        binding.tvCancel.setOnClickListener { dismissAllowingStateLoss() }
         binding.tvOk.visible()
         binding.tvOk.setOnClickListener {
             val waitDialog = WaitDialog(requireContext())
@@ -74,31 +72,23 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
         binding.tvFooterLeft.visible()
         binding.tvFooterLeft.setOnClickListener {
             val selectAll = viewModel.isSelectAll
-            viewModel.selectStatus.forEachIndexed { index, b ->
-                if (b != !selectAll) {
-                    viewModel.selectStatus[index] = !selectAll
-                }
+            viewModel.selectStatus.indices.forEach { index ->
+                viewModel.selectStatus[index] = !selectAll
+                rows.getOrNull(index)?.let { rows[index] = it.copy(selected = !selectAll) }
             }
-            adapter.notifyDataSetChanged()
             upSelectText()
         }
         viewModel.errorLiveData.observe(this) {
             binding.rotateLoading.gone()
-            binding.tvMsg.apply {
-                text = it
-                visible()
-            }
+            binding.tvMsg.apply { text = it; visible() }
         }
-        viewModel.successLiveData.observe(this) {
+        viewModel.successLiveData.observe(this) { count ->
             binding.rotateLoading.gone()
-            if (it > 0) {
-                adapter.setItems(viewModel.allSources)
+            if (count > 0) {
+                refreshRows()
                 upSelectText()
             } else {
-                binding.tvMsg.apply {
-                    setText(R.string.wrong_format)
-                    visible()
-                }
+                binding.tvMsg.apply { setText(R.string.wrong_format); visible() }
             }
         }
         val source = arguments?.getString("source")
@@ -109,78 +99,46 @@ class ImportHttpTtsDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
         viewModel.importSource(source)
     }
 
-    private fun upSelectText() {
-        if (viewModel.isSelectAll) {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_cancel_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
-            )
-        } else {
-            binding.tvFooterLeft.text = getString(
-                R.string.select_all_count,
-                viewModel.selectCount,
-                viewModel.allSources.size
+    private fun refreshRows() {
+        rows.clear()
+        viewModel.allSources.forEachIndexed { index, item ->
+            val local = viewModel.checkSources.getOrNull(index)
+            rows.add(
+                AssociationImportRow(
+                    name = item.name,
+                    status = when {
+                        local == null -> "新增"
+                        item.lastUpdateTime > local.lastUpdateTime -> "更新"
+                        else -> "已有"
+                    },
+                    selected = viewModel.selectStatus.getOrNull(index) == true,
+                    detail = item.url
+                )
             )
         }
     }
 
-    inner class SourcesAdapter(context: Context) :
-        RecyclerAdapter<HttpTTS, ItemSourceImportBinding>(context) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemSourceImportBinding {
-            return ItemSourceImportBinding.inflate(inflater, parent, false)
+    private fun openItem(index: Int) {
+        viewModel.allSources.getOrNull(index)?.let { item ->
+            showDialogFragment(CodeDialog(GSON.toJson(item), disableEdit = false, requestId = index.toString()))
         }
+    }
 
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemSourceImportBinding,
-            item: HttpTTS,
-            payloads: MutableList<Any>
-        ) {
-            binding.apply {
-                cbSourceName.isChecked = viewModel.selectStatus[holder.layoutPosition]
-                cbSourceName.text = item.name
-                val localSource = viewModel.checkSources[holder.layoutPosition]
-                tvSourceState.text = when {
-                    localSource == null -> "新增"
-                    item.lastUpdateTime > localSource.lastUpdateTime -> "更新"
-                    else -> "已有"
-                }
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemSourceImportBinding) {
-            binding.apply {
-                cbSourceName.setOnUserCheckedChangeListener { isChecked ->
-                    viewModel.selectStatus[holder.layoutPosition] = isChecked
-                    upSelectText()
-                }
-                root.onClick {
-                    cbSourceName.isChecked = !cbSourceName.isChecked
-                    viewModel.selectStatus[holder.layoutPosition] = cbSourceName.isChecked
-                    upSelectText()
-                }
-                tvOpen.setOnClickListener {
-                    val source = viewModel.allSources[holder.layoutPosition]
-                    showDialogFragment(
-                        CodeDialog(
-                            GSON.toJson(source),
-                            disableEdit = false,
-                            requestId = holder.layoutPosition.toString()
-                        )
-                    )
-                }
-            }
-        }
-
+    private fun upSelectText() {
+        binding.tvFooterLeft.text = getString(
+            if (viewModel.isSelectAll) R.string.select_cancel_count else R.string.select_all_count,
+            viewModel.selectCount,
+            viewModel.allSources.size
+        )
     }
 
     override fun onCodeSave(code: String, requestId: String?) {
-        requestId?.toInt()?.let {
-            HttpTTS.fromJson(code).getOrNull()?.let { source ->
-                viewModel.allSources[it] = source
-                adapter.setItem(it, source)
+        requestId?.toIntOrNull()?.let { index ->
+            HttpTTS.fromJson(code).getOrNull()?.let { item ->
+                if (index in viewModel.allSources.indices) {
+                    viewModel.allSources[index] = item
+                    refreshRows()
+                }
             }
         }
     }

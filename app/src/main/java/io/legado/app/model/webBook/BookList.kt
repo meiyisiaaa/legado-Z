@@ -11,6 +11,7 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.source.exploreKindsJson
 import io.legado.app.help.source.getBookType
 import io.legado.app.model.Debug
+import io.legado.app.model.DebugRunContext
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setRuleData
@@ -289,7 +290,7 @@ object BookList {
     }
 
     private fun checkExploreJson(bookSource: BookSource) {
-        if (Debug.callback == null) {
+        if (DebugRunContext.currentOrNull()?.capture != true) {
             return
         }
         val json = bookSource.exploreKindsJson()

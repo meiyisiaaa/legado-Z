@@ -62,6 +62,15 @@ object ReadBookConfig {
     val textAccentColor: Int get() = durConfig.curTextAccentColor()
     var isNineBgImg = false
 
+    private val legacyPresetNames = listOf(
+        "微信读书" to "沉浸长读",
+        "预设1" to "纯白专注",
+        "预设2" to "纸感暖黄",
+        "预设3" to "护眼青绿",
+        "预设4" to "柔紫夜读",
+        "预设5" to "雾蓝静读"
+    )
+
     init {
         initConfigs()
         initShareConfig()
@@ -86,9 +95,21 @@ object ReadBookConfig {
                 AppLog.put("读取排版配置文件出错", e)
             }
         }
-        (configs ?: DefaultData.readConfigs).let {
+        val defaultConfigs = DefaultData.readConfigs
+        (configs ?: defaultConfigs).let {
             configList.clear()
             configList.addAll(it)
+            legacyPresetNames.forEachIndexed { index, (legacyName, currentName) ->
+                configList.getOrNull(index)?.let { config ->
+                    val defaultConfig = defaultConfigs.getOrNull(index)
+                    if (defaultConfig != null
+                        && config.name == legacyName
+                        && config.copy(name = currentName) == defaultConfig
+                    ) {
+                        config.name = currentName
+                    }
+                }
+            }
         }
     }
 

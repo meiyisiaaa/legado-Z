@@ -61,11 +61,15 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         execute { appDb.bookSourceDao.update(*bookSource) }
     }
 
-    fun upOrder(items: List<BookSourcePart>) {
-        if (items.isEmpty()) return
-        execute {
-            appDb.bookSourceDao.upOrder(items)
-        }
+    fun move(
+        sourceUrl: String,
+        targetUrl: String,
+        after: Boolean,
+        onFinally: () -> Unit = {}
+    ) {
+        executeLazy {
+            appDb.bookSourceDao.moveRelativeTo(sourceUrl, targetUrl, after)
+        }.onFinally { onFinally() }.start()
     }
 
     fun enable(enable: Boolean, items: List<BookSourcePart>) {
@@ -171,6 +175,42 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
                 "bookSource_$timestamp.json"
             }
             saveToFile(sources, name, success)
+        }
+    }
+
+    fun saveMainJsToFile(
+        selection: List<BookSourcePart>,
+        success: (file: File, name: String) -> Unit
+    ) {
+        val selectedSources = selection.toList()
+        execute {
+            if (selectedSources.size != 1) {
+                throw MainJsExportException(MainJsExportFailure.SELECT_ONE)
+            }
+            val export = requireMainJsExport(
+                listOf(appDb.bookSourceDao.getBookSource(selectedSources.single().bookSourceUrl))
+            )
+            val path = "${context.filesDir}/shareBookSource.js"
+            FileUtils.delete(path)
+            val file = FileUtils.createFileWithReplace(path)
+            file.outputStream().buffered().use {
+                it.write(export.script.toByteArray(Charsets.UTF_8))
+            }
+            file to "bookSource_${export.sourceName.normalizeFileName()}.js"
+        }.onSuccess { (file, name) ->
+            success(file, name)
+        }.onError { error ->
+            val message = if (error is MainJsExportException) {
+                val messageRes = when (error.reason) {
+                    MainJsExportFailure.SELECT_ONE -> R.string.export_main_js_select_one
+                    MainJsExportFailure.SOURCE_MISSING -> R.string.export_main_js_source_missing
+                    MainJsExportFailure.SCRIPT_EMPTY -> R.string.export_main_js_empty
+                }
+                context.getString(messageRes)
+            } else {
+                error.stackTraceStr
+            }
+            context.toastOnUi(message)
         }
     }
 
@@ -295,4 +335,22 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         }
     }
 
+}
+
+internal enum class MainJsExportFailure {
+    SELECT_ONE,
+    SOURCE_MISSING,
+    SCRIPT_EMPTY
+}
+
+internal class MainJsExportException(val reason: MainJsExportFailure) : IllegalArgumentException()
+
+internal data class MainJsExportPayload(val sourceName: String, val script: String)
+
+internal fun requireMainJsExport(sources: List<BookSource?>): MainJsExportPayload {
+    if (sources.size != 1) throw MainJsExportException(MainJsExportFailure.SELECT_ONE)
+    val source = sources.single() ?: throw MainJsExportException(MainJsExportFailure.SOURCE_MISSING)
+    val script = source.mainJs?.takeIf { it.isNotBlank() }
+        ?: throw MainJsExportException(MainJsExportFailure.SCRIPT_EMPTY)
+    return MainJsExportPayload(source.bookSourceName, script)
 }

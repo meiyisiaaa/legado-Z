@@ -3,7 +3,6 @@ package io.legado.app.ui.association
 import android.app.Application
 import androidx.lifecycle.MutableLiveData
 import com.jayway.jsonpath.JsonPath
-import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
@@ -17,11 +16,11 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.BookSourceImport
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.model.RuleUpdate
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.inputStream
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
@@ -29,6 +28,7 @@ import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
 import io.legado.app.utils.splitNotBlank
 import androidx.core.net.toUri
+import kotlinx.coroutines.currentCoroutineContext
 
 
 class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
@@ -42,6 +42,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     val selectStatus = arrayListOf<Boolean>()
     val newSourceStatus = arrayListOf<Boolean>()
     val updateSourceStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -130,35 +131,26 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             val mText = text.trim()
             when {
                 mText.isJsonObject() -> {
-                    kotlin.runCatching {
+                    val sourceUrls = kotlin.runCatching {
                         val json = JsonPath.parse(mText)
                         json.read<List<String>>("$.sourceUrls")
-                    }.onSuccess { listUrl ->
-                        listUrl.forEach {
-                            importSourceUrl(it)
+                    }.getOrNull()
+                    if (sourceUrls != null) {
+                        sourceUrls.forEach { url ->
+                            importSourceUrl(url)
                         }
-                    }.onFailure {
-                        GSON.fromJsonObject<BookSource>(mText).getOrThrow().let {
-                            if (it.bookSourceUrl.isEmpty()) {
-                                throw NoStackTraceException("不是书源")
-                            }
-                            allSources.add(it)
-                        }
+                    } else {
+                        addImportedSources(listOf(BookSourceImport.parse(mText, currentCoroutineContext())))
                     }
                 }
 
-                mText.isJsonArray() -> GSON.fromJsonArray<BookSource>(mText).getOrThrow()
-                    .let { items ->
-                        val source = items.firstOrNull() ?: return@let
-                        if (source.bookSourceUrl.isEmpty()) {
-                            throw NoStackTraceException("不是书源")
-                        }
-                        allSources.addAll(items)
-                    }
+                mText.isJsonArray() -> addImportedSources(GSON.fromJsonArray<BookSource>(mText).getOrThrow())
 
                 mText.isAbsUrl() -> {
                     importSourceUrl(mText)
@@ -167,17 +159,13 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 mText.isUri() -> {
                     val uri = mText.toUri()
                     uri.inputStream(context).getOrThrow().use { inputS ->
-                        GSON.fromJsonArray<BookSource>(inputS).getOrThrow().let {
-                            val source = it.firstOrNull() ?: return@let
-                            if (source.bookSourceUrl.isEmpty()) {
-                                throw NoStackTraceException("不是书源")
-                            }
-                            allSources.addAll(it)
-                        }
+                        addImportedText(inputS.bufferedReader().use { reader -> reader.readText() })
                     }
                 }
 
-                else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
+                else -> addImportedSources(
+                    listOf(BookSourceImport.parse(mText, currentCoroutineContext()))
+                )
             }
         }.onError {
             errorLiveData.postValue("ImportError:${it.localizedMessage}")
@@ -189,7 +177,7 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
 
     private suspend fun importSourceUrl(url: String) {
         RuleUpdate.cacheBookSourceMap[url]?.also {
-            allSources.addAll(it)
+            addImportedSources(it)
             RuleUpdate.cacheBookSourceMap.remove(url)
             return
         }
@@ -200,14 +188,27 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
             } else {
                 url(url)
             }
-        }.decompressed().byteStream().use {
-            GSON.fromJsonArray<BookSource>(it).getOrThrow().let { list ->
-                val source = list.firstOrNull() ?: return@let
-                if (source.bookSourceUrl.isEmpty()) {
-                    throw NoStackTraceException("不是书源")
-                }
-                allSources.addAll(list)
+        }.decompressed().byteStream().use { input ->
+            addImportedText(input.bufferedReader().use { reader -> reader.readText() })
+        }
+    }
+
+    private suspend fun addImportedText(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isJsonArray()) {
+            addImportedSources(GSON.fromJsonArray<BookSource>(trimmed).getOrThrow())
+        } else {
+            addImportedSources(listOf(BookSourceImport.parse(text, currentCoroutineContext())))
+        }
+    }
+
+    private suspend fun addImportedSources(sources: List<BookSource>) {
+        for (source in sources) {
+            val canonical = BookSourceImport.canonicalize(source, currentCoroutineContext())
+            if (canonical.bookSourceUrl.isBlank()) {
+                throw NoStackTraceException("不是书源")
             }
+            allSources.add(canonical)
         }
     }
 

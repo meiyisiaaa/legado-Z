@@ -1,0 +1,29 @@
+Legado-Z 功能移植来源
+
+本项目保留原有 GPL-3.0 许可证（见 LICENSE）。本次按当前代码结构适配，
+未整仓替换。相关开源来源与固定参考版本：
+
+LegadoTeam / legado (GPL-3.0)
+https://github.com/LegadoTeam/legado
+5198645f0a504b1f6d1259885317e056ff6a4a02 - Cronet 重定向认证隔离
+f3ff73c5ee2f21e21820755f773283c54b0f8102 - 阅读页回调所有权
+35eb2ccba1bf7fd8f6f12b2b021f874ecc4e1557 - WebView 请求生命周期
+da19d281c8fde2579dc6d1fac579ec87a326a2f6 - 大文本编辑传递
+eddef32898e6767e70e676e867004e93afd02607 - 大文本安全编辑器
+603b043650f4260e61f0e999b6484a0a8b574d71 - 筛选列表拖动排序
+
+skybbk1001 / legadoT (GPL-3.0)
+https://github.com/skybbk1001/legadoT
+869eb25511f48e2748ee3c3dede3cb1a9a60e143 - 单文件同步 JS 书源协议
+
+wuge0 / legado_NG (GPL-3.0，原参考链接 joestar817/legado_NG)
+https://github.com/wuge0/legado_NG
+eefade77a9c7fdb5b2c1ebcea919825d9694a135 - 角色协调、语音路由与缓存设计参考
+
+MCP Kotlin SDK 0.14.0 (MIT / Apache-2.0 过渡，按各贡献的原始许可)
+https://github.com/modelcontextprotocol/kotlin-sdk/tree/0.14.0
+完整许可说明：app/src/main/assets/licenses/mcp-kotlin-sdk-0.14.0.txt
+
+Ktor 3.4.3 (Apache-2.0)
+https://github.com/ktorio/ktor
+完整许可证：app/src/main/assets/licenses/ktor-3.4.3.txt

@@ -269,7 +269,10 @@ class AudioPlayService : BaseService(),
     /**
      * 暂停播放
      */
-    private fun pause(abandonFocus: Boolean = true) {
+    private fun pause(
+        abandonFocus: Boolean = true,
+        finalStatus: Int = Status.PAUSE
+    ) {
         if (useWakeLock) {
             wakeLock.release()
             wifiLock?.release()
@@ -283,8 +286,8 @@ class AudioPlayService : BaseService(),
             position = exoPlayer.currentPosition.toInt()
             if (exoPlayer.isPlaying) exoPlayer.pause()
             upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
-            AudioPlay.status = Status.PAUSE
-            postEvent(EventBus.AUDIO_STATE, Status.PAUSE)
+            AudioPlay.status = finalStatus
+            postEvent(EventBus.AUDIO_STATE, finalStatus)
             upAudioPlayNotification()
         } catch (e: Exception) {
             e.printOnDebug()
@@ -403,8 +406,8 @@ class AudioPlayService : BaseService(),
      */
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
-        AudioPlay.status = Status.STOP
-        postEvent(EventBus.AUDIO_STATE, Status.STOP)
+        pause(finalStatus = Status.STOP)
+        upMediaMetadata()
         AudioPlay.upLoading(false)
         val errorMsg = "音频播放出错\n${error.errorCodeName} ${error.errorCode}"
         AppLog.put(errorMsg, error)

@@ -11,8 +11,11 @@ class ServerConfigViewModel(application: Application): BaseViewModel(application
     var mServer: Server? = null
 
     fun init(id: Long?, onSuccess: () -> Unit) {
-        //mServer不为空可能是旋转屏幕界面重新创建,不用更新数据
-        if (mServer != null) return
+        // A recreated dialog view still needs the already-loaded model to hydrate its form.
+        if (mServer != null) {
+            onSuccess.invoke()
+            return
+        }
         execute {
             mServer = if (id != null) {
                 appDb.serverDao.get(id)
@@ -24,7 +27,7 @@ class ServerConfigViewModel(application: Application): BaseViewModel(application
         }
     }
 
-    fun save(server: Server, onSuccess: () -> Unit) {
+    fun save(server: Server, onSuccess: () -> Unit, onError: () -> Unit = {}) {
         execute {
             mServer?.let {
                 appDb.serverDao.delete(it)
@@ -35,6 +38,7 @@ class ServerConfigViewModel(application: Application): BaseViewModel(application
             onSuccess.invoke()
         }.onError {
             context.toastOnUi("保存出错\n${it.localizedMessage}")
+            onError.invoke()
         }
     }
 

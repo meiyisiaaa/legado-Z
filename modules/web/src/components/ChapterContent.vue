@@ -10,6 +10,7 @@
       class="full"
       v-if="/^\s*<img[^>]*src[^>]+>$/.test(String(para))"
       :src="getImageSrc(para)"
+      :alt="`${title} 插图`"
       @error.once="proxyImage"
       loading="lazy"
     />
@@ -44,6 +45,9 @@ const imgDataUrlPattern = lazyRegex('data:image[^;]+;base64,[^,]{39,}')
 
 const replaceImage = (content: string) => {
   return content.replace(imgPatternAll(), (match, src) => {
+    const image = /\balt\s*=/i.test(match)
+      ? match
+      : match.replace(/<img\b/i, '<img alt="章节插图"')
     const dataUrl = src.match(imgDataUrlPattern())
     if (dataUrl) {
       return dataUrl[0]
@@ -54,9 +58,9 @@ const replaceImage = (content: string) => {
         src,
         lineImgWidth.value,
       )
-      return match.replace(src, proxySrc)
+      return image.replace(src, proxySrc)
     }
-    return match
+    return image
   })
 }
 
@@ -175,18 +179,23 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .title {
-  margin-bottom: 57px;
-  font:
-    24px / 32px PingFangSC-Regular,
-    HelveticaNeue-Light,
-    'Helvetica Neue Light',
-    'Microsoft YaHei',
-    sans-serif;
+  max-width: 42ch;
+  margin-bottom: 38px;
+  color: var(--app-ink);
+  font-family:
+    'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light,
+    'Helvetica Neue Light', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 p {
   display: block;
   word-wrap: break-word;
+  color: var(--app-ink);
   /*   word-break: break-all; */
   letter-spacing: calc(v-bind('props.spacing.letter') * 1em);
   line-height: calc(1 + v-bind('props.spacing.line'));
@@ -194,11 +203,20 @@ p {
 
   :deep(img) {
     height: 1em;
+    max-width: 100%;
+  }
+
+  :deep(a) {
+    color: var(--app-accent-strong);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
   }
 }
 
 .full {
   display: block;
   width: 100%;
+  height: auto;
+  border-radius: 8px;
 }
 </style>

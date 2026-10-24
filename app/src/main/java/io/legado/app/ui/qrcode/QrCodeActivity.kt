@@ -5,11 +5,19 @@ import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.FrameLayout
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.fragment.app.commit
 import com.google.zxing.Result
 import io.legado.app.R
 import io.legado.app.base.BaseActivity
 import io.legado.app.databinding.ActivityQrcodeCaptureBinding
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.QRCodeUtils
 import io.legado.app.utils.readBytes
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -26,11 +34,12 @@ class QrCodeActivity : BaseActivity<ActivityQrcodeCaptureBinding>(), ScanResultC
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        val fTag = "qrCodeFragment"
-        val qrCodeFragment = QrCodeFragment()
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fl_content, qrCodeFragment, fTag)
-            .commit()
+        binding.composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.composeView.setContent {
+            LegadoTheme {
+                ScannerSurface()
+            }
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -52,6 +61,24 @@ class QrCodeActivity : BaseActivity<ActivityQrcodeCaptureBinding>(), ScanResultC
         intent.putExtra("result", result?.text)
         setResult(RESULT_OK, intent)
         finish()
+    }
+
+    @Composable
+    private fun ScannerSurface() {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                FrameLayout(context).apply {
+                    id = R.id.fl_content
+                    if (supportFragmentManager.findFragmentByTag("qrCodeFragment") == null) {
+                        supportFragmentManager.commit {
+                            setReorderingAllowed(true)
+                            replace(R.id.fl_content, QrCodeFragment(), "qrCodeFragment")
+                        }
+                    }
+                }
+            }
+        )
     }
 
 }

@@ -16,6 +16,8 @@ import com.shuyu.gsyvideoplayer.model.GSYModel
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel
 import com.shuyu.gsyvideoplayer.player.BasePlayerManager
 import tv.danmaku.ijk.media.player.IMediaPlayer
+import io.legado.app.utils.LogUtils
+private const val TAG = "ExoPlayerManager"
 
 
 /**
@@ -90,7 +92,7 @@ class ExoPlayerManager : BasePlayerManager() {
                 mediaPlayer!!.setSurface(dummySurface)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
         }
         initSuccess(model)
     }
@@ -113,7 +115,7 @@ class ExoPlayerManager : BasePlayerManager() {
             try {
                 mediaPlayer!!.setSpeed(speed, 1f)
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e(TAG, e.stackTraceToString())
             }
         }
     }

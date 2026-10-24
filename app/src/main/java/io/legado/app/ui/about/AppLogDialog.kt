@@ -1,90 +1,33 @@
 package io.legado.app.ui.about
 
-import android.content.Context
 import android.os.Bundle
-import android.view.MenuItem
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.compose.runtime.*
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.AppLog
-import io.legado.app.databinding.DialogRecyclerViewBinding
-import io.legado.app.databinding.ItemAppLogBinding
-import io.legado.app.lib.theme.primaryColor
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.viewbindingdelegate.viewBinding
-import splitties.views.onClick
-import java.util.*
+import java.util.Date
 
-class AppLogDialog : BaseDialogFragment(R.layout.dialog_recycler_view),
-    Toolbar.OnMenuItemClickListener {
-
-    private val binding by viewBinding(DialogRecyclerViewBinding::bind)
-    private val adapter by lazy {
-        LogAdapter(requireContext())
-    }
-
-    override fun onStart() {
-        super.onStart()
-        setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT)
-    }
-
-    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.run {
-            toolBar.setBackgroundColor(primaryColor)
-            toolBar.setTitle(R.string.log)
-            toolBar.inflateMenu(R.menu.app_log)
-            toolBar.setOnMenuItemClickListener(this@AppLogDialog)
-            recyclerView.layoutManager = LinearLayoutManager(requireContext())
-            recyclerView.adapter = adapter
+class AppLogDialog : BaseDialogFragment(0) {
+    private var logs by mutableStateOf<List<Triple<Long, String, Throwable?>>>(emptyList())
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View =
+        LegadoComposeView(requireContext()).apply {
+            setContent { LegadoTheme {
+                DiagnosticsContent(getString(R.string.log), logs.map {
+                    DiagnosticItem(it.second, LogUtils.logTimeFormat.format(Date(it.first)), it.third != null)
+                }, onClear = { AppLog.clear(); logs = emptyList() }, onOpen = { index ->
+                    logs.getOrNull(index)?.third?.let { showDialogFragment(TextDialog("Log", it.stackTraceToString())) }
+                }, onClose = ::dismiss)
+            } }
         }
-        adapter.setItems(AppLog.logs)
-    }
-
-    override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
-            R.id.menu_clear -> {
-                AppLog.clear()
-                adapter.clearItems()
-            }
-        }
-        return true
-    }
-
-    inner class LogAdapter(context: Context) :
-        RecyclerAdapter<Triple<Long, String, Throwable?>, ItemAppLogBinding>(context) {
-
-        override fun getViewBinding(parent: ViewGroup): ItemAppLogBinding {
-            return ItemAppLogBinding.inflate(inflater, parent, false)
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemAppLogBinding,
-            item: Triple<Long, String, Throwable?>,
-            payloads: MutableList<Any>
-        ) {
-            binding.textTime.text = LogUtils.logTimeFormat.format(Date(item.first))
-            binding.textMessage.text = item.second
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemAppLogBinding) {
-            binding.root.onClick {
-                getItem(holder.layoutPosition)?.let { item ->
-                    item.third?.let {
-                        showDialogFragment(TextDialog("Log", it.stackTraceToString()))
-                    }
-                }
-            }
-        }
-
-    }
-
+    override fun onStart() { super.onStart(); setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT) }
+    override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) { logs = AppLog.logs.toList() }
 }

@@ -59,14 +59,15 @@ class ReplaceRuleViewModel(application: Application) : BaseViewModel(application
         }
     }
 
-    fun upOrder() {
-        execute {
-            val rules = appDb.replaceRuleDao.all
-            for ((index, rule) in rules.withIndex()) {
-                rule.order = index + 1
-            }
-            appDb.replaceRuleDao.update(*rules.toTypedArray())
-        }
+    fun move(
+        ruleId: Long,
+        targetId: Long,
+        after: Boolean,
+        onFinally: () -> Unit = {}
+    ) {
+        executeLazy {
+            appDb.replaceRuleDao.moveRelativeTo(ruleId, targetId, after)
+        }.onFinally { onFinally() }.start()
     }
 
     fun enableSelection(rules: List<ReplaceRule>) {

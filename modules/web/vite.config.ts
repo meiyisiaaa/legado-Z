@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
             prefix: "Icon",
           }),
         ],
-        dts: "./src/auto-imports.d.ts",
+        dts: mode === "development" ? "./src/auto-imports.d.ts" : false,
       }),
       Components({
         resolvers: [
@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
             enabledCollections: ["ep"],
           }),
         ],
-        dts: "./src/components.d.ts",
+        dts: mode === "development" ? "./src/components.d.ts" : false,
       }),
       Icons({
         autoInstall: true,

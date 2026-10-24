@@ -11,6 +11,8 @@ import androidx.annotation.RequiresApi
 import io.legado.app.R
 import io.legado.app.constant.IntentAction
 import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.LogUtils
+private const val TAG = "WebTileService"
 
 
 /**
@@ -61,14 +63,14 @@ class WebTileService : TileService() {
                     try {
                         WebService.startForeground(this)
                     } catch (e: ForegroundServiceStartNotAllowedException) {
-                        e.printStackTrace()
+                        LogUtils.e(TAG, e.stackTraceToString())
                     }
                     dialog.dismiss()
                 }
                 try {
                     showDialog(dialog)
                 } catch (e: BadTokenException) {
-                    e.printStackTrace()
+                    LogUtils.e(TAG, e.stackTraceToString())
                 }
             } else {
                 WebService.start(this)

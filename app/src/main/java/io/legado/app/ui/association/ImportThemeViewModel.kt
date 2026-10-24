@@ -31,6 +31,7 @@ class ImportThemeViewModel(app: Application) : BaseViewModel(app) {
     val allSources = arrayListOf<ThemeConfig.Config>()
     val checkSources = arrayListOf<ThemeConfig.Config?>()
     val selectStatus = arrayListOf<Boolean>()
+    private var requestedImportText: String? = null
 
     val isSelectAll: Boolean
         get() {
@@ -66,6 +67,8 @@ class ImportThemeViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (requestedImportText == text) return
+        requestedImportText = text
         execute {
             importSourceAwait(text.trim())
         }.onError {

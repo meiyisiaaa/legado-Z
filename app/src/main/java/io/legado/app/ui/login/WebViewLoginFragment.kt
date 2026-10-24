@@ -14,6 +14,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.activityViewModels
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
@@ -23,6 +26,7 @@ import io.legado.app.databinding.FragmentWebViewLoginBinding
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.gone
 import io.legado.app.utils.longSnackbar
@@ -74,7 +78,14 @@ class WebViewLoginFragment : BaseFragment(R.layout.fragment_web_view_login) {
             it.realWebView
         }
         webView.onResume()
-        binding.webViewContainer.addView(webView)
+        binding.webViewCompose.setContent {
+            LegadoTheme {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { webView }
+                )
+            }
+        }
         currentWebView = webView
         binding.progressBar.fontColor = accentColor
         webView.settings.apply {

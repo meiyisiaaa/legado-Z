@@ -51,6 +51,8 @@ import java.util.zip.ZipFile
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import io.legado.app.utils.LogUtils
+private const val TAG = "BookHelp"
 
 @Suppress("unused", "ConstPropertyName")
 object BookHelp {
@@ -168,7 +170,7 @@ object BookHelp {
             //saveImages(bookSource, book, bookChapter, content)
             postEvent(EventBus.SAVE_CONTENT, Pair(book, bookChapter))
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e(TAG, e.stackTraceToString())
             AppLog.put("保存正文失败 ${book.name} ${bookChapter.title}", e)
         }
     }

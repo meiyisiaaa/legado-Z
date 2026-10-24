@@ -44,4 +44,6 @@ class SwitchPreference(context: Context, attrs: AttributeSet) :
         onLongClick = listener
     }
 
+    fun performPreferenceLongClick(): Boolean = onLongClick?.invoke(this) ?: false
+
 }

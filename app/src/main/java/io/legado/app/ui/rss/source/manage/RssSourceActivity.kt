@@ -2,10 +2,16 @@ package io.legado.app.ui.rss.source.manage
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.SubMenu
+import android.view.View
 import androidx.activity.viewModels
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.lifecycleScope
@@ -26,6 +32,8 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.edit.RssSourceEditActivity
 import io.legado.app.ui.widget.SelectActionBar
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
@@ -69,6 +77,11 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
     }
     private var sourceFlowJob: Job? = null
     private var groups = arrayListOf<String>()
+    private val composeSources = mutableStateListOf<RssSource>()
+    private val composeGroups = mutableStateListOf<String>()
+    private val selectedUrls = mutableStateListOf<String>()
+    private var selectionVersion by mutableStateOf(0)
+    private var currentQuery by mutableStateOf("")
     private var groupMenu: SubMenu? = null
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
@@ -113,10 +126,44 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initRecyclerView()
-        initSearchView()
         initGroupFlow()
         upSourceFlow()
         initSelectActionBar()
+        setSupportActionBar(null)
+        setContentView(LegadoComposeView(this).apply {
+            id = R.id.legado_rss_source_compose_root
+            setContent {
+                LegadoTheme {
+                    RssSourceManageContent(
+                        sources = composeSources,
+                        groups = composeGroups,
+                        query = currentQuery,
+                        selectedUrls = selectedUrls.toSet(),
+                        selectionVersion = selectionVersion,
+                        onBack = { onBackPressedDispatcher.onBackPressed() },
+                        onQueryChange = ::setFilterQuery,
+                        onTopAction = ::onTopAction,
+                        onSelectionAction = ::performSelectionAction,
+                        onSelectionChange = { source, selected ->
+                            adapter.setSelected(source, selected)
+                            syncSelection()
+                        },
+                        onEnabledChange = { source, enabled ->
+                            source.enabled = enabled
+                            update(source)
+                        },
+                        onEdit = ::edit,
+                        onTop = ::toTop,
+                        onBottom = ::toBottom,
+                        onMove = ::move,
+                        onDelete = ::del,
+                        onSelectAll = { adapter.selectAll(); syncSelection() },
+                        onRevertSelection = { adapter.revertSelection(); syncSelection() },
+                        onDeleteSelected = ::delSourceDialog
+                    )
+                }
+            }
+        })
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -143,31 +190,36 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_default -> viewModel.importDefault()
             R.id.menu_enabled_group -> {
-                searchView.setQuery(getString(R.string.enabled), true)
+                setFilterQuery(getString(R.string.enabled))
             }
 
             R.id.menu_disabled_group -> {
-                searchView.setQuery(getString(R.string.disabled), true)
+                setFilterQuery(getString(R.string.disabled))
             }
 
             R.id.menu_group_login -> {
-                searchView.setQuery(getString(R.string.need_login), true)
+                setFilterQuery(getString(R.string.need_login))
             }
 
             R.id.menu_group_null -> {
-                searchView.setQuery(getString(R.string.no_group), true)
+                setFilterQuery(getString(R.string.no_group))
             }
 
             R.id.menu_help -> showHelp("SourceMRssHelp")
             else -> if (item.groupId == R.id.source_group) {
-                searchView.setQuery("group:${item.title}", true)
+                setFilterQuery("group:${item.title}")
             }
         }
         return super.onCompatOptionsItemSelected(item)
     }
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
+        item?.itemId?.let(::performSelectionAction)
+        return true
+    }
+
+    private fun performSelectionAction(itemId: Int) {
+        when (itemId) {
             R.id.menu_enable_selection -> viewModel.enableSelection(adapter.selection)
             R.id.menu_disable_selection -> viewModel.disableSelection(adapter.selection)
             R.id.menu_add_group -> selectionAddToGroups()
@@ -189,7 +241,6 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
 
             R.id.menu_check_selected_interval -> adapter.checkSelectedInterval()
         }
-        return true
     }
 
     private fun initRecyclerView() {
@@ -238,6 +289,8 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
             appDb.rssSourceDao.flowGroups().conflate().collect {
                 groups.clear()
                 groups.addAll(it)
+                composeGroups.clear()
+                composeGroups.addAll(it)
                 upGroupMenu()
             }
         }
@@ -313,7 +366,33 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         }
     }
 
-    private fun upSourceFlow(searchKey: String? = null) {
+    private fun setFilterQuery(value: String) {
+        currentQuery = value
+        upSourceFlow(value)
+    }
+
+    private fun syncSelection() {
+        selectedUrls.clear()
+        selectedUrls.addAll(adapter.selection.map { it.sourceUrl })
+        selectionVersion++
+    }
+
+    private fun onTopAction(itemId: Int) {
+        when (itemId) {
+            R.id.menu_add -> startActivity<RssSourceEditActivity>()
+            R.id.menu_import_local -> importDoc.launch {
+                mode = HandleFileContract.FILE
+                allowExtensions = arrayOf("txt", "json")
+            }
+            R.id.menu_import_onLine -> showImportDialog()
+            R.id.menu_import_qr -> qrCodeResult.launch()
+            R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
+            R.id.menu_import_default -> viewModel.importDefault()
+            R.id.menu_help -> showHelp("SourceMRssHelp")
+        }
+    }
+
+    private fun upSourceFlow(searchKey: String? = currentQuery.ifBlank { null }) {
         sourceFlowJob?.cancel()
         sourceFlowJob = lifecycleScope.launch {
             when {
@@ -347,8 +426,14 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
                 }
             }.catch {
                 AppLog.put("订阅源管理界面更新数据出错", it)
-            }.flowOn(IO).conflate().collect {
-                adapter.setItems(it, adapter.diffItemCallback)
+            }.flowOn(IO).conflate().collect { items ->
+                val previouslySelected = adapter.selection.map { it.sourceUrl }.toSet()
+                adapter.setItems(items, adapter.diffItemCallback)
+                composeSources.clear()
+                composeSources.addAll(items)
+                selectedUrls.clear()
+                selectedUrls.addAll(items.filter { it.sourceUrl in previouslySelected }.map { it.sourceUrl })
+                selectionVersion++
                 delay(100)
             }
         }
@@ -432,8 +517,17 @@ class RssSourceActivity : VMBaseActivity<ActivityRssSourceBinding, RssSourceView
         viewModel.bottomSource(source)
     }
 
-    override fun upOrder() {
-        viewModel.upOrder()
+    override fun move(
+        sourceUrl: String,
+        targetUrl: String,
+        after: Boolean,
+        onFinally: () -> Unit
+    ) {
+        viewModel.move(sourceUrl, targetUrl, after, onFinally)
+    }
+
+    override fun reload() {
+        upSourceFlow(currentQuery)
     }
 
 }

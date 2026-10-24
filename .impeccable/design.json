@@ -1,0 +1,510 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T03:20:57.4472917Z",
+  "title": "Design System: Legado",
+  "extensions": {
+    "colorMeta": {
+      "web-light-canvas": {
+        "role": "neutral",
+        "displayName": "Web Light Canvas",
+        "canonical": "#e8efee",
+        "tonalRamp": [
+          "oklch(15% 0.008 186.9)",
+          "oklch(26% 0.008 186.9)",
+          "oklch(37% 0.008 186.9)",
+          "oklch(48% 0.008 186.9)",
+          "oklch(59% 0.008 186.9)",
+          "oklch(70% 0.008 186.9)",
+          "oklch(81% 0.008 186.9)",
+          "oklch(92% 0.008 186.9)"
+        ]
+      },
+      "web-light-panel": {
+        "role": "neutral",
+        "displayName": "Web Light Panel",
+        "canonical": "#f7fbfa",
+        "tonalRamp": [
+          "oklch(15% 0.004 179.7)",
+          "oklch(26% 0.004 179.7)",
+          "oklch(37% 0.004 179.7)",
+          "oklch(48% 0.004 179.7)",
+          "oklch(59% 0.004 179.7)",
+          "oklch(70% 0.004 179.7)",
+          "oklch(81% 0.004 179.7)",
+          "oklch(92% 0.004 179.7)"
+        ]
+      },
+      "web-light-ink": {
+        "role": "neutral",
+        "displayName": "Web Light Ink",
+        "canonical": "#172729",
+        "tonalRamp": [
+          "oklch(15% 0.022 205.8)",
+          "oklch(26% 0.022 205.8)",
+          "oklch(37% 0.022 205.8)",
+          "oklch(48% 0.022 205.8)",
+          "oklch(59% 0.022 205.8)",
+          "oklch(70% 0.022 205.8)",
+          "oklch(81% 0.022 205.8)",
+          "oklch(92% 0.022 205.8)"
+        ]
+      },
+      "web-light-accent": {
+        "role": "primary",
+        "displayName": "Web Light Reading Teal",
+        "canonical": "#007f82",
+        "tonalRamp": [
+          "oklch(15% 0.092 197.7)",
+          "oklch(26% 0.092 197.7)",
+          "oklch(37% 0.092 197.7)",
+          "oklch(48% 0.092 197.7)",
+          "oklch(59% 0.092 197.7)",
+          "oklch(70% 0.092 197.7)",
+          "oklch(81% 0.092 197.7)",
+          "oklch(92% 0.092 197.7)"
+        ]
+      },
+      "web-dark-canvas": {
+        "role": "neutral",
+        "displayName": "Web Dark Canvas",
+        "canonical": "#10191b",
+        "tonalRamp": [
+          "oklch(15% 0.014 212.9)",
+          "oklch(26% 0.014 212.9)",
+          "oklch(37% 0.014 212.9)",
+          "oklch(48% 0.014 212.9)",
+          "oklch(59% 0.014 212.9)",
+          "oklch(70% 0.014 212.9)",
+          "oklch(81% 0.014 212.9)",
+          "oklch(92% 0.014 212.9)"
+        ]
+      },
+      "web-dark-panel": {
+        "role": "neutral",
+        "displayName": "Web Dark Panel",
+        "canonical": "#172326",
+        "tonalRamp": [
+          "oklch(15% 0.018 214.9)",
+          "oklch(26% 0.018 214.9)",
+          "oklch(37% 0.018 214.9)",
+          "oklch(48% 0.018 214.9)",
+          "oklch(59% 0.018 214.9)",
+          "oklch(70% 0.018 214.9)",
+          "oklch(81% 0.018 214.9)",
+          "oklch(92% 0.018 214.9)"
+        ]
+      },
+      "web-dark-ink": {
+        "role": "neutral",
+        "displayName": "Web Dark Ink",
+        "canonical": "#e5f0ef",
+        "tonalRamp": [
+          "oklch(15% 0.012 190.4)",
+          "oklch(26% 0.012 190.4)",
+          "oklch(37% 0.012 190.4)",
+          "oklch(48% 0.012 190.4)",
+          "oklch(59% 0.012 190.4)",
+          "oklch(70% 0.012 190.4)",
+          "oklch(81% 0.012 190.4)",
+          "oklch(92% 0.012 190.4)"
+        ]
+      },
+      "web-dark-accent": {
+        "role": "primary",
+        "displayName": "Web Dark Reading Teal",
+        "canonical": "#53d4c9",
+        "tonalRamp": [
+          "oklch(15% 0.114 187.3)",
+          "oklch(26% 0.114 187.3)",
+          "oklch(37% 0.114 187.3)",
+          "oklch(48% 0.114 187.3)",
+          "oklch(59% 0.114 187.3)",
+          "oklch(70% 0.114 187.3)",
+          "oklch(81% 0.114 187.3)",
+          "oklch(92% 0.114 187.3)"
+        ]
+      },
+      "android-cloth": {
+        "role": "primary",
+        "displayName": "矿绿书衣",
+        "canonical": "#183F38",
+        "tonalRamp": [
+          "oklch(15% 0.046 179.9)",
+          "oklch(26% 0.046 179.9)",
+          "oklch(37% 0.046 179.9)",
+          "oklch(48% 0.046 179.9)",
+          "oklch(59% 0.046 179.9)",
+          "oklch(70% 0.046 179.9)",
+          "oklch(81% 0.046 179.9)",
+          "oklch(92% 0.046 179.9)"
+        ]
+      },
+      "android-accent": {
+        "role": "primary",
+        "displayName": "阅读绿",
+        "canonical": "#24675B",
+        "tonalRamp": [
+          "oklch(15% 0.070 179.1)",
+          "oklch(26% 0.070 179.1)",
+          "oklch(37% 0.070 179.1)",
+          "oklch(48% 0.070 179.1)",
+          "oklch(59% 0.070 179.1)",
+          "oklch(70% 0.070 179.1)",
+          "oklch(81% 0.070 179.1)",
+          "oklch(92% 0.070 179.1)"
+        ]
+      },
+      "android-paper": {
+        "role": "neutral",
+        "displayName": "浅纸面",
+        "canonical": "#F7F7F2",
+        "tonalRamp": [
+          "oklch(15% 0.007 106.5)",
+          "oklch(26% 0.007 106.5)",
+          "oklch(37% 0.007 106.5)",
+          "oklch(48% 0.007 106.5)",
+          "oklch(59% 0.007 106.5)",
+          "oklch(70% 0.007 106.5)",
+          "oklch(81% 0.007 106.5)",
+          "oklch(92% 0.007 106.5)"
+        ]
+      },
+      "android-bottom": {
+        "role": "neutral",
+        "displayName": "浅导航面",
+        "canonical": "#EBEEE7",
+        "tonalRamp": [
+          "oklch(15% 0.010 125.7)",
+          "oklch(26% 0.010 125.7)",
+          "oklch(37% 0.010 125.7)",
+          "oklch(48% 0.010 125.7)",
+          "oklch(59% 0.010 125.7)",
+          "oklch(70% 0.010 125.7)",
+          "oklch(81% 0.010 125.7)",
+          "oklch(92% 0.010 125.7)"
+        ]
+      },
+      "android-night-cloth": {
+        "role": "primary",
+        "displayName": "夜间书衣",
+        "canonical": "#172E2A",
+        "tonalRamp": [
+          "oklch(15% 0.030 181.6)",
+          "oklch(26% 0.030 181.6)",
+          "oklch(37% 0.030 181.6)",
+          "oklch(48% 0.030 181.6)",
+          "oklch(59% 0.030 181.6)",
+          "oklch(70% 0.030 181.6)",
+          "oklch(81% 0.030 181.6)",
+          "oklch(92% 0.030 181.6)"
+        ]
+      },
+      "android-night-accent": {
+        "role": "primary",
+        "displayName": "夜间阅读绿",
+        "canonical": "#A3D4C1",
+        "tonalRamp": [
+          "oklch(15% 0.058 169.2)",
+          "oklch(26% 0.058 169.2)",
+          "oklch(37% 0.058 169.2)",
+          "oklch(48% 0.058 169.2)",
+          "oklch(59% 0.058 169.2)",
+          "oklch(70% 0.058 169.2)",
+          "oklch(81% 0.058 169.2)",
+          "oklch(92% 0.058 169.2)"
+        ]
+      },
+      "android-night-paper": {
+        "role": "neutral",
+        "displayName": "夜间纸面",
+        "canonical": "#151D1B",
+        "tonalRamp": [
+          "oklch(15% 0.012 178.2)",
+          "oklch(26% 0.012 178.2)",
+          "oklch(37% 0.012 178.2)",
+          "oklch(48% 0.012 178.2)",
+          "oklch(59% 0.012 178.2)",
+          "oklch(70% 0.012 178.2)",
+          "oklch(81% 0.012 178.2)",
+          "oklch(92% 0.012 178.2)"
+        ]
+      },
+      "android-night-bottom": {
+        "role": "neutral",
+        "displayName": "夜间导航面",
+        "canonical": "#1C2824",
+        "tonalRamp": [
+          "oklch(15% 0.018 172.4)",
+          "oklch(26% 0.018 172.4)",
+          "oklch(37% 0.018 172.4)",
+          "oklch(48% 0.018 172.4)",
+          "oklch(59% 0.018 172.4)",
+          "oklch(70% 0.018 172.4)",
+          "oklch(81% 0.018 172.4)",
+          "oklch(92% 0.018 172.4)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "web-interface": {
+        "displayName": "Web Interface Stack",
+        "purpose": "The shared Web management-interface font stack declared in app.css."
+      },
+      "android-display": {
+        "displayName": "android-display",
+        "purpose": "大层级角色；原生系统字体与回退。"
+      },
+      "android-headline": {
+        "displayName": "android-headline",
+        "purpose": "页面与分区标题。"
+      },
+      "android-book-title": {
+        "displayName": "android-book-title",
+        "purpose": "书架、搜索和编辑预览的局部系统衬线书名。"
+      },
+      "android-body": {
+        "displayName": "android-body",
+        "purpose": "工具界面正文，阅读引擎继续服从用户字体。"
+      },
+      "android-label": {
+        "displayName": "android-label",
+        "purpose": "控件标签与辅助状态。"
+      },
+      "android-title": {
+        "displayName": "android-title",
+        "purpose": "工具栏、列表及管理标题。"
+      },
+      "android-book-identity": {
+        "displayName": "android-book-identity",
+        "purpose": "详情书衣上的局部系统衬线身份书名。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "web-light-dialog",
+        "value": "0 18px 42px rgba(21, 48, 50, 0.08)",
+        "purpose": "Light-theme dialog elevation."
+      },
+      {
+        "name": "web-light-soft",
+        "value": "0 8px 22px rgba(21, 48, 50, 0.06)",
+        "purpose": "Light-theme hover elevation for interactive book cards."
+      },
+      {
+        "name": "web-dark-dialog",
+        "value": "0 20px 46px rgba(0, 0, 0, 0.24)",
+        "purpose": "Dark-theme dialog elevation."
+      },
+      {
+        "name": "web-dark-soft",
+        "value": "0 8px 24px rgba(0, 0, 0, 0.2)",
+        "purpose": "Dark-theme hover elevation for interactive book cards."
+      },
+      {
+        "name": "android-book-cover",
+        "value": "6dp elevation; 4dp rounded clip",
+        "purpose": "详情中书衣上的实体封面；普通工具列表保持平面。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "android-press",
+        "value": "120ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "LocalLegadoMotion press时长token；共享按压由spring参数决定结束。"
+      },
+      {
+        "name": "android-state",
+        "value": "240ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "Selection and state changes in Compose."
+      },
+      {
+        "name": "android-container",
+        "value": "360ms; 0ms when E-Ink or system animators are disabled",
+        "purpose": "Container changes in Compose."
+      },
+      {
+        "name": "web-state",
+        "value": "240ms",
+        "purpose": "Web global color, border, shadow, and opacity transitions."
+      },
+      {
+        "name": "web-panel",
+        "value": "360ms",
+        "purpose": "Web panel transition duration."
+      },
+      {
+        "name": "web-reduced-motion",
+        "value": "0.01ms with one animation iteration",
+        "purpose": "prefers-reduced-motion: reduce behavior."
+      },
+      {
+        "name": "android-press-spring",
+        "value": "scale 0.985; dampingRatio 1; stiffness 700; snap when disabled",
+        "purpose": "legadoPressFeedback只改变绘制层，测量与命中区域保持稳定。"
+      },
+      {
+        "name": "android-list-state",
+        "value": "tween(state): fadeIn, fadeOut, placement",
+        "purpose": "书签与记录animateItem，书源选择颜色复用state，内容增高复用container。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "web-source-editor-narrow",
+        "value": "980px",
+        "purpose": "Switch the source editor to its two-panel mobile tab layout at or below this width."
+      },
+      {
+        "name": "web-bookshelf-single-column",
+        "value": "540px",
+        "purpose": "Collapse the book card grid to one column at or below this width."
+      },
+      {
+        "name": "android-book-info-stack",
+        "value": "360dp",
+        "purpose": "可用宽度小于360dp时用104×150dp封面，分类接在右侧书名/作者下方，来源/分组下移，局部书衣顶部/底部内距16/12dp；fontScale达到1.5时另行纵向重排。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Source Editor Utility Button",
+      "kind": "button",
+      "refersTo": "web-source-utility-button",
+      "description": "Secondary source-type and theme actions in the Web source editor.",
+      "html": "<button class=\"ds-source-utility\">切换为订阅源</button>",
+      "css": ".ds-source-utility { min-height: 38px; border: 1px solid var(--app-line); border-radius: 6px; padding: 0 8px; color: var(--app-ink-soft); background: var(--app-panel); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: color var(--app-duration-state) ease-out, background-color var(--app-duration-state) ease-out, border-color var(--app-duration-state) ease-out; } .ds-source-utility:hover { border-color: var(--app-accent-line); color: var(--app-accent-strong); background: var(--app-accent-soft); } .ds-source-utility:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }"
+    },
+    {
+      "name": "Book Search Field",
+      "kind": "input",
+      "refersTo": "web-search-field",
+      "description": "Text field using the Web panel, text, border, placeholder, and focus tokens.",
+      "html": "<input class=\"ds-search-field\" type=\"search\" placeholder=\"搜索书名或作者\" aria-label=\"搜索书名或作者\" />",
+      "css": ".ds-search-field { border: 1px solid var(--app-line); border-radius: 12px; padding: 8px 10px; color: var(--el-text-color-primary); background: var(--el-fill-color-blank); font: inherit; } .ds-search-field::placeholder { color: var(--app-ink-muted); opacity: 1; } .ds-search-field:focus-visible { outline: 3px solid var(--app-focus-ring); outline-offset: 3px; }"
+    },
+    {
+      "name": "Source Editor Panel Tabs",
+      "kind": "nav",
+      "refersTo": "web-source-panel-tab",
+      "description": "Narrow-screen tabs switch between rule fields and source tools.",
+      "html": "<nav class=\"ds-panel-tabs\" role=\"tablist\" aria-label=\"源编辑面板\"><button role=\"tab\" aria-selected=\"true\">规则字段</button><button role=\"tab\" aria-selected=\"false\">源工具</button></nav>",
+      "css": ".ds-panel-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; border-bottom: 1px solid var(--app-line); padding-bottom: 7px; } .ds-panel-tabs button { min-height: 40px; border: 1px solid var(--app-line); border-radius: 6px; color: var(--app-ink-muted); background: var(--app-panel); font: inherit; font-size: 12px; font-weight: 620; cursor: pointer; } .ds-panel-tabs button[aria-selected='true'] { border-color: var(--app-accent-line); color: var(--app-accent-strong); background: var(--app-accent-soft); } .ds-panel-tabs button:focus-visible { outline: 2px solid var(--app-focus-ring); outline-offset: 2px; }"
+    },
+    {
+      "name": "Book Card",
+      "kind": "card",
+      "refersTo": "web-book-card",
+      "description": "Whole-card book target with cover, title, author, reading progress, and latest chapter.",
+      "html": "<button class=\"ds-book-card\" type=\"button\" aria-label=\"打开《示例书》\"><span class=\"ds-cover-frame\" aria-hidden=\"true\"></span><span class=\"ds-book-info\"><strong>示例书</strong><span class=\"ds-author\">作者名</span><span class=\"ds-chapter\"><b>读到</b> 第十二章</span><span class=\"ds-chapter\"><b>最新</b> 第二十章</span></span><span class=\"ds-card-arrow\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\"><path d=\"m9 18 6-6-6-6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span></button>",
+      "css": ".ds-book-card { min-width: 0; min-height: 158px; position: relative; display: flex; align-items: flex-start; gap: 15px; border: 1px solid var(--app-line); border-radius: 15px; padding: 15px 34px 15px 15px; color: var(--app-ink); background: var(--app-panel); box-shadow: none; font: inherit; text-align: left; cursor: pointer; transition: background-color var(--app-duration-state) ease-out, border-color var(--app-duration-state) ease-out, box-shadow var(--app-duration-state) ease-out; } .ds-book-card:hover, .ds-book-card:focus-visible { z-index: 1; border-color: var(--app-accent-line); background: var(--app-panel-raised); box-shadow: var(--app-shadow-soft); } .ds-book-card:active { background: var(--app-panel-muted); } .ds-cover-frame { width: 82px; height: 118px; flex: none; border: 1px solid var(--app-line); border-radius: 9px; background: var(--app-panel-muted); } .ds-book-info { min-width: 0; min-height: 118px; display: flex; flex: 1; flex-direction: column; justify-content: space-between; gap: 7px; } .ds-book-info strong { color: var(--app-ink); font-size: 15px; font-weight: 730; line-height: 1.4; } .ds-author, .ds-chapter { overflow: hidden; color: var(--app-ink-muted); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; } .ds-chapter b { margin-right: 5px; color: var(--app-ink-soft); font-weight: 650; } .ds-card-arrow { position: absolute; top: 50%; right: 13px; color: var(--app-ink-muted); opacity: 0; transform: translate(-3px, -50%); transition: opacity var(--app-duration-state) ease-out, transform var(--app-duration-state) ease-out; } .ds-book-card:hover .ds-card-arrow, .ds-book-card:focus-visible .ds-card-arrow { opacity: 1; transform: translate(0, -50%); }"
+    },
+    {
+      "name": "Book Source Tag",
+      "kind": "chip",
+      "refersTo": "web-book-source-tag",
+      "description": "Plain tag used for source labels in book search cards.",
+      "html": "<span class=\"ds-source-tag\">玄幻</span>",
+      "css": ".ds-source-tag { display: inline-flex; border-radius: 6px; padding-inline: 5px; color: var(--app-accent-strong); background: var(--app-accent-soft); line-height: 18px; }"
+    },
+    {
+      "name": "Android Reading Button",
+      "kind": "button",
+      "refersTo": "android-book-read-button",
+      "description": "原生详情主操作的结构预览；实际语义色、字体与spring由Android解析。",
+      "html": "<button class=\"ds-android-read\"><svg aria-hidden=\"true\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\"><path d=\"M3 4h7l2 2 2-2h7v16h-7l-2 2-2-2H3zM12 6v16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"/></svg>阅读</button>",
+      "css": ".ds-android-read { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px; border:0; border-radius:12px; padding:8px 16px; background:#24675B; color:#fff; font:500 14px/20px sans-serif; cursor:pointer; transition:filter 120ms,transform 120ms; } .ds-android-read:hover { filter:brightness(1.06); } .ds-android-read:focus-visible { outline:2px solid #24675B; outline-offset:3px; } .ds-android-read:active { transform:scale(.985); } .ds-android-read:disabled { opacity:.38; cursor:default; } @media(prefers-reduced-motion:reduce) { .ds-android-read { transition:none; } .ds-android-read:active { transform:none; } }"
+    },
+    {
+      "name": "Android Bookshelf Button",
+      "kind": "button",
+      "refersTo": "android-book-shelf-button",
+      "description": "详情中的柔和书架次操作，背景来自用户背景与原始强调色10%混合；预览为默认浅色近似。",
+      "html": "<button class=\"ds-android-shelf\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\"><path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>加入书架</button>",
+      "css": ".ds-android-shelf { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px; border:0; border-radius:12px; padding:8px 16px; background:color-mix(in srgb,#F7F7F2 90%,#24675B); color:#212121; font:500 14px/20px sans-serif; cursor:pointer; transition:filter 120ms,transform 120ms; } .ds-android-shelf:hover { filter:brightness(.97); } .ds-android-shelf:focus-visible { outline:2px solid #24675B; outline-offset:3px; } .ds-android-shelf:active { transform:scale(.985); } @media(prefers-reduced-motion:reduce) { .ds-android-shelf { transition:none; } .ds-android-shelf:active { transform:none; } }"
+    },
+    {
+      "name": "Android Source Search",
+      "kind": "input",
+      "refersTo": "android-source-search",
+      "description": "书源管理的12dp圆角搜索；以下HTML是原生Material输入框的结构转译。",
+      "html": "<label class=\"ds-android-search\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"m16 16 4 4\" stroke=\"currentColor\" stroke-width=\"2\"/></svg><input aria-label=\"搜索书源\" placeholder=\"搜索书源\" /></label>",
+      "css": ".ds-android-search { display:flex; align-items:center; gap:12px; min-height:56px; padding:0 16px; border:1px solid #8f918c; border-radius:12px; color:#616161; background:#F7F7F2; } .ds-android-search input { width:100%; min-width:0; border:0; outline:0; color:#212121; background:transparent; font:400 16px/24px sans-serif; } .ds-android-search:hover { border-color:#212121; } .ds-android-search:focus-within { outline:2px solid #24675B; outline-offset:2px; }"
+    },
+    {
+      "name": "Android Mineral Toolbar",
+      "kind": "nav",
+      "refersTo": "android-tool-bar",
+      "description": "56dp工具栏的结构预览，实际系统栏及透明配置由宿主处理。",
+      "html": "<nav class=\"ds-android-toolbar\" aria-label=\"页面操作\"><button aria-label=\"返回\"><svg aria-hidden=\"true\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M20 12H4m7-7-7 7 7 7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></button><span>书源管理</span></nav>",
+      "css": ".ds-android-toolbar { display:flex; align-items:center; gap:8px; min-height:56px; padding:0 4px; background:#183F38; color:#fff; font:500 20px/28px sans-serif; } .ds-android-toolbar button { display:grid; place-items:center; width:48px; height:48px; border:0; border-radius:24px; background:transparent; color:inherit; cursor:pointer; } .ds-android-toolbar button:hover,.ds-android-toolbar button:active { background:#ffffff1f; } .ds-android-toolbar button:focus-visible { outline:2px solid currentColor; outline-offset:-4px; }"
+    },
+    {
+      "name": "Android Book Identity",
+      "kind": "custom",
+      "description": "书衣与纸面身份结构预览；compact常规字体将分类接在右侧书名/作者下方、来源/分组下移，局部书衣顶部/底部内距16/12dp；原生静态布纹、随实际封面底沿跨接缝的Canvas书签、封面资源及阴影以BookInfoScreen实际渲染为准。",
+      "html": "<section class=\"ds-android-identity\"><div class=\"ds-android-cloth\"><div class=\"ds-android-cover\" aria-hidden=\"true\"></div><div><h2>示例书名</h2><p>作者</p></div></div><div class=\"ds-android-paper\"><strong>当前章节</strong><p>章节内容</p></div></section>",
+      "css": ".ds-android-identity { background:#F7F7F2; color:#212121; font:400 14px/22px sans-serif; } .ds-android-cloth { display:flex; align-items:center; gap:24px; padding:24px; background:#183F38; color:#fff; } .ds-android-cover { flex:none; width:136px; height:196px; border-radius:4px; background:#EBEEE7; } .ds-android-cloth h2 { margin:0; font:400 28px/36px serif; } .ds-android-cloth p { font-size:16px; line-height:24px; } .ds-android-paper { padding:24px 20px; } .ds-android-paper p { border:1px solid #d5d5d1; border-radius:8px; padding:16px; } @media(max-width:359px) { .ds-android-cloth { align-items:center; gap:16px; } .ds-android-cover { width:104px; height:150px; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "矿绿书衣，连续纸面",
+    "overview": "Android 以用户选择的 A「矿绿书衣」为现行视觉方向：书籍身份在完整的书衣色场中被识别，阅读与维护落在清楚的纸面层。详情以非对称封面、局部衬线书名和书签细节形成识别；书源、文章、书签与记录将同一语言转译为矿绿导航、连续列表、细线和清楚的文字层级。概念种子 `d57b1583` 作为方向来源记录，用户选择 A 决定最终方向；五块方向契约见 [CONCEPTS_V3.md](docs/ui/CONCEPTS_V3.md)。\n\n熟悉的四目的地导航、页面层级、操作入口和完整阅读能力继续保留。Compose 承担普通内容，专用阅读、代码编辑与媒体引擎保持互操作。Android 使用 ThemeStore 与 Material 3 语义角色响应用户主题、夜间和墨水屏；Web 由 app.css 的浅深 CSS 变量驱动，阅读正文另服从用户选择的字体与纸张主题。\n\n本文件以当前源码提取长期视觉规则；[DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) 补充 Design DNA、语义映射、组件模式与平台适配；页面构图见 `docs/ui/SCREEN_SPEC_*_V3.md`，实际设备与交互证据见 [VISUAL_REVIEW.md](VISUAL_REVIEW.md)。原书架“书页边注”继续作为列表模式使用。",
+    "keyCharacteristics": [
+      "Android 主导航维持四个原有目的地的图标式底栏，并按设置隐藏发现或 RSS。",
+      "书架保留分组、列表或多列网格、书籍元数据、刷新和原有菜单操作。",
+      "Android 阅读页保留专用阅读引擎，阅读设置与朗读配置使用对应的普通配置界面。",
+      "Web 书架、章节阅读、书源编辑和订阅源编辑保持独立的 hash 路由分区。",
+      "Android 主题服从 ThemeStore、夜间模式和墨水屏设置；Web 主题服从自身的浅色、深色和阅读主题配置。",
+      "详情使用书衣与纸面的鲜明主次，管理页用连续内容和细分隔保持扫描效率。"
+    ],
+    "rules": [
+      {
+        "name": "The Familiar Hierarchy Rule",
+        "body": "在既有页面层级和操作入口内深化排版、密度、反馈与可读性，不以新的首页概念替换 Legado 的阅读流程。",
+        "section": "overview"
+      },
+      {
+        "name": "The Runtime Theme Rule",
+        "body": "Android Compose 页面始终读取现有 ThemeStore 与 AppConfig 主题状态；Web 的 CSS 色板只服务 Web，不作为 Android 回退色板。",
+        "section": "colors"
+      },
+      {
+        "name": "The Cloth and Paper Rule",
+        "body": "书衣承担身份与导航，纸面承担阅读和维护；工具列表以细分隔组织，色块只服务真实层级与状态。",
+        "section": "colors"
+      },
+      {
+        "name": "The Role Scale Rule",
+        "body": "Android 文字优先通过 Material 3 类型角色表达；Web 阅读正文继续服从阅读设置，不将管理界面的字号层级强加给正文。",
+        "section": "typography"
+      },
+      {
+        "name": "The Existing Destination Rule",
+        "body": "保持 Android 底部目的地顺序、书架分组与书籍条目关系，以及 Web 的书架、章节和源编辑路由；响应式变化只调整空间分配和面板呈现。",
+        "section": "layout"
+      },
+      {
+        "name": "The Semantic Surface Rule",
+        "body": "Android 的层级来自 Material 表面角色；Web 的阴影只强化有明确浮层或交互提升语义的内容。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do：沿用 Legado 原有页面层级与熟悉的操作入口，优化间距、信息密度、可读性与反馈。",
+      "Do：保留 Android 目的地顺序、图标式底部导航、发现/RSS 可隐藏设置和书架更新徽标。",
+      "Do：使用 Android ThemeStore 与 Material 3 语义角色，并保留夜间和墨水屏行为。",
+      "Do：保留用户设置的阅读字体、字号、页面颜色、源规则及专用阅读或脚本引擎。",
+      "Do：遵守 Android 系统动画设置、墨水屏动效抑制、Web 减少动态效果偏好、系统 inset 和键盘焦点状态。",
+      "Do：按任务转译书衣与纸面；长文本与大字通过换行、纵向重排和滚动保持操作可达。"
+    ],
+    "donts": [
+      "Don't：不要把熟悉的书架流程改成营销仪表盘、超大继续阅读主卡片或固定继续阅读条。",
+      "Don't：不要在没有对应原有入口的情况下，把书架、编辑器或阅读操作移到新的菜单位置。",
+      "Don't：不要用通用 Compose 内容替换原生阅读引擎或脚本引擎。",
+      "Don't：不要把 Web 书架、章节阅读、书源编辑和订阅源编辑合并成同一页面或路由。",
+      "Don't：不要将概念图示例内容、装饰性编号、无真实用途的统计或逐条入场序列写入产品界面。",
+      "Don't：不要将发现的触控尺寸缺陷固化为紧凑组件标准；触控基线继续为 48dp。"
+    ]
+  }
+}

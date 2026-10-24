@@ -18,6 +18,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.size
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -32,6 +35,7 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.ACache
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
@@ -97,7 +101,14 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         pooledWebView = WebViewPool.acquire(this)
         currentWebView = pooledWebView.realWebView
-        binding.webViewContainer.addView(currentWebView)
+        binding.webViewCompose.setContent {
+            LegadoTheme {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { currentWebView }
+                )
+            }
+        }
         currentWebView.post {
             currentWebView.clearHistory()
         }

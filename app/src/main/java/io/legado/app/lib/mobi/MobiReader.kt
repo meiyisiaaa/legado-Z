@@ -12,6 +12,8 @@ import io.legado.app.lib.mobi.utils.readUInt32
 import io.legado.app.lib.mobi.utils.readUInt8
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import io.legado.app.utils.LogUtils
+private const val TAG = "MobiReader"
 
 class MobiReader {
 
@@ -37,7 +39,7 @@ class MobiReader {
                     kf8BoundaryOffset = boundary
                     isKF8 = true
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    LogUtils.e(TAG, e.stackTraceToString())
                 }
             }
         }

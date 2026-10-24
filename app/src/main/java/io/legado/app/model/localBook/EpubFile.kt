@@ -32,6 +32,8 @@ import java.io.InputStream
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.Charset
+import io.legado.app.utils.LogUtils
+private const val TAG = "EpubFile"
 
 class EpubFile(var book: Book) {
 
@@ -353,7 +355,7 @@ class EpubFile(var book: Book) {
                                 title = elements[0].text()
                             }
                         } catch (e: IOException) {
-                            e.printStackTrace()
+                            LogUtils.e(TAG, e.stackTraceToString())
                         }
                     }
                     val chapter = BookChapter()

@@ -1,11 +1,13 @@
 <template>
-  <el-tabs v-model="current_tab">
+  <el-tabs id="source-tools" v-model="current_tab">
     <el-tab-pane
       v-for="(tab, index) in tabData"
-      :key="tab[0]"
-      :name="tab[0]"
-      :label="tab[1]"
+      :key="tab.name"
+      :name="tab.name"
     >
+      <template #label>
+        <span class="tool-tab-label"><el-icon><component :is="tab.icon" /></el-icon>{{ tab.label }}</span>
+      </template>
       <source-json v-if="index == 0" />
       <source-debug v-if="index == 1" />
       <source-list v-if="index == 2" />
@@ -16,6 +18,7 @@
 
 <script setup lang="ts">
 import { useSourceStore } from '@/store'
+import { EditPen, VideoPlay, List, QuestionFilled } from '@element-plus/icons-vue'
 
 const store = useSourceStore()
 
@@ -25,15 +28,36 @@ const current_tab = computed({
 })
 
 const tabData = ref([
-  ['editTab', '编辑源'],
-  ['editDebug', '调试源'],
-  ['editList', '源列表'],
-  ['editHelp', '帮助信息'],
+  { name: 'editTab', label: '编辑源', icon: EditPen },
+  { name: 'editDebug', label: '调试源', icon: VideoPlay },
+  { name: 'editList', label: '源列表', icon: List },
+  { name: 'editHelp', label: '帮助信息', icon: QuestionFilled },
 ])
 </script>
 
 <style lang="scss" scoped>
+:deep(.el-tabs__nav) {
+  gap: 4px;
+}
+
+:deep(.el-tabs__item) {
+  height: 46px;
+  color: var(--app-ink-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+:deep(.el-tabs__item.is-active) {
+  color: var(--app-accent-strong);
+}
+
+.tool-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 :deep(.el-tabs__header) {
-  margin-bottom: 5px;
+  margin-bottom: 0;
 }
 </style>

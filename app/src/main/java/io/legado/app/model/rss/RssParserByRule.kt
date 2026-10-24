@@ -10,6 +10,8 @@ import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setRuleData
 import io.legado.app.model.analyzeRule.RuleData
+import io.legado.app.model.rss.media.RssMediaResolver
+import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import kotlinx.coroutines.currentCoroutineContext
 import splitties.init.appCtx
@@ -133,6 +135,7 @@ object RssParserByRule {
         rssArticle.link = analyzeRule.getString(ruleLink, isUrl = true)
         Debug.log(sourceUrl, "└${rssArticle.link}", log)
         rssArticle.type = type
+        rssArticle.enclosureJson = GSON.toJson(RssMediaResolver.extractAttachments(item.toString()))
         if (rssArticle.title.isBlank()) {
             return null
         }

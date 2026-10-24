@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import splitties.systemservices.downloadManager
 import splitties.systemservices.notificationManager
+import io.legado.app.utils.LogUtils
+private const val TAG = "DownloadService"
 
 /**
  * 下载文件
@@ -114,7 +116,7 @@ class DownloadService : BaseService() {
                 checkDownloadState()
             }
         }.onFailure {
-            it.printStackTrace()
+            LogUtils.e(TAG, it.stackTraceToString())
             val msg = when (it) {
                 is SecurityException -> "下载出错,没有存储权限"
                 else -> "下载出错,${it.localizedMessage}"

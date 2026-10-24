@@ -1,159 +1,191 @@
 package io.legado.app.ui.file
 
-import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
-import androidx.appcompat.widget.Toolbar
-import androidx.core.content.res.ResourcesCompat
-import androidx.core.graphics.drawable.DrawableCompat
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.observe
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
-import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.RecyclerAdapter
-import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogFileChooserBinding
-import io.legado.app.databinding.ItemFilePickerBinding
-import io.legado.app.databinding.ItemPathPickerBinding
-import io.legado.app.help.config.AppConfig
+import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.theme.getPrimaryDisabledTextColor
-import io.legado.app.lib.theme.getPrimaryTextColor
-import io.legado.app.lib.theme.primaryColor
-import io.legado.app.ui.file.HandleFileContract.Companion.FILE
-import io.legado.app.ui.file.utils.FilePickerIcon
-import io.legado.app.ui.widget.recycler.VerticalDivider
-import io.legado.app.utils.ConvertUtils
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.utils.FileUtils
-import io.legado.app.utils.applyTint
-import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import java.io.File
 
-
-class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
-    Toolbar.OnMenuItemClickListener {
+class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser) {
 
     companion object {
         const val tag = "FileChooserDialog"
 
         fun show(
             manager: FragmentManager,
-            mode: Int = FILE,
+            mode: Int = HandleFileContract.FILE,
             title: String? = null,
             initPath: String? = null,
             isShowHideDir: Boolean = false,
             allowExtensions: Array<String>? = null,
         ) {
             FilePickerDialog().apply {
-                val bundle = Bundle()
-                bundle.putInt("mode", mode)
-                bundle.putString("title", title)
-                bundle.putBoolean("isShowHideDir", isShowHideDir)
-                bundle.putString("initPath", initPath)
-                bundle.putStringArray("allowExtensions", allowExtensions)
-                arguments = bundle
+                arguments = Bundle().apply {
+                    putInt("mode", mode)
+                    putString("title", title)
+                    putBoolean("isShowHideDir", isShowHideDir)
+                    putString("initPath", initPath)
+                    putStringArray("allowExtensions", allowExtensions)
+                }
             }.show(manager, tag)
         }
     }
 
     private val binding by viewBinding(DialogFileChooserBinding::bind)
     private val viewModel by viewModels<FilePickerViewModel>()
-    private val dirParent = ".."
-    private val pathAdapter by lazy { PathAdapter() }
-    private val fileAdapter by lazy { FileAdapter() }
+    private val files = mutableStateListOf<File>()
+    private val pathItems = mutableStateListOf<File>()
+    private var selectedFile by mutableStateOf<File?>(null)
 
     override fun onStart() {
         super.onStart()
-        setLayout(0.9f, 0.8f)
+        setLayout(0.9f, 0.82f)
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        binding.toolBar.setBackgroundColor(primaryColor)
         view.setBackgroundResource(R.color.background_card)
-        initMenu()
-        initContentView()
-        viewModel.filesLiveData.observe(viewLifecycleOwner) {
-            fileAdapter.selectFile = null
-            fileAdapter.setItems(it)
+        viewModel.filesLiveData.observe(viewLifecycleOwner) { rows ->
+            selectedFile = null
+            files.clear()
+            files.addAll(rows.orEmpty())
         }
         viewModel.initData(arguments)
-        binding.toolBar.title = arguments?.getString("title") ?: let {
-            if (viewModel.isSelectDir) {
-                getString(R.string.folder_chooser)
-            } else {
-                getString(R.string.file_chooser)
+        pathItems.clear()
+        pathItems.addAll(viewModel.subDocs)
+        val title = arguments?.getString("title") ?: if (viewModel.isSelectDir) {
+            getString(R.string.folder_chooser)
+        } else {
+            getString(R.string.file_chooser)
+        }
+        binding.composeView.setContent {
+            LegadoTheme {
+                FilePickerContent(
+                    title = title,
+                    files = files.toList(),
+                    pathItems = pathItems.toList(),
+                    rootDoc = viewModel.rootDoc,
+                    currentDir = viewModel.lastDir,
+                    isSelectFile = viewModel.isSelectFile,
+                    allowExtensions = viewModel.allowExtensions,
+                    selectedFile = selectedFile,
+                    onSelectFile = { selectedFile = it },
+                    onNavigateRoot = ::navigateRoot,
+                    onNavigateTo = ::navigateTo,
+                    onEnterDirectory = ::enterDirectory,
+                    onCreateFolder = ::createFolder,
+                    onConfirm = ::confirmSelection
+                )
             }
         }
     }
 
-    private fun initMenu() {
-        binding.toolBar.inflateMenu(R.menu.file_chooser)
-        binding.toolBar.menu.applyTint(requireContext())
-        binding.toolBar.setOnMenuItemClickListener(this)
+    private fun navigateRoot() {
+        viewModel.subDocs.clear()
+        pathItems.clear()
+        viewModel.upFiles(viewModel.rootDoc)
     }
 
-    private fun initContentView() {
-        binding.rvPath.layoutManager = LinearLayoutManager(activity, RecyclerView.HORIZONTAL, false)
-        binding.rvPath.adapter = pathAdapter
+    private fun navigateTo(index: Int) {
+        if (index <= 0) {
+            navigateRoot()
+            return
+        }
+        val nextPath = viewModel.subDocs.take(index).toMutableList()
+        viewModel.subDocs = nextPath
+        pathItems.clear()
+        pathItems.addAll(nextPath)
+        viewModel.upFiles(nextPath.lastOrNull())
+    }
 
-        binding.rvFile.addItemDecoration(VerticalDivider(requireContext()))
-        binding.rvFile.layoutManager = LinearLayoutManager(activity)
-        binding.rvFile.adapter = fileAdapter
+    private fun enterDirectory(file: File) {
+        val nextPath = viewModel.subDocs.toMutableList().apply { add(file) }
+        viewModel.subDocs = nextPath
+        pathItems.clear()
+        pathItems.addAll(nextPath)
+        viewModel.upFiles(file)
+    }
 
-        binding.tvOk.setOnClickListener {
-            if (viewModel.isSelectDir) {
-                viewModel.lastDir?.let {
-                    setResultData(it.path)
-                    dismissAllowingStateLoss()
-                }
-            } else {
-                val file = fileAdapter.selectFile
-                if (file == null) {
-                    toastOnUi("请选择文件")
-                } else {
-                    setResultData(file.path)
-                    dismissAllowingStateLoss()
-                }
-            }
+    private fun confirmSelection() {
+        if (viewModel.isSelectDir) {
+            viewModel.lastDir?.let { returnResult(it.path) }
+        } else {
+            selectedFile?.let { returnResult(it.path) } ?: toastOnUi("请选择文件")
         }
     }
 
-    override fun onMenuItemClick(item: MenuItem?): Boolean {
-        when (item?.itemId) {
-            R.id.menu_create -> alert(R.string.create_folder) {
-                val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                    editView.hint = "文件夹名"
-                }
-                customView { alertBinding.root }
-                okButton {
-                    val text = alertBinding.editView.text?.toString()
-                    if (text.isNullOrBlank()) {
-                        toastOnUi("文件夹名不能为空")
-                    } else {
-                        viewModel.createFolder(text.trim())
-                    }
-                }
-                cancelButton()
-            }
-        }
-        return true
-    }
-
-    private fun setResultData(path: String) {
+    private fun returnResult(path: String) {
         val data = Intent().setData(Uri.fromFile(File(path)))
         (parentFragment as? CallBack)?.onResult(data)
         (activity as? CallBack)?.onResult(data)
+        dismissAllowingStateLoss()
+    }
+
+    private fun createFolder() {
+        alert(R.string.create_folder) {
+            val editBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = "文件夹名"
+            }
+            customView { editBinding.root }
+            okButton {
+                val name = editBinding.editView.text?.toString()
+                if (name.isNullOrBlank()) {
+                    toastOnUi("文件夹名不能为空")
+                } else {
+                    viewModel.createFolder(name.trim())
+                }
+            }
+            cancelButton()
+        }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
@@ -161,135 +193,179 @@ class FilePickerDialog : BaseDialogFragment(R.layout.dialog_file_chooser),
         activity?.finish()
     }
 
-    @SuppressLint("SetTextI18n")
-    inner class PathAdapter :
-        RecyclerAdapter<File, ItemPathPickerBinding>(requireContext()) {
-
-        private val arrowIcon = ConvertUtils.toDrawable(FilePickerIcon.getArrow())
-
-        init {
-            addHeaderView {
-                ItemPathPickerBinding.inflate(inflater, it, false).apply {
-                    textView.text = "root"
-                    imageView.setImageDrawable(arrowIcon)
-                    root.setOnClickListener {
-                        viewModel.subDocs.clear()
-                        setItems(viewModel.subDocs)
-                        viewModel.upFiles(viewModel.rootDoc)
-                    }
-                }
-            }
-        }
-
-        override fun getViewBinding(parent: ViewGroup): ItemPathPickerBinding {
-            return ItemPathPickerBinding.inflate(inflater, parent, false).apply {
-                imageView.setImageDrawable(arrowIcon)
-            }
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemPathPickerBinding) {
-            binding.root.setOnClickListener {
-                viewModel.subDocs = viewModel.subDocs.subList(0, holder.layoutPosition)
-                setItems(viewModel.subDocs)
-                viewModel.upFiles(viewModel.subDocs.lastOrNull())
-            }
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemPathPickerBinding,
-            item: File,
-            payloads: MutableList<Any>
-        ) {
-            binding.textView.text = item.name
-        }
-
-    }
-
-    inner class FileAdapter : RecyclerAdapter<File, ItemFilePickerBinding>(requireContext()) {
-        private val primaryTextColor = context.getPrimaryTextColor(!AppConfig.isNightTheme)
-        private val disabledTextColor = context.getPrimaryDisabledTextColor(!AppConfig.isNightTheme)
-        private val upIcon = ConvertUtils.toDrawable(FilePickerIcon.getUpDir())!!
-        private val folderIcon = ConvertUtils.toDrawable(FilePickerIcon.getFolder())!!
-        private val fileIcon = ConvertUtils.toDrawable(FilePickerIcon.getFile())!!
-        private val selectDrawable =
-            ResourcesCompat.getDrawable(resources, R.drawable.shape_radius_1dp, null)!!.apply {
-                DrawableCompat.setTint(this, primaryTextColor)
-            }
-        var selectFile: File? = null
-
-        override fun getViewBinding(parent: ViewGroup): ItemFilePickerBinding {
-            return ItemFilePickerBinding.inflate(inflater, parent, false)
-        }
-
-        override fun registerListener(holder: ItemViewHolder, binding: ItemFilePickerBinding) {
-            binding.root.setOnClickListener {
-                val item = getItemByLayoutPosition(holder.layoutPosition)
-                item?.let {
-                    if (item == viewModel.lastDir) {
-                        viewModel.subDocs.removeLastOrNull()
-                        pathAdapter.setItems(viewModel.subDocs)
-                        viewModel.upFiles(viewModel.subDocs.lastOrNull() ?: viewModel.rootDoc)
-                    } else if (item.isDirectory) {
-                        viewModel.subDocs.add(item)
-                        pathAdapter.setItems(viewModel.subDocs)
-                        viewModel.upFiles(item)
-                    } else if (viewModel.isSelectFile) {
-                        viewModel.allowExtensions.let {
-                            if (it.isNullOrEmpty() || it.contains(FileUtils.getExtension(item.path))) {
-                                selectFile = item
-                                notifyItemRangeChanged(getHeaderCount(), itemCount, "selectFile")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        override fun convert(
-            holder: ItemViewHolder,
-            binding: ItemFilePickerBinding,
-            item: File,
-            payloads: MutableList<Any>
-        ) {
-            if (payloads.isEmpty()) {
-                if (item == viewModel.lastDir) {
-                    binding.imageView.setImageDrawable(upIcon)
-                    binding.textView.text = dirParent
-                } else if (item.isDirectory) {
-                    binding.imageView.setImageDrawable(folderIcon)
-                    binding.textView.text = item.name
-                } else {
-                    binding.imageView.setImageDrawable(fileIcon)
-                    binding.textView.text = item.name
-                }
-                if (item.isDirectory) {
-                    binding.textView.setTextColor(primaryTextColor)
-                } else {
-                    if (viewModel.isSelectDir) {
-                        binding.textView.setTextColor(disabledTextColor)
-                    } else {
-                        viewModel.allowExtensions?.let {
-                            if (it.isEmpty() || it.contains(FileUtils.getExtension(item.path))) {
-                                binding.textView.setTextColor(primaryTextColor)
-                            } else {
-                                binding.textView.setTextColor(disabledTextColor)
-                            }
-                        } ?: binding.textView.setTextColor(primaryTextColor)
-                    }
-                }
-            }
-            binding.root.isSelected = item == selectFile
-            if (item == selectFile) {
-                binding.root.background = selectDrawable
-            } else {
-                binding.root.setBackgroundColor(getCompatColor(R.color.transparent))
-            }
-        }
-
-    }
-
     interface CallBack {
         fun onResult(data: Intent)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun FilePickerContent(
+    title: String,
+    files: List<File>,
+    pathItems: List<File>,
+    rootDoc: File?,
+    currentDir: File?,
+    isSelectFile: Boolean,
+    allowExtensions: Array<String>?,
+    selectedFile: File?,
+    onSelectFile: (File) -> Unit,
+    onNavigateRoot: () -> Unit,
+    onNavigateTo: (Int) -> Unit,
+    onEnterDirectory: (File) -> Unit,
+    onCreateFolder: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val crumbs = listOfNotNull(rootDoc) + pathItems
+    var menuExpanded by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            androidx.compose.foundation.layout.Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_more_vert),
+                        contentDescription = stringResource(R.string.more_menu),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.create_folder)) },
+                        leadingIcon = {
+                            Icon(painterResource(R.drawable.ic_create_folder_outline), contentDescription = null)
+                        },
+                        onClick = { menuExpanded = false; onCreateFolder() }
+                    )
+                }
+            }
+        }
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(crumbs.size, key = { crumbs[it].absolutePath }) { index ->
+                if (index > 0) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_right),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Text(
+                    text = if (index == 0) "root" else crumbs[index].name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (index == crumbs.lastIndex) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .combinedClickable(
+                            onClick = if (index == 0) onNavigateRoot else { { onNavigateTo(index) } }
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (files.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    stringResource(R.string.empty),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 0.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                items(files, key = { it.absolutePath }) { file ->
+                    val isParent = file == currentDir && currentDir != rootDoc
+                    val extensionAllowed = allowExtensions.isNullOrEmpty() ||
+                        allowExtensions.any { it.equals(FileUtils.getExtension(file.path), ignoreCase = true) }
+                    val allowed = isParent || file.isDirectory || isSelectFile && extensionAllowed
+                    val selected = file == selectedFile
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .combinedClickable(
+                                enabled = allowed,
+                                onClick = {
+                                    when {
+                                        isParent -> onNavigateTo((pathItems.size - 1).coerceAtLeast(0))
+                                        file.isDirectory -> onEnterDirectory(file)
+                                        isSelectFile -> onSelectFile(file)
+                                    }
+                                }
+                            )
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.background
+                            )
+                            .padding(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                when {
+                                    isParent -> R.drawable.ic_back
+                                    file.isDirectory -> R.drawable.ic_folder_outline
+                                    else -> R.drawable.ic_code
+                                }
+                            ),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = if (isParent) ".." else file.name,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (allowed) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (file != files.lastOrNull()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 34.dp, end = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
+                }
+            }
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(3.dp),
+            onClick = onConfirm
+        ) {
+            Text(stringResource(R.string.ok), modifier = Modifier.padding(vertical = 2.dp))
+        }
     }
 }

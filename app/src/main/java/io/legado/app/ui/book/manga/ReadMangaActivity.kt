@@ -7,9 +7,11 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.view.WindowManager
 import android.view.animation.LinearInterpolator
 import androidx.activity.viewModels
+import androidx.compose.runtime.mutableStateOf
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -51,6 +53,7 @@ import io.legado.app.ui.book.manga.recyclerview.MangaAdapter
 import io.legado.app.ui.book.manga.recyclerview.MangaLayoutManager
 import io.legado.app.ui.book.manga.recyclerview.ScrollTimer
 import io.legado.app.ui.book.read.MangaMenu
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.book.read.ReadBookActivity.Companion.RESULT_DELETED
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.widget.number.NumberPickerDialog
@@ -145,6 +148,9 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
     override val binding by viewBinding(ActivityMangaBinding::inflate)
     override val viewModel by viewModels<ReadMangaViewModel>()
     private val loadingViewVisible get() = binding.flLoading.isVisible
+    private val mangaLoadingUi = mutableStateOf(
+        MangaLoadingUiState(showProgress = !AppConfig.isEInkMode)
+    )
     private val df by lazy {
         DecimalFormat("0.0%")
     }
@@ -158,12 +164,14 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         ReadManga.register(this)
         upSystemUiVisibility(false)
         initRecyclerView()
-        binding.tvRetry.setOnClickListener {
-            binding.llLoading.isVisible = true
-            binding.llRetry.isGone = true
-            ReadManga.loadOrUpContent()
+        binding.mangaLoadingCompose.setContent {
+            LegadoTheme {
+                MangaLoadingContent(mangaLoadingUi.value) {
+                    showLoadingOverlay()
+                    ReadManga.loadOrUpContent()
+                }
+            }
         }
-        binding.pbLoading.isVisible = !AppConfig.isEInkMode
         mAdapter.addFooterView {
             ViewLoadMoreBinding.bind(loadMoreView)
         }
@@ -384,10 +392,11 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
     override fun loadFail(msg: String, retry: Boolean) {
         lifecycleScope.launch {
             if (loadingViewVisible) {
-                binding.llLoading.isGone = true
-                binding.llRetry.isVisible = true
-                binding.tvRetry.isVisible = retry
-                binding.tvMsg.text = msg
+                mangaLoadingUi.value = MangaLoadingUiState(
+                    loading = false,
+                    message = msg,
+                    showRetry = retry
+                )
             } else {
                 loadMoreView.error(null, "加载失败，点击重试")
             }
@@ -417,8 +426,13 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
     override fun showLoading() {
         lifecycleScope.launch {
-            binding.flLoading.isVisible = true
+            showLoadingOverlay()
         }
+    }
+
+    private fun showLoadingOverlay() {
+        mangaLoadingUi.value = MangaLoadingUiState(showProgress = !AppConfig.isEInkMode)
+        binding.flLoading.isVisible = true
     }
 
     override fun startLoad() {
@@ -444,7 +458,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
     override fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>) {
         if (book.isImage) {
-            binding.flLoading.isVisible = true
+            showLoadingOverlay()
             viewModel.changeTo(book, toc)
         } else {
             toastOnUi("所选择的源不是漫画源")
@@ -483,7 +497,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
             }
 
             R.id.menu_refresh -> {
-                binding.flLoading.isVisible = true
+                showLoadingOverlay()
                 ReadManga.book?.let {
                     viewModel.refreshContentDur(it)
                 }
@@ -635,6 +649,11 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
     override fun upSystemUiVisibility(menuIsVisible: Boolean) {
         toggleSystemBar(menuIsVisible)
+        binding.recyclerView.importantForAccessibility = if (menuIsVisible) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        }
         if (enableAutoScroll) {
             mScrollTimer.isEnabled = !menuIsVisible
         }

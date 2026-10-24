@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_product_name">Legado-Z</string>
+    <string name="about_project_summary">Android reader for custom sources, local TXT/EPUB, subscriptions, audiobooks, and AI reading assistance.</string>
+    <string name="about_project_import_note">Books and sources are not bundled; import your own.</string>
+    <string name="about_project_section">Project</string>
+    <string name="about_diagnostics_section">Diagnostics and logs</string>
+    <string name="about_legal_section">Privacy and legal</string>
+    <string name="about_repository">Project repository</string>
+    <string name="about_repository_summary">github.com/meiyisiaaa/legado-Z</string>
+    <string name="about_user_help">User help</string>
+    <string name="about_api_documentation">API documentation</string>
+    <string name="about_update_history">Update history</string>
+    <string name="about_update_history_summary">Commits on the main branch</string>
+    <string name="about_save_logs_summary">Save app logs to the configured backup folder</string>
+    <string name="about_heap_dump_summary">Create and copy a JVM heap dump to the configured backup folder</string>
+    <string name="about_license_summary">GPL-3.0</string>
+    <string name="about_share_text">Legado-Z\nProject repository: https://github.com/meiyisiaaa/legado-Z</string>
+</resources>

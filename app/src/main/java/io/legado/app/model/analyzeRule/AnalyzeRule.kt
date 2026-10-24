@@ -175,7 +175,7 @@ class AnalyzeRule(
         if (isMainThread) {
             error("webJs must be called on a background thread")
         }
-        return runBlocking {
+        return runBlocking(coroutineContext) {
             BackstageWebView(
                 url = baseUrl,
                 html = content.toString(),
@@ -185,7 +185,8 @@ class AnalyzeRule(
                 cacheFirst = true,
                 timeout = 10000,
                 result = GSON.toJson(result),
-                isRule = true
+                isRule = true,
+                source = getSource()
             ).getStrResponse().body.toString()
         }
     }

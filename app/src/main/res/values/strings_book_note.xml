@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="book_note_label">Book note</string>
+    <string name="book_note_backup_scope">Included in full backups, excluded from bookshelf sharing.</string>
+    <string name="book_note_saving">Saving…</string>
+    <string name="book_note_book_missing">This book is no longer in the library.</string>
+</resources>

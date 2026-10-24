@@ -254,6 +254,7 @@ fun Book.sync(oldBook: Book) {
         }
     }
     canUpdate = curBook.canUpdate
+    userNote = curBook.userNote
     readConfig = curBook.readConfig
 }
 
@@ -274,6 +275,7 @@ fun Book.updateTo(newBook: Book): Book {
     newBook.order = order
     newBook.customCoverUrl = customCoverUrl
     newBook.customIntro = customIntro
+    newBook.userNote = userNote
     newBook.customTag = customTag
     newBook.canUpdate = canUpdate
     newBook.readConfig = readConfig

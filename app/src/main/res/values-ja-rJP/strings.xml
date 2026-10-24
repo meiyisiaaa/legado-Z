@@ -477,6 +477,8 @@
     <string name="import_by_qr_code">Import from QR code</string>
     <string name="share_selected_source">Share selected sources</string>
     <string name="scan_qr_code">Scan QR code</string>
+    <string name="qr_flashlight_turn_on">フラッシュライトをオンにする</string>
+    <string name="qr_flashlight_turn_off">フラッシュライトをオフにする</string>
     <string name="click_on_selected_show_menu">Tap to display Menu when selected </string>
     <string name="theme">Theme</string>
     <string name="theme_mode">Theme mode</string>
@@ -597,6 +599,10 @@
     <string name="enable_selection">Enable selected</string>
     <string name="disable_selection">Disable selected</string>
     <string name="export_selection">Export selected</string>
+    <string name="export_main_js_file">単一のJSファイルをエクスポート</string>
+    <string name="export_main_js_select_one">JSファイルをエクスポートする書源を1つだけ選択してください。</string>
+    <string name="export_main_js_source_missing">選択した書源が見つかりません。</string>
+    <string name="export_main_js_empty">選択した書源にはエクスポート可能なmainJsスクリプトがありません。</string>
     <string name="export">Export</string>
     <string name="load_toc">Load chapters</string>
     <string name="load_info">Load book detail</string>

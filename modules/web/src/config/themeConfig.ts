@@ -1,6 +1,3 @@
-import body_0 from '../assets/imgs/themes/body_0.png'
-import content_0 from '../assets/imgs/themes/content_0.png'
-import popup_0 from '../assets/imgs/themes/popup_0.png'
 import body_1 from '../assets/imgs/themes/body_1.png'
 import content_1 from '../assets/imgs/themes/content_1.png'
 import popup_1 from '../assets/imgs/themes/popup_1.png'
@@ -13,15 +10,12 @@ import popup_3 from '../assets/imgs/themes/popup_3.png'
 import body_5 from '../assets/imgs/themes/body_5.png'
 import content_5 from '../assets/imgs/themes/content_5.png'
 import popup_5 from '../assets/imgs/themes/popup_5.png'
-import body_6 from '../assets/imgs/themes/body_6.png'
-import content_6 from '../assets/imgs/themes/content_6.png'
-import popup_6 from '../assets/imgs/themes/popup_6.png'
 const settings = {
   themes: [
     {
-      body: '#ede7da url(' + body_0 + ') repeat',
-      content: '#ede7da url(' + content_0 + ') repeat',
-      popup: '#ede7da url(' + popup_0 + ') repeat',
+      body: '#e8efee',
+      content: '#f7fbfa',
+      popup: '#ffffff',
     },
     {
       body: '#ede7da url(' + body_1 + ') repeat',
@@ -49,9 +43,9 @@ const settings = {
       popup: '#ede7da url(' + popup_5 + ') repeat',
     },
     {
-      body: '#ede7da url(' + body_6 + ') repeat',
-      content: '#ede7da url(' + content_6 + ') repeat',
-      popup: '#ede7da url(' + popup_6 + ') repeat',
+      body: '#10191b',
+      content: '#182528',
+      popup: '#1d2b2e',
     },
   ],
   fonts: [

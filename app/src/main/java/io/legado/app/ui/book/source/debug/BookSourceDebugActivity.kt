@@ -1,185 +1,149 @@
 package io.legado.app.ui.book.source.debug
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
 import androidx.activity.viewModels
-import androidx.appcompat.widget.SearchView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivitySourceDebugBinding
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
-import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.widget.compose.LegadoComposeView
+import io.legado.app.ui.widget.compose.LegadoTheme
 import io.legado.app.ui.widget.dialog.TextDialog
-import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.launch
-import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
-import splitties.views.onClick
-import splitties.views.onLongClick
 
 class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookSourceDebugModel>() {
 
     override val binding by viewBinding(ActivitySourceDebugBinding::inflate)
     override val viewModel by viewModels<BookSourceDebugModel>()
 
-    private val adapter by lazy { BookSourceDebugAdapter(this) }
-    private val searchView: SearchView by lazy {
-        binding.titleBar.findViewById(R.id.search_view)
-    }
-    private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
-        it?.let {
-            startSearch(it)
-        }
+    private val logs = mutableStateListOf<String>()
+    private var query by mutableStateOf("")
+    private var showingHelp by mutableStateOf(true)
+    private var isLoading by mutableStateOf(false)
+    private var suggestions by mutableStateOf(
+        listOf(
+            SourceDebugSuggestion("我的", "我的"),
+            SourceDebugSuggestion("系统", "系统"),
+            SourceDebugSuggestion("详情页示例", "https://m.qidian.com/book/1015609210"),
+            SourceDebugSuggestion("目录页示例", "++https://www.zhaishuyuan.com/read/30394"),
+            SourceDebugSuggestion("正文页示例", "--https://www.zhaishuyuan.com/chapter/30394/20940996")
+        )
+    )
+    private var exploreChoices: List<Pair<String, String>> = emptyList()
+
+    private val qrCodeResult = registerForActivityResult(QrCodeResult()) { result ->
+        result?.let(::startSearch)
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        initRecyclerView()
-        initSearchView()
-        viewModel.init(intent.getStringExtra("key")) {
-            initHelpView()
-        }
-        viewModel.observe { state, msg ->
-            lifecycleScope.launch {
-                adapter.addItem(msg)
-                if (state == -1 || state == 1000) {
-                    binding.rotateLoading.gone()
+        setSupportActionBar(null)
+        setContentView(LegadoComposeView(this).apply {
+            id = R.id.legado_book_source_compose_root
+            setContent {
+                LegadoTheme {
+                    SourceDebugContent(
+                        title = getString(R.string.debug_source),
+                        query = query,
+                        suggestions = suggestions,
+                        logs = logs,
+                        loading = isLoading,
+                        showHelp = showingHelp,
+                        menuItems = listOf(
+                            R.id.menu_search_src to R.string.search_src,
+                            R.id.menu_book_src to R.string.boo_src,
+                            R.id.menu_toc_src to R.string.toc_src,
+                            R.id.menu_content_src to R.string.content_src,
+                            R.id.menu_refresh_explore to R.string.refresh_explore,
+                            R.id.menu_help to R.string.help
+                        ),
+                        onQueryChange = { query = it },
+                        onSearch = ::startSearch,
+                        onScan = { qrCodeResult.launch() },
+                        onAction = ::performAction,
+                        onBack = { onBackPressedDispatcher.onBackPressed() }
+                    )
                 }
             }
-        }
-    }
-
-    private fun initRecyclerView() {
-        binding.recyclerView.setEdgeEffectColor(primaryColor)
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.applyNavigationBarPadding()
-        binding.rotateLoading.loadingColor = accentColor
-    }
-
-    private fun initSearchView() {
-        searchView.onActionViewExpanded()
-        searchView.isSubmitButtonEnabled = true
-        searchView.queryHint = getString(R.string.search_book_key)
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                searchView.clearFocus()
-                openOrCloseHelp(false)
-                startSearch(query ?: "我的")
-                return true
-            }
-
-            override fun onQueryTextChange(newText: String?): Boolean {
-                return false
-            }
         })
-        searchView.setOnQueryTextFocusChangeListener { _, hasFocus ->
-            openOrCloseHelp(hasFocus)
+        viewModel.init(intent.getStringExtra("key"), ::initHelpView)
+        viewModel.observe { state, message ->
+            lifecycleScope.launch {
+                logs += message
+                if (state == -1 || state == 1000) isLoading = false
+            }
         }
-        openOrCloseHelp(true)
     }
 
-    @SuppressLint("SetTextI18n")
     private fun initHelpView() {
-        viewModel.bookSource?.ruleSearch?.checkKeyWord?.let {
-            if (it.isNotBlank()) {
-                binding.textMy.text = it
-            }
-        }
-        binding.textMy.onClick {
-            searchView.setQuery(binding.textMy.text, true)
-        }
-        binding.textXt.onClick {
-            searchView.setQuery(binding.textXt.text, true)
-        }
-        binding.textFx.onClick {
-            if (!binding.textFx.text.startsWith("ERROR:")) {
-                searchView.setQuery(binding.textFx.text, true)
-            }
-        }
-        binding.textInfo.onClick {
-            if (!searchView.query.isNullOrBlank()) {
-                searchView.setQuery(searchView.query, true)
-            }
-        }
-        binding.textToc.onClick {
-            prefixAutoComplete("++")
-        }
-        binding.textContent.onClick {
-            prefixAutoComplete("--")
-        }
+        val checkKeyWord = viewModel.bookSource?.ruleSearch?.checkKeyWord?.takeIf(String::isNotBlank) ?: "我的"
+        suggestions = listOf(
+            SourceDebugSuggestion(checkKeyWord, checkKeyWord),
+            SourceDebugSuggestion("系统", "系统"),
+            SourceDebugSuggestion("详情页示例", "https://m.qidian.com/book/1015609210"),
+            SourceDebugSuggestion("目录页示例", "++https://www.zhaishuyuan.com/read/30394"),
+            SourceDebugSuggestion("正文页示例", "--https://www.zhaishuyuan.com/chapter/30394/20940996")
+        )
         initExploreKinds()
     }
 
-    @SuppressLint("SetTextI18n")
     private fun initExploreKinds() {
         lifecycleScope.launch {
-            val exploreKinds = viewModel.bookSource?.exploreKinds()?.filter {
-                !it.url.isNullOrBlank()
+            val kinds = viewModel.bookSource?.exploreKinds()?.filter { !it.url.isNullOrBlank() }.orEmpty()
+            exploreChoices = kinds.map { (it.title ?: "") to "${it.title}::${it.url}" }
+            val first = kinds.firstOrNull() ?: return@launch
+            val value = "${first.title}::${first.url}"
+            if (first.title.startsWith("ERROR:")) {
+                logs += "获取发现出错\n${first.url}"
+                showingHelp = false
             }
-            exploreKinds?.firstOrNull()?.let {
-                binding.textFx.text = "${it.title}::${it.url}"
-                if (it.title.startsWith("ERROR:")) {
-                    adapter.addItem("获取发现出错\n${it.url}")
-                    openOrCloseHelp(false)
-                    searchView.clearFocus()
-                    return@launch
-                }
-            }
-            @Suppress("USELESS_ELVIS")
-            exploreKinds?.map { it.title ?: "" }?.let { exploreKindTitles ->
-                binding.textFx.onLongClick {
-                    selector("选择发现", exploreKindTitles) { _, index ->
-                        val explore = exploreKinds[index]
-                        binding.textFx.text = "${explore.title}::${explore.url}"
-                        searchView.setQuery(binding.textFx.text, true)
-                    }
-                }
-            }
-        }
-    }
-
-    private fun prefixAutoComplete(prefix: String) {
-        val query = searchView.query
-        if (query.isNullOrBlank() || query.length <= 2) {
-            searchView.setQuery(prefix, false)
-        } else {
-            if (!query.startsWith(prefix)) {
-                searchView.setQuery("$prefix$query", true)
-            } else {
-                searchView.setQuery(query, true)
-            }
-        }
-    }
-
-    /**
-     * 打开关闭历史界面
-     */
-    private fun openOrCloseHelp(open: Boolean) {
-        if (open) {
-            binding.help.visibility = View.VISIBLE
-        } else {
-            binding.help.visibility = View.GONE
+            suggestions = suggestions.filterNot { it.label == "发现示例" } + SourceDebugSuggestion(
+                label = "发现示例",
+                value = value,
+                choices = exploreChoices
+            )
         }
     }
 
     private fun startSearch(key: String) {
-        adapter.clearItems()
-        viewModel.startDebug(key, {
-            binding.rotateLoading.visible()
-        }, {
+        query = key
+        logs.clear()
+        showingHelp = false
+        isLoading = true
+        viewModel.startDebug(key, { isLoading = true }, {
+            isLoading = false
             toastOnUi("未获取到书源")
         })
+    }
+
+    private fun performAction(id: Int) {
+        when (id) {
+            R.id.menu_search_src -> showDialogFragment(TextDialog("html", viewModel.searchSrc))
+            R.id.menu_book_src -> showDialogFragment(TextDialog("html", viewModel.bookSrc))
+            R.id.menu_toc_src -> showDialogFragment(TextDialog("html", viewModel.tocSrc))
+            R.id.menu_content_src -> showDialogFragment(TextDialog("html", viewModel.contentSrc))
+            R.id.menu_refresh_explore -> lifecycleScope.launch {
+                viewModel.bookSource?.clearExploreKindsCache()
+                logs.clear()
+                showingHelp = true
+                initExploreKinds()
+            }
+            R.id.menu_help -> showHelp("debugHelp")
+            R.id.menu_scan -> qrCodeResult.launch()
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -188,22 +152,7 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     }
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_scan -> qrCodeResult.launch()
-            R.id.menu_search_src -> showDialogFragment(TextDialog("html", viewModel.searchSrc))
-            R.id.menu_book_src -> showDialogFragment(TextDialog("html", viewModel.bookSrc))
-            R.id.menu_toc_src -> showDialogFragment(TextDialog("html", viewModel.tocSrc))
-            R.id.menu_content_src -> showDialogFragment(TextDialog("html", viewModel.contentSrc))
-            R.id.menu_refresh_explore -> lifecycleScope.launch {
-                viewModel.bookSource?.clearExploreKindsCache()
-                adapter.clearItems()
-                openOrCloseHelp(true)
-                initExploreKinds()
-            }
-
-            R.id.menu_help -> showHelp("debugHelp")
-        }
+        performAction(item.itemId)
         return super.onCompatOptionsItemSelected(item)
     }
-
 }

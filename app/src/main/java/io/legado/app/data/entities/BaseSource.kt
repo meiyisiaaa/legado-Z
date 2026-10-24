@@ -70,6 +70,7 @@ interface BaseSource : JsExtensions {
     }
 
     fun getLoginJs(): String? {
+        if (this is BookSource && isJsSource()) return mainJs
         val loginJs = loginUrl
         return when {
             loginJs == null -> null

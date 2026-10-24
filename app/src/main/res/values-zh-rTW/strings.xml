@@ -49,6 +49,9 @@
     <string name="last_read">最後閱讀</string>
     <string name="update_log">更新日誌</string>
     <string name="bookshelf_empty">書架還空著，先去搜尋書籍或從發現裡新增吧！</string>
+    <string name="bookshelf_empty_title">暫無書籍</string>
+    <string name="bookshelf_reading_chapter">讀至</string>
+    <string name="bookshelf_latest_chapter">更新</string>
     <string name="action_search">搜尋</string>
     <string name="action_download">下載</string>
     <string name="layout_list">列表</string>
@@ -471,6 +474,8 @@
     <string name="import_by_qr_code">二維碼匯入</string>
     <string name="share_selected_source">分享選取源</string>
     <string name="scan_qr_code">掃描二維碼</string>
+    <string name="qr_flashlight_turn_on">開啟手電筒</string>
+    <string name="qr_flashlight_turn_off">關閉手電筒</string>
     <string name="click_on_selected_show_menu">選中時點擊可彈出選單</string>
     <string name="theme">主題</string>
     <string name="theme_mode">主題模式</string>
@@ -556,6 +561,7 @@
     <string name="skip_next">下一個</string>
     <string name="music">音樂</string>
     <string name="audio">音訊</string>
+    <string name="manga">漫畫</string>
     <string name="is_enable">啟用</string>
     <string name="enable_js">啟用JS</string>
     <string name="load_with_base_url">載入BaseUrl</string>
@@ -591,6 +597,10 @@
     <string name="enable_selection">啟用所選</string>
     <string name="disable_selection">禁用所選</string>
     <string name="export_selection">匯出所選</string>
+    <string name="export_main_js_file">匯出單一 JS 檔案</string>
+    <string name="export_main_js_select_one">匯出 JS 檔案時只能選擇一個書源。</string>
+    <string name="export_main_js_source_missing">找不到所選書源。</string>
+    <string name="export_main_js_empty">所選書源沒有可匯出的 mainJs 腳本。</string>
     <string name="export">匯出</string>
     <string name="load_toc">載入目錄</string>
     <string name="load_info">載入詳情頁</string>
